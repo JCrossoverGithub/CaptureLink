@@ -108,7 +108,7 @@ root.innerHTML = `
             type="button"
             class="record"
             disabled
-            title="Record incoming Xbox game and game-chat audio"
+            title="Record Xbox game audio, incoming game chat, and your microphone when enabled"
           >
             Record Audio
           </button>
@@ -118,7 +118,7 @@ root.innerHTML = `
             type="button"
             class="record"
             disabled
-            title="Record Xbox video with incoming game and game-chat audio"
+            title="Record Xbox video with game audio, incoming game chat, and your microphone when enabled"
           >
             Record Video
           </button>
@@ -267,6 +267,30 @@ root.innerHTML = `
       </div>
     </section>
 
+
+
+    <section class="recording-library-panel" aria-label="Recording library">
+      <div class="recording-library-heading">
+        <div>
+          <div class="eyebrow">RECORDING LIBRARY</div>
+          <h2>Your CaptureLink recordings</h2>
+          <p id="recording-library-message">
+            Finished recordings will appear here automatically.
+          </p>
+        </div>
+
+        <button id="refresh-recording-library" type="button">
+          Refresh Library
+        </button>
+      </div>
+
+      <div
+        id="recording-library-list"
+        class="recording-library-list"
+        aria-live="polite"
+      ></div>
+    </section>
+
     <section class="grid">
       <article>
         <h2>Xbox account</h2>
@@ -293,8 +317,8 @@ root.innerHTML = `
         <h2>Current milestone</h2>
 
         <p>
-          Local capture: audio-only recording plus synchronized Xbox video,
-          game audio, and incoming game-chat recording.
+          Recording library: manage completed audio and video captures,
+          then export the original WebM file. Common-format export comes next.
         </p>
       </article>
     </section>
@@ -416,6 +440,15 @@ const recordingSize =
 const recordingSpace =
   requireElement<HTMLSpanElement>('#recording-space')
 
+const recordingLibraryMessage =
+  requireElement<HTMLParagraphElement>('#recording-library-message')
+
+const recordingLibraryList =
+  requireElement<HTMLDivElement>('#recording-library-list')
+
+const refreshRecordingLibraryButton =
+  requireElement<HTMLButtonElement>('#refresh-recording-library')
+
 const refreshAudioDevicesButton =
   requireElement<HTMLButtonElement>('#refresh-audio-devices')
 
@@ -533,6 +566,12 @@ let recordingWriteQueue: Promise<void> = Promise.resolve()
 let recordingWriteError: Error | null = null
 let recordingStopPromise: Promise<void> | null = null
 let recordingStopResolve: (() => void) | null = null
+let recordingLibrary: CaptureLinkRecordingItem[] = []
+let recordingAudioContext: AudioContext | null = null
+let recordingXboxAudioSource: MediaStreamAudioSourceNode | null = null
+let recordingMicrophoneSource: MediaStreamAudioSourceNode | null = null
+let recordingAudioDestination: MediaStreamAudioDestinationNode | null = null
+let recordingMicrophoneTrackId = ''
 
 function formatConsoleType(consoleType: string): string {
   switch (consoleType) {
@@ -945,6 +984,7 @@ function detachController(): void {
 
 function stopMicrophone(): void {
   clearMicrophoneTimeout()
+  detachRecordingMicrophoneSource()
 
   if (activePlayer) {
     try {
@@ -1179,6 +1219,193 @@ function setDiagnosticsVisible(visible: boolean): void {
   }
 }
 
+function formatLibraryDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? 'Unknown date'
+    : date.toLocaleString()
+}
+
+function renderRecordingLibrary(): void {
+  if (recordingLibrary.length === 0) {
+    recordingLibraryMessage.textContent = 'No CaptureLink recordings yet.'
+    recordingLibraryList.innerHTML = `
+      <div class="recording-library-empty">
+        Record Xbox audio or video and the finished file will appear here.
+      </div>
+    `
+    return
+  }
+
+  recordingLibraryMessage.textContent =
+    `${recordingLibrary.length} recording${recordingLibrary.length === 1 ? '' : 's'} in your library.`
+
+  recordingLibraryList.innerHTML = recordingLibrary.map((recording) => {
+    const typeLabel = recording.kind === 'video' ? 'Video' : 'Audio'
+    const duration = formatRecordingDuration(recording.durationMs)
+    const size = formatRecordingBytes(recording.bytes)
+    const availability = recording.exists ? '' : ' · File missing'
+    const disabled = recording.exists ? '' : ' disabled'
+
+    return `
+      <article class="recording-library-item" data-recording-id="${escapeHtml(recording.id)}">
+        <div class="recording-library-main">
+          <div class="recording-library-badge recording-library-badge--${recording.kind}">
+            ${typeLabel}
+          </div>
+
+          <div class="recording-library-copy">
+            <div class="recording-library-name-row">
+              <strong class="recording-library-name">${escapeHtml(recording.fileName)}</strong>
+              <span class="recording-library-missing">${escapeHtml(availability)}</span>
+            </div>
+
+            <div class="recording-library-meta">
+              <span>${escapeHtml(formatLibraryDate(recording.createdAt))}</span>
+              <span>${escapeHtml(duration)}</span>
+              <span>${escapeHtml(size)}</span>
+            </div>
+
+            <div class="recording-library-path">${escapeHtml(recording.filePath)}</div>
+
+            <div class="recording-rename-row" hidden>
+              <input
+                class="recording-rename-input"
+                type="text"
+                value="${escapeHtml(recording.fileName)}"
+                aria-label="New recording name"
+              />
+              <button type="button" data-action="save-rename">Save</button>
+              <button type="button" data-action="cancel-rename">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="recording-library-actions">
+          <button type="button" data-action="open"${disabled}>Open</button>
+          <button type="button" data-action="show"${disabled}>Show Folder</button>
+          <button type="button" data-action="rename"${disabled}>Rename</button>
+          <button type="button" data-action="export"${disabled}>Export Original</button>
+          <button type="button" data-action="delete">Delete</button>
+        </div>
+      </article>
+    `
+  }).join('')
+}
+
+async function refreshRecordingLibrary(): Promise<void> {
+  refreshRecordingLibraryButton.disabled = true
+  recordingLibraryMessage.textContent = 'Refreshing recordings…'
+
+  try {
+    recordingLibrary = await window.captureLink.getRecordings()
+    renderRecordingLibrary()
+  } catch (error) {
+    console.error('[CaptureLink] Recording library refresh failed:', error)
+    recordingLibraryMessage.textContent = error instanceof Error
+      ? `Could not load recordings: ${error.message}`
+      : 'Could not load recordings.'
+  } finally {
+    refreshRecordingLibraryButton.disabled = false
+  }
+}
+
+function findLibraryItem(id: string): CaptureLinkRecordingItem | undefined {
+  return recordingLibrary.find((recording) => recording.id === id)
+}
+
+function toggleRenameEditor(card: HTMLElement, visible: boolean): void {
+  const row = card.querySelector<HTMLElement>('.recording-rename-row')
+  const input = card.querySelector<HTMLInputElement>('.recording-rename-input')
+
+  if (!row || !input) {
+    return
+  }
+
+  row.hidden = !visible
+
+  if (visible) {
+    input.focus()
+    const extensionIndex = input.value.toLowerCase().lastIndexOf('.webm')
+    input.setSelectionRange(0, extensionIndex > 0 ? extensionIndex : input.value.length)
+  }
+}
+
+async function handleRecordingLibraryAction(button: HTMLButtonElement): Promise<void> {
+  const action = button.dataset.action
+  const card = button.closest<HTMLElement>('.recording-library-item')
+  const id = card?.dataset.recordingId
+
+  if (!action || !card || !id) {
+    return
+  }
+
+  const recording = findLibraryItem(id)
+  if (!recording) {
+    await refreshRecordingLibrary()
+    return
+  }
+
+  if (action === 'rename') {
+    toggleRenameEditor(card, true)
+    return
+  }
+
+  if (action === 'cancel-rename') {
+    const input = card.querySelector<HTMLInputElement>('.recording-rename-input')
+    if (input) {
+      input.value = recording.fileName
+    }
+    toggleRenameEditor(card, false)
+    return
+  }
+
+  button.disabled = true
+
+  try {
+    switch (action) {
+      case 'open':
+        await window.captureLink.openRecording(id)
+        break
+      case 'show':
+        await window.captureLink.showRecording(id)
+        break
+      case 'export': {
+        const result = await window.captureLink.exportOriginalRecording(id)
+        if (result.exported && result.filePath) {
+          recordingLibraryMessage.textContent = `Exported original: ${result.filePath}`
+        }
+        break
+      }
+      case 'delete': {
+        const result = await window.captureLink.deleteRecording(id)
+        if (result.deleted) {
+          await refreshRecordingLibrary()
+        }
+        break
+      }
+      case 'save-rename': {
+        const input = card.querySelector<HTMLInputElement>('.recording-rename-input')
+        if (!input) {
+          return
+        }
+        await window.captureLink.renameRecording(id, input.value)
+        await refreshRecordingLibrary()
+        break
+      }
+    }
+  } catch (error) {
+    console.error(`[CaptureLink] Recording library ${action} failed:`, error)
+    recordingLibraryMessage.textContent = error instanceof Error
+      ? error.message
+      : `Recording ${action} failed.`
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false
+    }
+  }
+}
+
 function formatRecordingDuration(elapsedMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000))
   const hours = Math.floor(totalSeconds / 3600)
@@ -1231,6 +1458,107 @@ function createRecordingName(
   return `CaptureLink-${label}-${stamp}.webm`
 }
 
+function detachRecordingMicrophoneSource(): void {
+  try {
+    recordingMicrophoneSource?.disconnect()
+  } catch {
+    // The source may already be disconnected during stream teardown.
+  }
+
+  recordingMicrophoneSource = null
+  recordingMicrophoneTrackId = ''
+}
+
+function syncRecordingMicrophoneSource(): void {
+  const context = recordingAudioContext
+  const destination = recordingAudioDestination
+
+  if (!context || !destination) {
+    return
+  }
+
+  const microphoneStream = activePlayer?._channels.chat._micStream
+  const track = microphoneActive
+    ? microphoneStream
+        ?.getAudioTracks()
+        .find((candidate) => candidate.readyState === 'live')
+    : undefined
+
+  if (!track) {
+    detachRecordingMicrophoneSource()
+    return
+  }
+
+  if (recordingMicrophoneTrackId === track.id && recordingMicrophoneSource) {
+    return
+  }
+
+  detachRecordingMicrophoneSource()
+
+  const source = context.createMediaStreamSource(new MediaStream([track]))
+  source.connect(destination)
+  recordingMicrophoneSource = source
+  recordingMicrophoneTrackId = track.id
+
+  console.log('[CaptureLink] Recording mix includes microphone:', track.label || track.id)
+}
+
+function cleanupRecordingAudioMix(): void {
+  detachRecordingMicrophoneSource()
+
+  try {
+    recordingXboxAudioSource?.disconnect()
+  } catch {
+    // The source may already be disconnected during recording teardown.
+  }
+
+  recordingXboxAudioSource = null
+  recordingAudioDestination = null
+
+  const context = recordingAudioContext
+  recordingAudioContext = null
+
+  if (context) {
+    void context.close().catch(() => undefined)
+  }
+}
+
+async function createRecordingAudioMix(): Promise<MediaStream | null> {
+  const incoming = getIncomingAudioRecordingStream()
+
+  if (!incoming) {
+    return null
+  }
+
+  cleanupRecordingAudioMix()
+
+  const context = new AudioContext()
+
+  try {
+    await context.resume()
+
+    const source = context.createMediaStreamSource(incoming)
+    const destination = context.createMediaStreamDestination()
+
+    source.connect(destination)
+
+    recordingAudioContext = context
+    recordingXboxAudioSource = source
+    recordingAudioDestination = destination
+
+    // If Xbox game-chat microphone transmission is already active, mix that
+    // exact outbound track into the local recording. If the user toggles the
+    // microphone later, toggleMicrophone()/stopMicrophone() resync this bus.
+    syncRecordingMicrophoneSource()
+
+    return destination.stream
+  } catch (error) {
+    void context.close().catch(() => undefined)
+    cleanupRecordingAudioMix()
+    throw error
+  }
+}
+
 function getIncomingAudioRecordingStream(): MediaStream | null {
   const audio = getAudioElement()
   const source = audio?.srcObject
@@ -1248,12 +1576,13 @@ function getIncomingAudioRecordingStream(): MediaStream | null {
     : null
 }
 
-function getIncomingVideoRecordingStream(): MediaStream | null {
+function getIncomingVideoRecordingStream(
+  audioSource: MediaStream
+): MediaStream | null {
   const video = streamHolder.querySelector<HTMLVideoElement>('video')
   const videoSource = video?.srcObject
-  const audioSource = getIncomingAudioRecordingStream()
 
-  if (!(videoSource instanceof MediaStream) || !audioSource) {
+  if (!(videoSource instanceof MediaStream)) {
     return null
   }
 
@@ -1435,6 +1764,7 @@ async function finalizeRecording(
       setStreamStatus(
         `${kind === 'video' ? 'Video' : 'Audio'} recording saved: ${result.filePath}`
       )
+      void refreshRecordingLibrary()
     }
   } catch (error) {
     console.error(`[CaptureLink] ${kind} recording finalize failed:`, error)
@@ -1444,6 +1774,7 @@ async function finalizeRecording(
       recordingErrorMessage(error)
     )
   } finally {
+    cleanupRecordingAudioMix()
     mediaRecorder = null
     recordingKind = null
     recordingFilePath = ''
@@ -1472,17 +1803,32 @@ async function startRecording(kind: RecordingKind): Promise<void> {
     return
   }
 
-  const stream = kind === 'video'
-    ? getIncomingVideoRecordingStream()
-    : getIncomingAudioRecordingStream()
+  let recordingAudio: MediaStream | null
 
-  if (!stream) {
+  try {
+    recordingAudio = await createRecordingAudioMix()
+  } catch (error) {
     setRecordingUi('error', kind)
     setStreamStatus(
-      kind === 'video'
-        ? 'Xbox video and audio streams are not both available for recording'
-        : 'Xbox audio stream is not available for recording'
+      `Could not prepare recording audio mix: ${recordingErrorMessage(error)}`
     )
+    return
+  }
+
+  if (!recordingAudio) {
+    setRecordingUi('error', kind)
+    setStreamStatus('Xbox audio stream is not available for recording')
+    return
+  }
+
+  const stream = kind === 'video'
+    ? getIncomingVideoRecordingStream(recordingAudio)
+    : recordingAudio
+
+  if (!stream) {
+    cleanupRecordingAudioMix()
+    setRecordingUi('error', kind)
+    setStreamStatus('Xbox video stream is not available for recording')
     return
   }
 
@@ -1494,6 +1840,7 @@ async function startRecording(kind: RecordingKind): Promise<void> {
       ? new MediaRecorder(stream, { mimeType })
       : new MediaRecorder(stream)
   } catch (error) {
+    cleanupRecordingAudioMix()
     setRecordingUi('error', kind)
     setStreamStatus(
       `Could not create ${kind} recorder: ${recordingErrorMessage(error)}`
@@ -1509,6 +1856,7 @@ async function startRecording(kind: RecordingKind): Promise<void> {
   try {
     beginResult = await window.captureLink.beginRecording(kind, suggestedName)
   } catch (error) {
+    cleanupRecordingAudioMix()
     setRecordingUi('error', kind)
     setStreamStatus(
       `Could not start ${kind} recording: ${recordingErrorMessage(error)}`
@@ -1521,6 +1869,7 @@ async function startRecording(kind: RecordingKind): Promise<void> {
     !beginResult.recordingId ||
     !beginResult.filePath
   ) {
+    cleanupRecordingAudioMix()
     setRecordingUi('canceled', kind)
     setStreamStatus(`${kind === 'video' ? 'Video' : 'Audio'} recording not started`)
     return
@@ -1564,6 +1913,7 @@ async function startRecording(kind: RecordingKind): Promise<void> {
     recordingKind = null
     recordingFilePath = ''
     recordingStartedAt = null
+    cleanupRecordingAudioMix()
 
     await window.captureLink.cancelRecording(recordingId).catch((cancelError) => {
       console.warn('[CaptureLink] Failed to cancel unopened recording:', cancelError)
@@ -1580,10 +1930,11 @@ async function startRecording(kind: RecordingKind): Promise<void> {
   updateRecordingTimer()
   recordingTimerHandle = setInterval(updateRecordingTimer, 250)
   setRecordingUi('recording', kind)
+  const microphoneIncluded = recordingMicrophoneSource !== null
   setStreamStatus(
     kind === 'video'
-      ? `Recording Xbox video to ${recordingFilePath}`
-      : `Recording Xbox audio to ${recordingFilePath}`
+      ? `Recording Xbox video + audio${microphoneIncluded ? ' + microphone' : ''} to ${recordingFilePath}`
+      : `Recording Xbox audio${microphoneIncluded ? ' + microphone' : ''} to ${recordingFilePath}`
   )
   updateInteractiveState()
 }
@@ -2085,6 +2436,7 @@ async function toggleMicrophone(): Promise<void> {
 
     microphonePending = false
     microphoneActive = true
+    syncRecordingMicrophoneSource()
     microphoneDeviceState.textContent = 'Live'
     microphoneDeviceMessage.textContent =
       `Sending ${track.label || 'selected microphone'} to Xbox game chat.`
@@ -2148,6 +2500,22 @@ window.captureLink.onRecordingStopRequested(() => {
   void stopRecording()
 })
 
+refreshRecordingLibraryButton.addEventListener('click', () => {
+  void refreshRecordingLibrary()
+})
+
+recordingLibraryList.addEventListener('click', (event) => {
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return
+  }
+
+  const button = target.closest<HTMLButtonElement>('button[data-action]')
+  if (button && !button.disabled) {
+    void handleRecordingLibraryAction(button)
+  }
+})
+
 refreshAudioDevicesButton.addEventListener('click', () => {
   void refreshAudioDevices()
 })
@@ -2170,19 +2538,24 @@ speakerDeviceSelect.addEventListener('change', () => {
   void applySelectedSpeaker()
 })
 
-chooseSpeakerButton.addEventListener('click', () => {
-  const mediaDevices = navigator.mediaDevices as MediaDevices & {
-    selectAudioOutput?: () => Promise<MediaDeviceInfo>
-  }
+const mediaDevicesWithOutputChooser = navigator.mediaDevices as MediaDevices & {
+  selectAudioOutput?: () => Promise<MediaDeviceInfo>
+}
 
-  if (!mediaDevices.selectAudioOutput) {
+if (!mediaDevicesWithOutputChooser.selectAudioOutput) {
+  chooseSpeakerButton.disabled = true
+  chooseSpeakerButton.title = 'Native output chooser is unavailable in this Chromium build.'
+}
+
+chooseSpeakerButton.addEventListener('click', () => {
+  if (!mediaDevicesWithOutputChooser.selectAudioOutput) {
     speakerDeviceState.textContent = 'Unsupported'
     speakerDeviceMessage.textContent =
       'This Chromium build does not expose the audio-output chooser.'
     return
   }
 
-  void mediaDevices.selectAudioOutput()
+  void mediaDevicesWithOutputChooser.selectAudioOutput()
     .then(async (device) => {
       selectedSpeakerId = device.deviceId
       await refreshAudioDevices()
@@ -2296,4 +2669,5 @@ window.addEventListener('beforeunload', () => {
 })
 
 void refreshAudioDevices()
+void refreshRecordingLibrary()
 void refreshAuthStatus()

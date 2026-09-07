@@ -63,6 +63,18 @@ declare global {
     ) => CaptureLinkGamepad
   }
 
+
+  interface CaptureLinkRecordingItem {
+    id: string
+    kind: 'audio' | 'video'
+    filePath: string
+    fileName: string
+    createdAt: string
+    durationMs: number
+    bytes: number
+    exists: boolean
+  }
+
   interface Window {
     xCloudPlayer?: CaptureLinkPlayerExports & {
       default?: CaptureLinkPlayerExports
@@ -142,6 +154,28 @@ declare global {
         canceled: boolean
         filePath: string
         bytesWritten: number
+      }>
+
+      getRecordings(): Promise<CaptureLinkRecordingItem[]>
+
+      openRecording(id: string): Promise<{ opened: boolean }>
+
+      showRecording(id: string): Promise<{ shown: boolean }>
+
+      renameRecording(
+        id: string,
+        name: string
+      ): Promise<{
+        renamed: boolean
+        filePath: string
+        fileName: string
+      }>
+
+      deleteRecording(id: string): Promise<{ deleted: boolean }>
+
+      exportOriginalRecording(id: string): Promise<{
+        exported: boolean
+        filePath?: string
       }>
 
 

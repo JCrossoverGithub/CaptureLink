@@ -63,14 +63,14 @@
 ## M5 — Recording library / export
 
 - [x] User-selected save location
-- [ ] Recording history
-- [ ] Open file / open folder
-- [ ] Delete recording
+- [x] Recording history
+- [x] Open file / open folder
+- [x] Rename/delete recording
 - [ ] Export/conversion strategy
 - [ ] MP3 export for audio-only recordings
 - [ ] MP4 export for video recordings
 - [ ] WAV export for lossless/editing workflows
-- [ ] Preserve original WebM capture when requested
+- [x] Preserve/export original WebM capture when requested
 
 ## M6 — Windows release
 

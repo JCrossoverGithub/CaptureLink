@@ -639,3 +639,206 @@ h1 {
     margin-left: 0;
   }
 }
+
+/* M5 recording library */
+.recording-library-panel {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid #242a31;
+  border-radius: 16px;
+  background: #101318;
+}
+
+.recording-library-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.recording-library-heading h2 {
+  margin: 6px 0 0;
+  font-size: 20px;
+}
+
+.recording-library-heading p {
+  margin: 8px 0 0;
+  color: #89929d;
+  line-height: 1.45;
+}
+
+.recording-library-heading button,
+.recording-library-actions button,
+.recording-rename-row button,
+.recording-rename-row input {
+  min-height: 38px;
+  border: 1px solid #303740;
+  border-radius: 9px;
+  background: #171b21;
+  color: #d8dde3;
+  font: inherit;
+}
+
+.recording-library-heading button,
+.recording-library-actions button,
+.recording-rename-row button {
+  padding: 0 12px;
+}
+
+.recording-library-heading button:not(:disabled),
+.recording-library-actions button:not(:disabled),
+.recording-rename-row button:not(:disabled) {
+  cursor: pointer;
+}
+
+.recording-library-heading button:disabled,
+.recording-library-actions button:disabled,
+.recording-rename-row button:disabled {
+  opacity: .45;
+}
+
+.recording-library-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.recording-library-empty {
+  padding: 24px;
+  border: 1px dashed #303740;
+  border-radius: 12px;
+  color: #89929d;
+  text-align: center;
+}
+
+.recording-library-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid #242a31;
+  border-radius: 12px;
+  background: #0c0f13;
+}
+
+.recording-library-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+
+.recording-library-badge {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 6px 8px;
+  border: 1px solid #303740;
+  border-radius: 999px;
+  color: #cbd1d8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.recording-library-badge--video {
+  background: #151a20;
+}
+
+.recording-library-badge--audio {
+  background: #11171b;
+}
+
+.recording-library-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.recording-library-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.recording-library-name {
+  color: #eef1f4;
+  overflow-wrap: anywhere;
+}
+
+.recording-library-missing {
+  color: #ff9a9a;
+  font-size: 12px;
+}
+
+.recording-library-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 7px;
+  color: #9da6b1;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-library-path {
+  margin-top: 7px;
+  color: #68717c;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.recording-library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.recording-rename-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.recording-rename-row[hidden] {
+  display: none;
+}
+
+.recording-rename-row input {
+  min-width: min(360px, 100%);
+  padding: 0 10px;
+  flex: 1;
+}
+
+@media (max-width: 980px) {
+  .recording-library-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recording-library-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .recording-library-heading {
+    flex-direction: column;
+  }
+
+  .recording-library-heading button {
+    width: 100%;
+  }
+
+  .recording-library-main {
+    flex-direction: column;
+  }
+}

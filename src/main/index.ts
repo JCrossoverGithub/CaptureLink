@@ -2,8 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
-import { open, statfs, unlink, type FileHandle } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { copyFile, open, readFile, rename, stat, statfs, unlink, writeFile, type FileHandle } from 'node:fs/promises'
+import { basename, dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
 import {
@@ -23,6 +23,21 @@ interface ActiveRecording {
   filePath: string
   handle: FileHandle
   bytesWritten: number
+  startedAt: number
+}
+
+interface RecordingLibraryEntry {
+  id: string
+  kind: RecordingKind
+  filePath: string
+  createdAt: string
+  durationMs: number
+  bytes: number
+}
+
+interface RecordingLibraryItem extends RecordingLibraryEntry {
+  fileName: string
+  exists: boolean
 }
 
 let activeRecording: ActiveRecording | null = null
@@ -50,6 +65,115 @@ function getRecordingDirectory(): string {
   const directory = join(app.getPath('videos'), 'CaptureLink')
   mkdirSync(directory, { recursive: true })
   return directory
+}
+
+function getRecordingLibraryPath(): string {
+  return join(app.getPath('userData'), 'recordings.json')
+}
+
+async function readRecordingLibrary(): Promise<RecordingLibraryEntry[]> {
+  try {
+    const raw = await readFile(getRecordingLibraryPath(), 'utf8')
+    const parsed: unknown = JSON.parse(raw)
+
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    return parsed.filter((entry): entry is RecordingLibraryEntry => {
+      if (!entry || typeof entry !== 'object') {
+        return false
+      }
+
+      const candidate = entry as Partial<RecordingLibraryEntry>
+      return typeof candidate.id === 'string' &&
+        (candidate.kind === 'audio' || candidate.kind === 'video') &&
+        typeof candidate.filePath === 'string' &&
+        typeof candidate.createdAt === 'string' &&
+        typeof candidate.durationMs === 'number' &&
+        typeof candidate.bytes === 'number'
+    })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn('[CaptureLink] Could not read recording library:', error)
+    }
+    return []
+  }
+}
+
+async function writeRecordingLibrary(entries: RecordingLibraryEntry[]): Promise<void> {
+  const target = getRecordingLibraryPath()
+  const temporary = `${target}.tmp`
+  await writeFile(temporary, `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
+  await rename(temporary, target)
+}
+
+async function upsertRecordingLibraryEntry(entry: RecordingLibraryEntry): Promise<void> {
+  const entries = await readRecordingLibrary()
+  const index = entries.findIndex((candidate) => candidate.id === entry.id)
+
+  if (index >= 0) {
+    entries[index] = entry
+  } else {
+    entries.unshift(entry)
+  }
+
+  await writeRecordingLibrary(entries)
+}
+
+async function listRecordingLibrary(): Promise<RecordingLibraryItem[]> {
+  const entries = await readRecordingLibrary()
+
+  return await Promise.all(entries.map(async (entry) => {
+    let exists = false
+    let bytes = entry.bytes
+
+    try {
+      const stats = await stat(entry.filePath)
+      exists = stats.isFile()
+      if (exists) {
+        bytes = stats.size
+      }
+    } catch {
+      exists = false
+    }
+
+    return {
+      ...entry,
+      bytes,
+      fileName: basename(entry.filePath),
+      exists
+    }
+  }))
+}
+
+async function requireLibraryEntry(id: string): Promise<{
+  entry: RecordingLibraryEntry
+  entries: RecordingLibraryEntry[]
+  index: number
+}> {
+  const entries = await readRecordingLibrary()
+  const index = entries.findIndex((candidate) => candidate.id === id)
+
+  if (index < 0) {
+    throw new Error('Recording is no longer in the CaptureLink library.')
+  }
+
+  return { entry: entries[index], entries, index }
+}
+
+function sanitizeLibraryRecordingName(name: string, currentPath: string): string {
+  const extension = extname(currentPath) || '.webm'
+  const raw = name.trim().replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_')
+    .replace(/[. ]+$/g, '')
+
+  if (!raw) {
+    throw new Error('Recording name cannot be empty.')
+  }
+
+  return raw.toLowerCase().endsWith(extension.toLowerCase())
+    ? raw
+    : `${raw}${extension}`
 }
 
 function sanitizeRecordingName(name: string): string {
@@ -121,6 +245,18 @@ async function preserveActiveRecording(reason: string): Promise<void> {
 
   try {
     await closeRecordingFile(recording)
+
+    if (recording.bytesWritten > 0) {
+      await upsertRecordingLibraryEntry({
+        id: recording.id,
+        kind: recording.kind,
+        filePath: recording.filePath,
+        createdAt: new Date(recording.startedAt).toISOString(),
+        durationMs: Math.max(0, Date.now() - recording.startedAt),
+        bytes: recording.bytesWritten
+      })
+    }
+
     console.warn(
       `[CaptureLink] Preserved partial ${recording.kind} recording after ${reason}: ${recording.filePath}`
     )
@@ -448,7 +584,8 @@ ipcMain.handle(
       kind,
       filePath: result.filePath,
       handle,
-      bytesWritten: 0
+      bytesWritten: 0,
+      startedAt: Date.now()
     }
 
     activeRecording = recording
@@ -542,6 +679,15 @@ ipcMain.handle(
         `[CaptureLink] ${recording.kind} recording finalized: ${recording.filePath}`
       )
 
+      await upsertRecordingLibraryEntry({
+        id: recording.id,
+        kind: recording.kind,
+        filePath: recording.filePath,
+        createdAt: new Date(recording.startedAt).toISOString(),
+        durationMs: Math.max(0, Date.now() - recording.startedAt),
+        bytes: recording.bytesWritten
+      })
+
       const result = {
         saved: true,
         filePath: recording.filePath,
@@ -581,6 +727,144 @@ ipcMain.handle(
       filePath: recording.filePath,
       bytesWritten: recording.bytesWritten
     }
+  }
+)
+
+
+ipcMain.handle('capturelink:recordings-list', async () => {
+  return await listRecordingLibrary()
+})
+
+ipcMain.handle(
+  'capturelink:recordings-open',
+  async (_event, id: string) => {
+    const { entry } = await requireLibraryEntry(id)
+
+    if (!existsSync(entry.filePath)) {
+      throw new Error('Recording file is missing from disk.')
+    }
+
+    const errorMessage = await shell.openPath(entry.filePath)
+    if (errorMessage) {
+      throw new Error(errorMessage)
+    }
+
+    return { opened: true }
+  }
+)
+
+ipcMain.handle(
+  'capturelink:recordings-show',
+  async (_event, id: string) => {
+    const { entry } = await requireLibraryEntry(id)
+
+    if (!existsSync(entry.filePath)) {
+      throw new Error('Recording file is missing from disk.')
+    }
+
+    shell.showItemInFolder(entry.filePath)
+    return { shown: true }
+  }
+)
+
+ipcMain.handle(
+  'capturelink:recordings-rename',
+  async (_event, payload: { id: string; name: string }) => {
+    const { entry, entries, index } = await requireLibraryEntry(payload?.id)
+
+    if (!existsSync(entry.filePath)) {
+      throw new Error('Recording file is missing from disk.')
+    }
+
+    const fileName = sanitizeLibraryRecordingName(payload?.name ?? '', entry.filePath)
+    const targetPath = join(dirname(entry.filePath), fileName)
+
+    if (targetPath !== entry.filePath && existsSync(targetPath)) {
+      throw new Error('A file with that name already exists.')
+    }
+
+    if (targetPath !== entry.filePath) {
+      await rename(entry.filePath, targetPath)
+      entries[index] = { ...entry, filePath: targetPath }
+      await writeRecordingLibrary(entries)
+    }
+
+    return {
+      renamed: true,
+      filePath: targetPath,
+      fileName: basename(targetPath)
+    }
+  }
+)
+
+ipcMain.handle(
+  'capturelink:recordings-delete',
+  async (_event, id: string) => {
+    const { entry, entries, index } = await requireLibraryEntry(id)
+    const response = mainWindow
+      ? await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          title: 'Delete recording',
+          message: `Delete ${basename(entry.filePath)}?`,
+          detail: 'This permanently deletes the recording file from disk.',
+          buttons: ['Cancel', 'Delete'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true
+        })
+      : await dialog.showMessageBox({
+          type: 'warning',
+          title: 'Delete recording',
+          message: `Delete ${basename(entry.filePath)}?`,
+          detail: 'This permanently deletes the recording file from disk.',
+          buttons: ['Cancel', 'Delete'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true
+        })
+
+    if (response.response !== 1) {
+      return { deleted: false }
+    }
+
+    await unlink(entry.filePath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') {
+        throw error
+      }
+    })
+
+    entries.splice(index, 1)
+    await writeRecordingLibrary(entries)
+    return { deleted: true }
+  }
+)
+
+ipcMain.handle(
+  'capturelink:recordings-export-original',
+  async (_event, id: string) => {
+    const { entry } = await requireLibraryEntry(id)
+
+    if (!existsSync(entry.filePath)) {
+      throw new Error('Recording file is missing from disk.')
+    }
+
+    const fileName = basename(entry.filePath)
+    const options = {
+      title: 'Export original CaptureLink recording',
+      defaultPath: join(app.getPath('downloads'), fileName),
+      filters: [{ name: 'WebM recording', extensions: ['webm'] }]
+    }
+
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, options)
+      : await dialog.showSaveDialog(options)
+
+    if (result.canceled || !result.filePath) {
+      return { exported: false }
+    }
+
+    await copyFile(entry.filePath, result.filePath)
+    return { exported: true, filePath: result.filePath }
   }
 )
 

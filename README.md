@@ -13,6 +13,7 @@ CaptureLink should let a user:
 5. Hear game audio and incoming game-chat audio.
 6. Use supported controller, microphone, and diagnostic controls.
 7. Record audio-only or video-plus-audio locally.
+8. Manage completed recordings in a local recording library.
 
 ## Current status
 

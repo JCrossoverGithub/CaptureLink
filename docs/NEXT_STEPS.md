@@ -98,3 +98,21 @@ Exit condition:
 - no hidden temporary recording file is required
 
 With M4 hardened, the next product milestone is the recording library and export layer. MP4, MP3, and WAV remain export targets rather than live-capture formats.
+
+
+## Checkpoint 10 — Recording library
+
+Persist metadata for finalized CaptureLink recordings and expose a desktop library without changing the capture pipeline.
+
+Exit condition:
+
+- completed recordings appear automatically after finalization
+- library shows audio/video type, date, duration, size, and full path
+- Open launches the recording with the system default app
+- Show Folder reveals the file in the desktop file manager
+- Rename updates the file on disk and the library index
+- Delete requires confirmation and removes the file plus library entry
+- Export Original copies the native WebM recording to a user-selected location
+- missing files are shown explicitly instead of crashing the library
+
+The next checkpoint adds common-format transcoding: MP4 for video and MP3/WAV for audio.

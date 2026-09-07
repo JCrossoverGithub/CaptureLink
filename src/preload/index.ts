@@ -66,6 +66,30 @@ contextBridge.exposeInMainWorld('captureLink', {
       recordingId
     ),
 
+  getRecordings: () =>
+    ipcRenderer.invoke('capturelink:recordings-list'),
+
+  openRecording: (id: string) =>
+    ipcRenderer.invoke('capturelink:recordings-open', id),
+
+  showRecording: (id: string) =>
+    ipcRenderer.invoke('capturelink:recordings-show', id),
+
+  renameRecording: (id: string, name: string) =>
+    ipcRenderer.invoke(
+      'capturelink:recordings-rename',
+      { id, name }
+    ),
+
+  deleteRecording: (id: string) =>
+    ipcRenderer.invoke('capturelink:recordings-delete', id),
+
+  exportOriginalRecording: (id: string) =>
+    ipcRenderer.invoke(
+      'capturelink:recordings-export-original',
+      id
+    ),
+
 
   onXboxAuthOutput: (
     callback: (message: string) => void
