@@ -72,6 +72,15 @@
 - [x] WAV export for lossless/editing workflows
 - [x] Preserve/export original WebM capture when requested
 
+## Pre-M6 polish — audio control and usability
+
+- [x] Independent microphone gain for saved recordings
+- [x] Final UI/UX pass for onboarding, focus states, and destructive actions
+- [x] Manual local audio resync without reconnecting the Xbox session
+- [x] Conservative automatic resync when WebRTC reports sustained audio-late A/V offset
+- [x] Surface A/V offset and average audio jitter-buffer delay in diagnostics
+- [ ] Re-test long-session audio drift in the native Windows build to determine whether the remaining delay is WSLg-specific
+
 ## M6 — Windows release
 
 - [ ] Product naming/trademark review

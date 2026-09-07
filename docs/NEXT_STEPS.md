@@ -138,3 +138,16 @@ Exit condition:
 - conversion progress is visible in the recording library
 - a failed conversion deletes the incomplete derived file and leaves the WebM master untouched
 - common-format export can be disabled cleanly when FFmpeg is unavailable
+
+
+## Checkpoint 12 — Pre-Windows polish and audio resync
+
+Before packaging, keep the proven xHome media path unchanged while improving recording control and long-session playback recovery.
+
+- Add a recording-only microphone gain control so users can balance their own voice against Xbox/game-chat audio without changing what other players hear.
+- Reorder onboarding/console selection ahead of session controls and replace internal milestone copy with a short user-facing quick start.
+- Add A/V offset and jitter-buffer diagnostics using WebRTC statistics.
+- Add a manual Resync Audio action that rebuilds the local media-element/output path without renegotiating Xbox Remote Play.
+- Allow conservative auto-resync only after sustained WebRTC-reported audio-late drift, with a cooldown to avoid repeated interruptions.
+
+The current Linux development build runs through WSLg's RDP/PulseAudio audio bridge, so native Windows testing remains authoritative. If long-session delay disappears on native Windows, do not add more aggressive buffer-reset behavior solely to compensate for WSLg.

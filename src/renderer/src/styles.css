@@ -842,3 +842,118 @@ h1 {
     flex-direction: column;
   }
 }
+
+/* Pre-M6 usability and audio-sync polish */
+button,
+select,
+input {
+  transition: border-color 120ms ease, background-color 120ms ease, opacity 120ms ease, box-shadow 120ms ease;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:not(:disabled):hover {
+  border-color: #59636f;
+  background: #1d2229;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid #d8dde3;
+  outline-offset: 2px;
+}
+
+.quick-start-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: #aeb6bf;
+  line-height: 1.55;
+}
+
+.range-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 10px;
+}
+
+.range-field input[type="range"] {
+  width: 100%;
+  accent-color: #d9dee5;
+}
+
+.range-field output {
+  color: #d8dde3;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-hint {
+  margin: 7px 0 0;
+  color: #68717c;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.toggle-field {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 13px;
+  color: #9da6b1;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.toggle-field input {
+  margin: 2px 0 0;
+  accent-color: #d9dee5;
+}
+
+.recording-library-actions button[data-action="delete"]:not(:disabled) {
+  border-color: #513338;
+  color: #ffc2c8;
+}
+
+.recording-library-actions button[data-action="delete"]:not(:disabled):hover {
+  border-color: #75444c;
+  background: #2a1719;
+}
+
+#resync-audio:not(:disabled) {
+  border-color: #43505e;
+}
+
+@media (max-width: 600px) {
+  .range-field {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+}
+
+/* Put onboarding and console selection before the live session for first-run clarity. */
+.shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar { order: 0; }
+.grid { order: 1; margin-top: 0; }
+.stream-card { order: 2; margin-top: 18px; }
+.audio-devices-panel { order: 3; }
+.diagnostics-panel { order: 4; }
+.recording-library-panel { order: 5; }
+
+.auth-output:empty {
+  display: none;
+}

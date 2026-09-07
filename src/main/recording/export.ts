@@ -115,6 +115,11 @@ function getRecordingExportArgs(
       '-map', '0:v:0',
       '-map', '0:a:0?',
       ...videoArgs,
+      // Chrome/Electron MediaRecorder WebM can advertise a nominal 1000 fps
+      // time base even though real frames arrive at normal gameplay cadence.
+      // Preserve the captured frame timestamps instead of letting FFmpeg's
+      // automatic CFR behavior duplicate/drop frames during MP4 transcode.
+      '-fps_mode:v', 'vfr',
       '-c:a', 'aac',
       '-b:a', '192k',
       '-movflags', '+faststart',

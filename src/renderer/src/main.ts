@@ -170,6 +170,24 @@ root.innerHTML = `
             <span id="mic-level-value">−∞ dB</span>
           </div>
 
+          <label class="device-field" for="recording-mic-gain">
+            <span>Recording mic level</span>
+            <div class="range-field">
+              <input
+                id="recording-mic-gain"
+                type="range"
+                min="0"
+                max="200"
+                step="5"
+                value="100"
+              />
+              <output id="recording-mic-gain-value" for="recording-mic-gain">100%</output>
+            </div>
+          </label>
+          <p class="device-hint">
+            Changes your microphone level in saved recordings only. Xbox game-chat volume is unchanged.
+          </p>
+
           <div class="device-actions">
             <button id="test-microphone" type="button">
               Test Microphone
@@ -201,10 +219,24 @@ root.innerHTML = `
             <button id="choose-speaker" type="button">
               Choose Output
             </button>
+            <button
+              id="resync-audio"
+              type="button"
+              disabled
+              title="Rebuild local audio playback without reconnecting to Xbox"
+            >
+              Resync Audio
+            </button>
           </div>
+
+          <label class="toggle-field" for="auto-audio-resync">
+            <input id="auto-audio-resync" type="checkbox" checked />
+            <span>Auto-resync when WebRTC reports sustained audio delay</span>
+          </label>
 
           <p id="speaker-device-message" class="device-message">
             CaptureLink uses the system default output until another device is selected.
+            Resync Audio can flush a delayed local playback path without reconnecting the Xbox session.
           </p>
         </div>
       </div>
@@ -241,6 +273,8 @@ root.innerHTML = `
             <div><dt>Packets</dt><dd id="diag-audio-packets">—</dd></div>
             <div><dt>Lost</dt><dd id="diag-audio-lost">—</dd></div>
             <div><dt>Jitter</dt><dd id="diag-audio-jitter">—</dd></div>
+            <div><dt>A/V offset</dt><dd id="diag-av-offset">—</dd></div>
+            <div><dt>Buffer avg</dt><dd id="diag-audio-buffer">—</dd></div>
           </dl>
         </div>
 
@@ -317,12 +351,13 @@ root.innerHTML = `
       </article>
 
       <article>
-        <h2>Current milestone</h2>
-
-        <p>
-          Recording library and common-format export: keep WebM as the
-          capture master, then export video to MP4 or audio to MP3 / WAV.
-        </p>
+        <h2>Quick start</h2>
+        <ol class="quick-start-list">
+          <li>Sign in and connect to your Xbox.</li>
+          <li>Choose and test your microphone if you use game chat.</li>
+          <li>Adjust playback and recording levels, then start a capture.</li>
+          <li>Open or export finished recordings from the library.</li>
+        </ol>
       </article>
     </section>
   </main>
@@ -479,11 +514,23 @@ const micLevelFill =
 const micLevelValue =
   requireElement<HTMLSpanElement>('#mic-level-value')
 
+const recordingMicGain =
+  requireElement<HTMLInputElement>('#recording-mic-gain')
+
+const recordingMicGainValue =
+  requireElement<HTMLOutputElement>('#recording-mic-gain-value')
+
 const speakerDeviceSelect =
   requireElement<HTMLSelectElement>('#speaker-device')
 
 const chooseSpeakerButton =
   requireElement<HTMLButtonElement>('#choose-speaker')
+
+const resyncAudioButton =
+  requireElement<HTMLButtonElement>('#resync-audio')
+
+const autoAudioResync =
+  requireElement<HTMLInputElement>('#auto-audio-resync')
 
 const speakerDeviceMessage =
   requireElement<HTMLParagraphElement>('#speaker-device-message')
@@ -511,6 +558,10 @@ const diagAudioLost =
   requireElement<HTMLElement>('#diag-audio-lost')
 const diagAudioJitter =
   requireElement<HTMLElement>('#diag-audio-jitter')
+const diagAvOffset =
+  requireElement<HTMLElement>('#diag-av-offset')
+const diagAudioBuffer =
+  requireElement<HTMLElement>('#diag-audio-buffer')
 const diagMicDevice =
   requireElement<HTMLElement>('#diag-mic-device')
 const diagMicState =
@@ -543,6 +594,13 @@ let microphoneTimeout: ReturnType<typeof setTimeout> | null = null
 let audioMuted = false
 let audioVolumeLevel = 1
 let selectedMicrophoneId = 'default'
+let audioResyncInProgress = false
+let autoAudioResyncEnabled = true
+let audioLateSampleCount = 0
+let lastAudioResyncAt = 0
+const AUDIO_LATE_THRESHOLD_MS = 750
+const AUDIO_LATE_REQUIRED_SAMPLES = 4
+const AUDIO_RESYNC_COOLDOWN_MS = 60_000
 let selectedSpeakerId = ''
 let microphoneMonitorStream: MediaStream | null = null
 let microphoneMeterContext: AudioContext | null = null
@@ -577,8 +635,10 @@ let commonExportAvailable = false
 let recordingAudioContext: AudioContext | null = null
 let recordingXboxAudioSource: MediaStreamAudioSourceNode | null = null
 let recordingMicrophoneSource: MediaStreamAudioSourceNode | null = null
+let recordingMicrophoneGainNode: GainNode | null = null
 let recordingAudioDestination: MediaStreamAudioDestinationNode | null = null
 let recordingMicrophoneTrackId = ''
+let recordingMicrophoneGainLevel = 1
 
 function formatConsoleType(consoleType: string): string {
   switch (consoleType) {
@@ -958,6 +1018,89 @@ function scheduleAudioControlSync(attempt = 0): void {
   window.setTimeout(() => scheduleAudioControlSync(attempt + 1), 250)
 }
 
+type CaptureLinkAudioReceiver = RTCRtpReceiver & {
+  jitterBufferTarget?: number
+}
+
+function tuneAudioJitterBufferTarget(): boolean {
+  const receiver = activePlayer?._peerConnection
+    .getReceivers()
+    .find((candidate) => candidate.track?.kind === 'audio') as
+      | CaptureLinkAudioReceiver
+      | undefined
+
+  if (!receiver || !('jitterBufferTarget' in receiver)) {
+    return false
+  }
+
+  try {
+    // Keep the target conservative. This is only a hint, and Chromium may
+    // ignore it. The manual playback rebuild below remains the fallback.
+    receiver.jitterBufferTarget = 0.12
+    return true
+  } catch (error) {
+    console.warn('[CaptureLink] Audio jitter-buffer target was not accepted:', error)
+    return false
+  }
+}
+
+async function resyncAudioPlayback(reason: 'manual' | 'automatic'): Promise<boolean> {
+  if (audioResyncInProgress || !webRtcConnected) {
+    return false
+  }
+
+  const audio = getAudioElement()
+  const source = audio?.srcObject
+
+  if (!audio || !(source instanceof MediaStream)) {
+    speakerDeviceMessage.textContent =
+      'Xbox audio is not available to resync yet.'
+    return false
+  }
+
+  audioResyncInProgress = true
+  resyncAudioButton.textContent = 'Resyncing…'
+  speakerDeviceState.textContent = 'Resyncing'
+  updateInteractiveState()
+
+  try {
+    const jitterTargetApplied = tuneAudioJitterBufferTarget()
+
+    // Detaching and reattaching the live MediaStream rebuilds Chromium's
+    // local media-element/output path without renegotiating the Xbox session.
+    // This is intentionally separate from the raw stream used by recording.
+    audio.pause()
+    audio.srcObject = null
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 80))
+    audio.srcObject = source
+
+    audio.volume = audioVolumeLevel
+    audio.muted = audioMuted
+    await applySelectedSpeaker(audio)
+    await audio.play()
+
+    lastAudioResyncAt = Date.now()
+    audioLateSampleCount = 0
+    speakerDeviceState.textContent = 'Synced'
+    speakerDeviceMessage.textContent = reason === 'automatic'
+      ? `CaptureLink automatically rebuilt delayed audio playback${jitterTargetApplied ? ' and lowered the WebRTC jitter-buffer target' : ''}.`
+      : `Audio playback rebuilt${jitterTargetApplied ? ' with a lower WebRTC jitter-buffer target' : ''}.`
+    console.log(`[CaptureLink] Audio playback resynced (${reason})`)
+    return true
+  } catch (error) {
+    console.error('[CaptureLink] Audio resync failed:', error)
+    speakerDeviceState.textContent = 'Resync failed'
+    speakerDeviceMessage.textContent = error instanceof Error
+      ? `Audio resync failed: ${error.message}`
+      : 'Audio resync failed.'
+    return false
+  } finally {
+    audioResyncInProgress = false
+    resyncAudioButton.textContent = 'Resync Audio'
+    updateInteractiveState()
+  }
+}
+
 function clearMicrophoneTimeout(): void {
   if (microphoneTimeout) {
     clearTimeout(microphoneTimeout)
@@ -1023,6 +1166,8 @@ function resetDiagnostics(): void {
   diagAudioPackets.textContent = '—'
   diagAudioLost.textContent = '—'
   diagAudioJitter.textContent = '—'
+  diagAvOffset.textContent = '—'
+  diagAudioBuffer.textContent = '—'
   diagMicDevice.textContent = '—'
   diagMicState.textContent = 'Off'
   diagMicBitrate.textContent = '—'
@@ -1041,6 +1186,7 @@ function stopDiagnosticsPolling(): void {
   }
 
   previousStatsSample = null
+  audioLateSampleCount = 0
 }
 
 function formatBitrate(bytes: number, previousBytes: number, elapsedMs: number): string {
@@ -1073,6 +1219,10 @@ type CaptureLinkRtcStat = RTCStats & {
   frameHeight?: number
   framesPerSecond?: number
   currentRoundTripTime?: number
+  estimatedPlayoutTimestamp?: number
+  jitterBufferDelay?: number
+  jitterBufferEmittedCount?: number
+  jitterBufferTargetDelay?: number
   nominated?: boolean
   state?: string
 }
@@ -1139,6 +1289,41 @@ async function refreshDiagnostics(): Promise<void> {
     ? `${(audio.jitter * 1000).toFixed(1)} ms`
     : '—'
 
+  const avOffsetMs = typeof audio?.estimatedPlayoutTimestamp === 'number' &&
+      typeof video?.estimatedPlayoutTimestamp === 'number'
+    ? audio.estimatedPlayoutTimestamp - video.estimatedPlayoutTimestamp
+    : null
+
+  diagAvOffset.textContent = avOffsetMs === null
+    ? '—'
+    : avOffsetMs > 0
+      ? `${Math.round(avOffsetMs)} ms late`
+      : avOffsetMs < 0
+        ? `${Math.abs(Math.round(avOffsetMs))} ms early`
+        : '0 ms'
+
+  const audioBufferMs = typeof audio?.jitterBufferDelay === 'number' &&
+      typeof audio?.jitterBufferEmittedCount === 'number' &&
+      audio.jitterBufferEmittedCount > 0
+    ? (audio.jitterBufferDelay / audio.jitterBufferEmittedCount) * 1000
+    : null
+
+  diagAudioBuffer.textContent = audioBufferMs === null
+    ? '—'
+    : `${audioBufferMs.toFixed(1)} ms`
+
+  if (autoAudioResyncEnabled && avOffsetMs !== null && avOffsetMs > AUDIO_LATE_THRESHOLD_MS) {
+    audioLateSampleCount += 1
+
+    const cooldownExpired = Date.now() - lastAudioResyncAt >= AUDIO_RESYNC_COOLDOWN_MS
+    if (audioLateSampleCount >= AUDIO_LATE_REQUIRED_SAMPLES && cooldownExpired) {
+      audioLateSampleCount = 0
+      void resyncAudioPlayback('automatic')
+    }
+  } else {
+    audioLateSampleCount = 0
+  }
+
   const outboundTrack = activePlayer?._channels.chat._micStream?.getAudioTracks()[0]
   diagMicDevice.textContent = outboundTrack?.label ||
     microphoneDeviceSelect.selectedOptions[0]?.textContent?.trim() ||
@@ -1198,9 +1383,11 @@ async function refreshDiagnostics(): Promise<void> {
 
   diagnosticsHealth.textContent = peerConnection.connectionState !== 'connected'
     ? 'Not connected'
-    : totalLost > 0 || audioJitterMs > 30
-      ? 'Check metrics'
-      : 'Healthy'
+    : (avOffsetMs ?? 0) > AUDIO_LATE_THRESHOLD_MS
+      ? 'Audio late'
+      : totalLost > 0 || audioJitterMs > 30
+        ? 'Check metrics'
+        : 'Healthy'
 }
 
 function startDiagnosticsPolling(): void {
@@ -1219,8 +1406,13 @@ function setDiagnosticsVisible(visible: boolean): void {
   diagnosticsPanel.hidden = !visible
   diagnosticsButton.textContent = visible ? 'Hide Diagnostics' : 'Diagnostics'
 
-  if (visible && activePlayer) {
-    startDiagnosticsPolling()
+  // Sync monitoring stays active during a connected session even when the
+  // diagnostics panel is hidden. This lets conservative auto-resync work
+  // without requiring the user to keep diagnostics open.
+  if (activePlayer && webRtcConnected) {
+    if (!diagnosticsTimer) {
+      startDiagnosticsPolling()
+    }
   } else {
     stopDiagnosticsPolling()
   }
@@ -1511,7 +1703,14 @@ function detachRecordingMicrophoneSource(): void {
     // The source may already be disconnected during stream teardown.
   }
 
+  try {
+    recordingMicrophoneGainNode?.disconnect()
+  } catch {
+    // The gain node may already be disconnected during stream teardown.
+  }
+
   recordingMicrophoneSource = null
+  recordingMicrophoneGainNode = null
   recordingMicrophoneTrackId = ''
 }
 
@@ -1542,11 +1741,19 @@ function syncRecordingMicrophoneSource(): void {
   detachRecordingMicrophoneSource()
 
   const source = context.createMediaStreamSource(new MediaStream([track]))
-  source.connect(destination)
+  const gain = context.createGain()
+  gain.gain.value = recordingMicrophoneGainLevel
+  source.connect(gain)
+  gain.connect(destination)
   recordingMicrophoneSource = source
+  recordingMicrophoneGainNode = gain
   recordingMicrophoneTrackId = track.id
 
-  console.log('[CaptureLink] Recording mix includes microphone:', track.label || track.id)
+  console.log(
+    '[CaptureLink] Recording mix includes microphone:',
+    track.label || track.id,
+    `at ${Math.round(recordingMicrophoneGainLevel * 100)}%`
+  )
 }
 
 function cleanupRecordingAudioMix(): void {
@@ -2038,6 +2245,7 @@ function updateInteractiveState(): void {
   refreshAudioDevicesButton.disabled = microphonePending
   audioMuteButton.disabled = !mediaReady
   audioVolume.disabled = !mediaReady
+  resyncAudioButton.disabled = !mediaReady || audioResyncInProgress
   diagnosticsButton.disabled = !mediaReady
   const recordingActive = mediaRecorder?.state === 'recording' ||
     mediaRecorder?.state === 'paused'
@@ -2176,9 +2384,9 @@ function destroyPlayer(): void {
   detachController()
   stopMicrophoneMonitor()
   stopMicrophone()
+  webRtcConnected = false
   stopDiagnosticsPolling()
   setDiagnosticsVisible(false)
-  webRtcConnected = false
 
   if (!activePlayer) {
     updateInteractiveState()
@@ -2304,15 +2512,13 @@ async function connectToConsole(
         webRtcConnected = true
         hideStreamPlaceholder()
         scheduleAudioControlSync()
+        startDiagnosticsPolling()
         updateInteractiveState()
-
-        if (diagnosticsVisible) {
-          startDiagnosticsPolling()
-        }
       }
 
       if (state === 'failed' || state === 'disconnected') {
         webRtcConnected = false
+        stopDiagnosticsPolling()
 
         if (mediaRecorder || recordingSaving) {
           setStreamStatus(`WebRTC ${state}; finalizing recording...`)
@@ -2528,6 +2734,37 @@ audioVolume.addEventListener('input', () => {
   applyAudioControls()
 })
 
+recordingMicGain.addEventListener('input', () => {
+  const parsed = Number(recordingMicGain.value)
+  const clamped = Math.min(200, Math.max(0, Number.isFinite(parsed) ? parsed : 100))
+  recordingMicrophoneGainLevel = clamped / 100
+  recordingMicGain.value = String(clamped)
+  recordingMicGainValue.value = `${Math.round(clamped)}%`
+  recordingMicGainValue.textContent = `${Math.round(clamped)}%`
+
+  if (recordingMicrophoneGainNode && recordingAudioContext) {
+    recordingMicrophoneGainNode.gain.setValueAtTime(
+      recordingMicrophoneGainLevel,
+      recordingAudioContext.currentTime
+    )
+  }
+
+  window.localStorage.setItem('capturelink.recordingMicGain', String(clamped))
+})
+
+resyncAudioButton.addEventListener('click', () => {
+  void resyncAudioPlayback('manual')
+})
+
+autoAudioResync.addEventListener('change', () => {
+  autoAudioResyncEnabled = autoAudioResync.checked
+  audioLateSampleCount = 0
+  window.localStorage.setItem(
+    'capturelink.autoAudioResync',
+    autoAudioResyncEnabled ? 'true' : 'false'
+  )
+})
+
 diagnosticsButton.addEventListener('click', () => {
   setDiagnosticsVisible(!diagnosticsVisible)
 })
@@ -2720,6 +2957,21 @@ window.addEventListener('beforeunload', () => {
   destroyPlayer()
   void window.captureLink.stopXboxStream()
 })
+
+const savedRecordingMicGain = Number(
+  window.localStorage.getItem('capturelink.recordingMicGain') ?? '100'
+)
+const initialRecordingMicGain = Number.isFinite(savedRecordingMicGain)
+  ? Math.min(200, Math.max(0, savedRecordingMicGain))
+  : 100
+recordingMicrophoneGainLevel = initialRecordingMicGain / 100
+recordingMicGain.value = String(initialRecordingMicGain)
+recordingMicGainValue.value = `${Math.round(initialRecordingMicGain)}%`
+recordingMicGainValue.textContent = `${Math.round(initialRecordingMicGain)}%`
+
+const savedAutoAudioResync = window.localStorage.getItem('capturelink.autoAudioResync')
+autoAudioResyncEnabled = savedAutoAudioResync !== 'false'
+autoAudioResync.checked = autoAudioResyncEnabled
 
 void refreshAudioDevices()
 void refreshRecordingLibrary()
