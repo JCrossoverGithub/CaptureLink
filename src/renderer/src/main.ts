@@ -277,6 +277,9 @@ root.innerHTML = `
           <p id="recording-library-message">
             Finished recordings will appear here automatically.
           </p>
+          <p id="recording-export-status">
+            Checking MP4 / MP3 / WAV export support…
+          </p>
         </div>
 
         <button id="refresh-recording-library" type="button">
@@ -317,8 +320,8 @@ root.innerHTML = `
         <h2>Current milestone</h2>
 
         <p>
-          Recording library: manage completed audio and video captures,
-          then export the original WebM file. Common-format export comes next.
+          Recording library and common-format export: keep WebM as the
+          capture master, then export video to MP4 or audio to MP3 / WAV.
         </p>
       </article>
     </section>
@@ -442,6 +445,9 @@ const recordingSpace =
 
 const recordingLibraryMessage =
   requireElement<HTMLParagraphElement>('#recording-library-message')
+
+const recordingExportStatus =
+  requireElement<HTMLParagraphElement>('#recording-export-status')
 
 const recordingLibraryList =
   requireElement<HTMLDivElement>('#recording-library-list')
@@ -567,6 +573,7 @@ let recordingWriteError: Error | null = null
 let recordingStopPromise: Promise<void> | null = null
 let recordingStopResolve: (() => void) | null = null
 let recordingLibrary: CaptureLinkRecordingItem[] = []
+let commonExportAvailable = false
 let recordingAudioContext: AudioContext | null = null
 let recordingXboxAudioSource: MediaStreamAudioSourceNode | null = null
 let recordingMicrophoneSource: MediaStreamAudioSourceNode | null = null
@@ -1285,12 +1292,35 @@ function renderRecordingLibrary(): void {
           <button type="button" data-action="open"${disabled}>Open</button>
           <button type="button" data-action="show"${disabled}>Show Folder</button>
           <button type="button" data-action="rename"${disabled}>Rename</button>
-          <button type="button" data-action="export"${disabled}>Export Original</button>
+          ${recording.kind === 'video'
+            ? `<button type="button" data-action="export-mp4"${recording.exists && commonExportAvailable ? '' : ' disabled'}>Export MP4</button>`
+            : `<button type="button" data-action="export-mp3"${recording.exists && commonExportAvailable ? '' : ' disabled'}>Export MP3</button>
+               <button type="button" data-action="export-wav"${recording.exists && commonExportAvailable ? '' : ' disabled'}>Export WAV</button>`}
+          <button type="button" data-action="export-original"${disabled}>Export Original</button>
           <button type="button" data-action="delete">Delete</button>
         </div>
       </article>
     `
   }).join('')
+}
+
+async function refreshRecordingExportSupport(): Promise<void> {
+  recordingExportStatus.textContent = 'Checking MP4 / MP3 / WAV export support…'
+
+  try {
+    const support = await window.captureLink.getRecordingExportSupport()
+    commonExportAvailable = support.available
+    recordingExportStatus.textContent = support.available
+      ? 'Common-format export ready: MP4 for video, MP3 / WAV for audio.'
+      : `Common-format export unavailable: ${support.detail}`
+  } catch (error) {
+    commonExportAvailable = false
+    recordingExportStatus.textContent = error instanceof Error
+      ? `Common-format export unavailable: ${error.message}`
+      : 'Common-format export unavailable.'
+  }
+
+  renderRecordingLibrary()
 }
 
 async function refreshRecordingLibrary(): Promise<void> {
@@ -1370,10 +1400,26 @@ async function handleRecordingLibraryAction(button: HTMLButtonElement): Promise<
       case 'show':
         await window.captureLink.showRecording(id)
         break
-      case 'export': {
+      case 'export-original': {
         const result = await window.captureLink.exportOriginalRecording(id)
         if (result.exported && result.filePath) {
           recordingLibraryMessage.textContent = `Exported original: ${result.filePath}`
+        }
+        break
+      }
+      case 'export-mp4':
+      case 'export-mp3':
+      case 'export-wav': {
+        const format = action.replace('export-', '') as 'mp4' | 'mp3' | 'wav'
+        recordingExportStatus.textContent =
+          `Exporting ${recording.fileName} as ${format.toUpperCase()}…`
+        const result = await window.captureLink.exportRecording(id, format)
+
+        if (result.exported && result.filePath) {
+          recordingExportStatus.textContent =
+            `Exported ${format.toUpperCase()}: ${result.filePath}`
+        } else {
+          recordingExportStatus.textContent = 'Export canceled.'
         }
         break
       }
@@ -2659,6 +2705,13 @@ window.captureLink.onXboxAuthComplete((result) => {
   }
 })
 
+window.captureLink.onRecordingExportProgress((progress) => {
+  const recording = findLibraryItem(progress.id)
+  const name = recording?.fileName ?? 'recording'
+  recordingExportStatus.textContent =
+    `Exporting ${name} as ${progress.format.toUpperCase()}… ${Math.round(progress.percent)}%`
+})
+
 window.captureLink.onXboxStreamStatus((status) => {
   setStreamStatus(status)
 })
@@ -2670,4 +2723,5 @@ window.addEventListener('beforeunload', () => {
 
 void refreshAudioDevices()
 void refreshRecordingLibrary()
+void refreshRecordingExportSupport()
 void refreshAuthStatus()

@@ -178,6 +178,20 @@ declare global {
         filePath?: string
       }>
 
+      getRecordingExportSupport(): Promise<{
+        available: boolean
+        detail: string
+      }>
+
+      exportRecording(
+        id: string,
+        format: 'mp4' | 'mp3' | 'wav'
+      ): Promise<{
+        exported: boolean
+        filePath?: string
+        format?: 'mp4' | 'mp3' | 'wav'
+      }>
+
 
       onXboxAuthOutput(
         callback: (message: string) => void
@@ -194,6 +208,14 @@ declare global {
 
       onRecordingStopRequested(
         callback: () => void
+      ): void
+
+      onRecordingExportProgress(
+        callback: (progress: {
+          id: string
+          format: 'mp4' | 'mp3' | 'wav'
+          percent: number
+        }) => void
       ): void
 
       onXboxStreamStatus(

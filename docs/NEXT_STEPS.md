@@ -116,3 +116,25 @@ Exit condition:
 - missing files are shown explicitly instead of crashing the library
 
 The next checkpoint adds common-format transcoding: MP4 for video and MP3/WAV for audio.
+
+
+## Checkpoint 11 — Common-format export
+
+Keep WebM as CaptureLink's native capture/master format, and convert completed recordings only after capture has finalized.
+
+Current export targets:
+
+- video recording -> MP4 (H.264/AAC when FFmpeg exposes `libx264`; MPEG-4/AAC fallback if needed)
+- audio recording -> MP3 at 192 kbps
+- audio recording -> WAV PCM
+- any recording -> original WebM copy
+
+The development build intentionally does not bundle an FFmpeg executable yet. CaptureLink resolves FFmpeg from `CAPTURELINK_FFMPEG` when set, otherwise from `PATH`. This keeps the transcoding layer separate from the M6 Windows distribution/licensing decision.
+
+Exit condition:
+
+- video recordings export to playable MP4
+- audio recordings export to playable MP3 and WAV
+- conversion progress is visible in the recording library
+- a failed conversion deletes the incomplete derived file and leaves the WebM master untouched
+- common-format export can be disabled cleanly when FFmpeg is unavailable

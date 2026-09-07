@@ -66,10 +66,10 @@
 - [x] Recording history
 - [x] Open file / open folder
 - [x] Rename/delete recording
-- [ ] Export/conversion strategy
-- [ ] MP3 export for audio-only recordings
-- [ ] MP4 export for video recordings
-- [ ] WAV export for lossless/editing workflows
+- [x] Export/conversion strategy
+- [x] MP3 export for audio-only recordings
+- [x] MP4 export for video recordings
+- [x] WAV export for lossless/editing workflows
 - [x] Preserve/export original WebM capture when requested
 
 ## M6 — Windows release

@@ -10,6 +10,11 @@ import {
   type LocalIceCandidate,
   XboxHomeManager
 } from './xbox/xhome'
+import {
+  exportRecordingWithFfmpeg,
+  getFfmpegSupport,
+  type RecordingExportFormat
+} from './recording/export'
 
 let mainWindow: BrowserWindow | null = null
 let authProcessRunning = false
@@ -43,6 +48,10 @@ interface RecordingLibraryItem extends RecordingLibraryEntry {
 let activeRecording: ActiveRecording | null = null
 let recordingClosePromptOpen = false
 let closeAfterRecording = false
+let activeRecordingExport: {
+  recordingId: string
+  format: RecordingExportFormat
+} | null = null
 
 const MIB = 1024 * 1024
 const MINIMUM_START_SPACE: Record<RecordingKind, number> = {
@@ -159,7 +168,13 @@ async function requireLibraryEntry(id: string): Promise<{
     throw new Error('Recording is no longer in the CaptureLink library.')
   }
 
-  return { entry: entries[index], entries, index }
+  const entry = entries[index]
+
+  if (!entry) {
+    throw new Error('Recording is no longer in the CaptureLink library.')
+  }
+
+  return { entry, entries, index }
 }
 
 function sanitizeLibraryRecordingName(name: string, currentPath: string): string {
@@ -867,6 +882,103 @@ ipcMain.handle(
     return { exported: true, filePath: result.filePath }
   }
 )
+
+ipcMain.handle('capturelink:recordings-export-support', async () => {
+  return await getFfmpegSupport()
+})
+
+ipcMain.handle(
+  'capturelink:recordings-export-converted',
+  async (
+    _event,
+    payload: {
+      id: string
+      format: RecordingExportFormat
+    }
+  ) => {
+    const { entry } = await requireLibraryEntry(payload?.id)
+    const format = payload?.format
+
+    if (!existsSync(entry.filePath)) {
+      throw new Error('Recording file is missing from disk.')
+    }
+
+    if (format !== 'mp4' && format !== 'mp3' && format !== 'wav') {
+      throw new Error('Unsupported CaptureLink export format.')
+    }
+
+    if (entry.kind === 'video' && format !== 'mp4') {
+      throw new Error('Video recordings currently export to MP4 or original WebM.')
+    }
+
+    if (entry.kind === 'audio' && format === 'mp4') {
+      throw new Error('Audio recordings currently export to MP3, WAV, or original WebM.')
+    }
+
+    if (activeRecordingExport) {
+      throw new Error('Another CaptureLink export is already running.')
+    }
+
+    const support = await getFfmpegSupport()
+
+    if (!support.available) {
+      throw new Error(support.detail)
+    }
+
+    const extension = extname(entry.filePath)
+    const stem = basename(entry.filePath, extension)
+    const fileName = `${stem}.${format}`
+    const filterNames: Record<RecordingExportFormat, string> = {
+      mp4: 'MP4 video',
+      mp3: 'MP3 audio',
+      wav: 'WAV audio'
+    }
+    const options = {
+      title: `Export CaptureLink recording as ${format.toUpperCase()}`,
+      defaultPath: join(app.getPath('downloads'), fileName),
+      filters: [{ name: filterNames[format], extensions: [format] }]
+    }
+
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, options)
+      : await dialog.showSaveDialog(options)
+
+    if (result.canceled || !result.filePath) {
+      return { exported: false }
+    }
+
+    activeRecordingExport = {
+      recordingId: entry.id,
+      format
+    }
+
+    try {
+      await exportRecordingWithFfmpeg({
+        source: entry,
+        format,
+        outputPath: result.filePath,
+        onProgress: (percent) => {
+          mainWindow?.webContents.send(
+            'capturelink:recordings-export-progress',
+            { id: entry.id, format, percent }
+          )
+        }
+      })
+
+      return {
+        exported: true,
+        filePath: result.filePath,
+        format
+      }
+    } catch (error) {
+      await unlink(result.filePath).catch(() => undefined)
+      throw error
+    } finally {
+      activeRecordingExport = null
+    }
+  }
+)
+
 
 
 app.whenReady().then(() => {

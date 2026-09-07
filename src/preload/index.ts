@@ -90,6 +90,18 @@ contextBridge.exposeInMainWorld('captureLink', {
       id
     ),
 
+  getRecordingExportSupport: () =>
+    ipcRenderer.invoke('capturelink:recordings-export-support'),
+
+  exportRecording: (
+    id: string,
+    format: 'mp4' | 'mp3' | 'wav'
+  ) =>
+    ipcRenderer.invoke(
+      'capturelink:recordings-export-converted',
+      { id, format }
+    ),
+
 
   onXboxAuthOutput: (
     callback: (message: string) => void
@@ -120,6 +132,19 @@ contextBridge.exposeInMainWorld('captureLink', {
     ipcRenderer.on(
       'capturelink:recording-stop-request',
       () => callback()
+    )
+  },
+
+  onRecordingExportProgress: (
+    callback: (progress: {
+      id: string
+      format: 'mp4' | 'mp3' | 'wav'
+      percent: number
+    }) => void
+  ) => {
+    ipcRenderer.on(
+      'capturelink:recordings-export-progress',
+      (_event, progress) => callback(progress)
     )
   },
 

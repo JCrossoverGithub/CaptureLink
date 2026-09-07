@@ -14,6 +14,7 @@ CaptureLink should let a user:
 6. Use supported controller, microphone, and diagnostic controls.
 7. Record audio-only or video-plus-audio locally.
 8. Manage completed recordings in a local recording library.
+9. Export video to MP4 and audio to MP3/WAV while preserving the original WebM master.
 
 ## Current status
 
