@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
@@ -21,6 +22,26 @@ function getAuthDirectory(): string {
 
 function getTokenPath(): string {
   return join(getAuthDirectory(), '.xbox.tokens.json')
+}
+
+function getRecordingDirectory(): string {
+  const directory = join(app.getPath('videos'), 'CaptureLink')
+  mkdirSync(directory, { recursive: true })
+  return directory
+}
+
+function sanitizeRecordingName(name: string): string {
+  const safe = name
+    .replace(/[<>:\"/\\|?*\u0000-\u001F]/g, '_')
+    .replace(/[. ]+$/g, '')
+    .trim()
+
+  const fallback = `CaptureLink-Audio-${Date.now()}.webm`
+  const candidate = safe || fallback
+
+  return candidate.toLowerCase().endsWith('.webm')
+    ? candidate
+    : `${candidate}.webm`
 }
 
 function getXboxAuthExecutable(): string {
@@ -237,6 +258,59 @@ ipcMain.handle('capturelink:xbox-stream-stop', async () => {
   await xboxHome.stop()
   emitStreamStatus('Remote Play stopped.')
 })
+
+
+ipcMain.handle(
+  'capturelink:recording-save-audio',
+  async (
+    _event,
+    payload: {
+      data: ArrayBuffer
+      suggestedName: string
+    }
+  ) => {
+    if (!payload?.data || typeof payload.data.byteLength !== 'number') {
+      throw new Error('Audio recording data is missing.')
+    }
+
+    if (payload.data.byteLength === 0) {
+      throw new Error('Audio recording is empty.')
+    }
+
+    const suggestedName = sanitizeRecordingName(payload.suggestedName)
+    const defaultPath = join(getRecordingDirectory(), suggestedName)
+
+    const options = {
+      title: 'Save CaptureLink audio recording',
+      defaultPath,
+      filters: [
+        { name: 'WebM audio', extensions: ['webm'] }
+      ]
+    }
+
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, options)
+      : await dialog.showSaveDialog(options)
+
+    if (result.canceled || !result.filePath) {
+      return {
+        saved: false
+      }
+    }
+
+    await writeFile(
+      result.filePath,
+      Buffer.from(payload.data)
+    )
+
+    console.log(`[CaptureLink] Audio recording saved: ${result.filePath}`)
+
+    return {
+      saved: true,
+      filePath: result.filePath
+    }
+  }
+)
 
 app.whenReady().then(() => {
   createMainWindow()

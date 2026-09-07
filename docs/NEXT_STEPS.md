@@ -53,3 +53,16 @@ Exit condition:
 - diagnostics report connection, audio, and video statistics
 
 Recording remains disabled until this checkpoint is stable.
+
+
+## Checkpoint 7 — Audio recording
+
+Record the already-received Xbox audio MediaStream without changing xHome or WebRTC negotiation. CaptureLink records the raw incoming audio track, so local speaker mute/volume controls do not alter the saved recording.
+
+Exit condition:
+
+- audio-only recording can start and stop during Remote Play
+- a save dialog writes the recording as WebM/Opus
+- the saved file contains game audio
+- the saved file contains incoming in-game chat
+- recording state and elapsed time are obvious in the UI

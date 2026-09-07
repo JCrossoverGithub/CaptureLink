@@ -34,19 +34,20 @@
 - [x] Speaker/output selector with Chromium sink routing
 - [x] Live WebRTC statistics
 - [x] Connection state and error UX
-- [ ] Validate microphone audibility with another player
+- [x] Validate microphone audibility with another player
 - [ ] Decide whether touch or dedicated mouse input belongs in the Windows-first product
 
 **Exit criterion:** controller input, selected-device microphone chat uplink, audio routing controls, and diagnostics all work reliably during a live xHome session.
 
 ## M3 — Audio recording
 
-- [ ] Tap the incoming Remote Play audio stream
-- [ ] Start/stop audio recording
-- [ ] Preserve game audio + game chat
-- [ ] Save locally
-- [ ] Recording timer
-- [ ] Clear recording indicator
+- [x] Tap the incoming Remote Play audio stream
+- [x] Start/stop audio recording
+- [ ] Verify saved recordings contain game audio + incoming game chat
+- [x] Save locally through an Electron save dialog
+- [x] Recording timer
+- [x] Clear recording indicator
+- [x] Preserve local mute/volume independence from recorded media
 
 **Exit criterion:** a saved file audibly contains the same game and game-chat audio heard live.
 

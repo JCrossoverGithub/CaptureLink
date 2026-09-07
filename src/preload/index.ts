@@ -35,6 +35,16 @@ contextBridge.exposeInMainWorld('captureLink', {
   stopXboxStream: () =>
     ipcRenderer.invoke('capturelink:xbox-stream-stop'),
 
+
+  saveAudioRecording: (
+    data: ArrayBuffer,
+    suggestedName: string
+  ) =>
+    ipcRenderer.invoke(
+      'capturelink:recording-save-audio',
+      { data, suggestedName }
+    ),
+
   onXboxAuthOutput: (
     callback: (message: string) => void
   ) => {

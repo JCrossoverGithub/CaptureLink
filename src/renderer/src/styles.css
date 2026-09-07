@@ -559,3 +559,69 @@ h1 {
     width: 100%;
   }
 }
+
+
+/* M3 audio recording */
+.recording-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  min-height: 42px;
+}
+
+.recording-controls .record {
+  margin-left: 0;
+}
+
+.recording-indicator {
+  color: #ff7676;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.recording-indicator[hidden] {
+  display: none;
+}
+
+.recording-indicator--active {
+  animation: capturelink-recording-pulse 1.3s ease-in-out infinite;
+}
+
+.recording-timer {
+  min-width: 44px;
+  color: #e7eaee;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-status {
+  min-width: 52px;
+  color: #9da6b1;
+  font-size: 12px;
+}
+
+.controls .record--active {
+  border-color: #6c3c3c;
+  background: #2a1719;
+  color: #ffd8d8;
+}
+
+@keyframes capturelink-recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-indicator--active {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .recording-controls {
+    width: 100%;
+    margin-left: 0;
+  }
+}

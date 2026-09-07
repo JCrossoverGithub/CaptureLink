@@ -109,6 +109,14 @@ declare global {
 
       stopXboxStream(): Promise<void>
 
+      saveAudioRecording(
+        data: ArrayBuffer,
+        suggestedName: string
+      ): Promise<{
+        saved: boolean
+        filePath?: string
+      }>
+
       onXboxAuthOutput(
         callback: (message: string) => void
       ): void
