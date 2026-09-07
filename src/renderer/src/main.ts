@@ -27,21 +27,24 @@ root.innerHTML = `
     </header>
 
     <section class="stream-card" aria-label="Remote Play preview">
-      <div class="stream-placeholder">
-        <div class="stream-mark">CL</div>
-        <p>Remote Play stream will appear here.</p>
+      <div id="stream-holder" class="stream-holder">
+        <div id="stream-placeholder" class="stream-placeholder">
+          <div class="stream-mark">CL</div>
+          <p>Choose an Xbox below to start Remote Play.</p>
+        </div>
       </div>
 
       <div class="controls">
-        <button
-          id="sign-in"
-          type="button"
-        >
-          Sign in with Microsoft
-        </button>
+        <span id="stream-status" class="stream-state" aria-live="polite">
+          Remote Play idle
+        </span>
 
-        <button type="button" disabled>
-          Connect
+        <button
+          id="disconnect-session"
+          type="button"
+          disabled
+        >
+          Disconnect
         </button>
 
         <button type="button" disabled>
@@ -74,6 +77,13 @@ root.innerHTML = `
           Checking authentication status...
         </p>
 
+        <button
+          id="sign-in"
+          type="button"
+        >
+          Sign in with Microsoft
+        </button>
+
         <pre
           id="auth-output"
           class="auth-output"
@@ -85,8 +95,8 @@ root.innerHTML = `
         <h2>Current milestone</h2>
 
         <p>
-          Authenticate with Xbox services inside CaptureLink.
-          Console discovery comes next.
+          Remote Play integration: xHome session signalling plus Chromium
+          WebRTC video, game audio, and incoming game-chat audio.
         </p>
       </article>
     </section>
@@ -102,7 +112,7 @@ if (!grid) {
 grid.insertAdjacentHTML(
   'beforeend',
   `
-    <article>
+    <article class="console-section">
       <div class="section-heading">
         <div>
           <h2>Your consoles</h2>
@@ -159,6 +169,20 @@ const consoleList =
 const refreshConsolesButton =
   requireElement<HTMLButtonElement>('#refresh-consoles')
 
+const streamHolder =
+  requireElement<HTMLDivElement>('#stream-holder')
+
+const streamStatus =
+  requireElement<HTMLSpanElement>('#stream-status')
+
+const disconnectButton =
+  requireElement<HTMLButtonElement>('#disconnect-session')
+
+let signedIn = false
+let streamBusy = false
+let activeServerId: string | null = null
+let activePlayer: CaptureLinkPlayer | null = null
+
 function formatConsoleType(consoleType: string): string {
   switch (consoleType) {
     case 'XboxSeriesX':
@@ -181,11 +205,82 @@ function escapeHtml(value: string): string {
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
-    .replaceAll('\"', '&quot;')
+    .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;')
 }
 
+function setStreamStatus(message: string): void {
+  streamStatus.textContent = message
+}
+
+function showStreamPlaceholder(message: string): void {
+  let placeholder =
+    streamHolder.querySelector<HTMLDivElement>('#stream-placeholder')
+
+  if (!placeholder) {
+    placeholder = document.createElement('div')
+    placeholder.id = 'stream-placeholder'
+    placeholder.className = 'stream-placeholder'
+    placeholder.innerHTML = `
+      <div class="stream-mark">CL</div>
+      <p></p>
+    `
+    streamHolder.prepend(placeholder)
+  }
+
+  const text = placeholder.querySelector<HTMLParagraphElement>('p')
+
+  if (text) {
+    text.textContent = message
+  }
+
+  placeholder.hidden = false
+}
+
+function hideStreamPlaceholder(): void {
+  const placeholder =
+    streamHolder.querySelector<HTMLDivElement>('#stream-placeholder')
+
+  if (placeholder) {
+    placeholder.hidden = true
+  }
+}
+
+function resetStreamHolder(message = 'Choose an Xbox below to start Remote Play.'): void {
+  streamHolder.querySelectorAll('video, audio').forEach((element) => {
+    element.remove()
+  })
+
+  showStreamPlaceholder(message)
+}
+
+function updateInteractiveState(): void {
+  const sessionActive = activeServerId !== null
+  const locked = streamBusy || sessionActive
+
+  refreshConsolesButton.disabled = !signedIn || locked
+  disconnectButton.disabled = !sessionActive || streamBusy
+
+  consoleList
+    .querySelectorAll<HTMLButtonElement>('.console-connect')
+    .forEach((button) => {
+      button.disabled = !signedIn || locked
+    })
+}
+
+function resetConsoleButtonLabels(): void {
+  consoleList
+    .querySelectorAll<HTMLButtonElement>('.console-connect')
+    .forEach((button) => {
+      button.textContent = 'Connect'
+    })
+}
+
 async function loadConsoles(): Promise<void> {
+  if (streamBusy || activeServerId) {
+    return
+  }
+
   consoleMessage.textContent = 'Looking for Xbox consoles...'
   consoleList.innerHTML = ''
   refreshConsolesButton.disabled = true
@@ -226,8 +321,7 @@ async function loadConsoles(): Promise<void> {
             <button
               type="button"
               class="console-connect"
-              disabled
-              title="Remote Play connection comes in the next milestone"
+              title="Start Xbox Remote Play"
             >
               Connect
             </button>
@@ -241,11 +335,12 @@ async function loadConsoles(): Promise<void> {
         ? error.message
         : 'Xbox console discovery failed.'
   } finally {
-    refreshConsolesButton.disabled = false
+    updateInteractiveState()
   }
 }
 
 function setAuthenticated(): void {
+  signedIn = true
   accountStatus.textContent = 'Signed in'
   authMessage.textContent =
     'Xbox authentication is available.'
@@ -253,11 +348,12 @@ function setAuthenticated(): void {
   signInButton.textContent = 'Signed in'
   signInButton.disabled = true
 
-  refreshConsolesButton.disabled = false
+  updateInteractiveState()
   void loadConsoles()
 }
 
 function setSignedOut(): void {
+  signedIn = false
   accountStatus.textContent = 'Signed out'
   authMessage.textContent =
     'Sign in with the Microsoft account associated with your Xbox.'
@@ -265,10 +361,11 @@ function setSignedOut(): void {
   signInButton.textContent = 'Sign in with Microsoft'
   signInButton.disabled = false
 
-  refreshConsolesButton.disabled = true
   consoleList.innerHTML = ''
   consoleMessage.textContent =
     'Sign in to discover your Xbox consoles.'
+
+  updateInteractiveState()
 }
 
 async function refreshAuthStatus(): Promise<void> {
@@ -279,6 +376,146 @@ async function refreshAuthStatus(): Promise<void> {
     setAuthenticated()
   } else {
     setSignedOut()
+  }
+}
+
+function destroyPlayer(): void {
+  if (!activePlayer) {
+    return
+  }
+
+  try {
+    activePlayer.destroy()
+  } catch (error) {
+    console.warn('[CaptureLink] Player cleanup failed:', error)
+  }
+
+  activePlayer = null
+}
+
+async function disconnectFromConsole(): Promise<void> {
+  if (!activeServerId && !streamBusy) {
+    return
+  }
+
+  streamBusy = true
+  updateInteractiveState()
+  setStreamStatus('Disconnecting...')
+
+  destroyPlayer()
+
+  try {
+    await window.captureLink.stopXboxStream()
+  } catch (error) {
+    console.warn('[CaptureLink] Remote Play stop failed:', error)
+  } finally {
+    activeServerId = null
+    streamBusy = false
+    resetConsoleButtonLabels()
+    resetStreamHolder()
+    setStreamStatus('Remote Play idle')
+    updateInteractiveState()
+  }
+}
+
+async function connectToConsole(
+  serverId: string,
+  button: HTMLButtonElement
+): Promise<void> {
+  if (streamBusy || activeServerId) {
+    return
+  }
+
+  const playerConstructor =
+    window.xCloudPlayer?.Player ??
+    window.xCloudPlayer?.default?.Player
+
+  if (!playerConstructor) {
+    consoleMessage.textContent =
+      'Xbox WebRTC player bundle is missing. Run npm run vendor:xbox-player and restart CaptureLink.'
+    return
+  }
+
+  streamBusy = true
+  activeServerId = serverId
+  button.textContent = 'Connecting...'
+  showStreamPlaceholder('Starting Xbox Remote Play...')
+  setStreamStatus('Starting Remote Play...')
+  updateInteractiveState()
+
+  try {
+    await window.captureLink.startXboxStream(serverId)
+
+    setStreamStatus('Creating Chromium WebRTC connection...')
+
+    const player = new playerConstructor('stream-holder')
+    activePlayer = player
+
+    player.onConnectionStateChange((state) => {
+      console.log(`[CaptureLink] WebRTC connection state: ${state}`)
+      setStreamStatus(`WebRTC: ${state}`)
+
+      if (state === 'connected') {
+        hideStreamPlaceholder()
+      }
+
+      if (state === 'failed' || state === 'disconnected') {
+        showStreamPlaceholder(`WebRTC ${state}. Disconnect and try again.`)
+      }
+    })
+
+    const offer = await player.createOffer()
+
+    if (!offer.sdp) {
+      throw new Error('Chromium did not generate a WebRTC SDP offer.')
+    }
+
+    const remoteSdp =
+      await window.captureLink.exchangeXboxSdp(offer.sdp)
+
+    player.setRemoteOffer(remoteSdp.sdp)
+
+    const localCandidates = player
+      .getIceCandidates()
+      .map((candidate): CaptureLinkIceCandidate => ({
+        candidate: candidate.candidate,
+        sdpMid: candidate.sdpMid,
+        sdpMLineIndex: candidate.sdpMLineIndex,
+        usernameFragment: candidate.usernameFragment ?? null
+      }))
+
+    const remoteCandidates =
+      await window.captureLink.exchangeXboxIce(localCandidates)
+
+    player.setRemoteIceCandidates(remoteCandidates)
+
+    streamBusy = false
+    button.textContent = 'Connected'
+    updateInteractiveState()
+  } catch (error) {
+    console.error('[CaptureLink] Remote Play connection failed:', error)
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Remote Play connection failed.'
+
+    setStreamStatus('Remote Play failed')
+    showStreamPlaceholder(message)
+    consoleMessage.textContent = message
+
+    destroyPlayer()
+
+    try {
+      await window.captureLink.stopXboxStream()
+    } catch (stopError) {
+      console.warn('[CaptureLink] Failed to clean up Xbox session:', stopError)
+    }
+
+    activeServerId = null
+    streamBusy = false
+    button.textContent = 'Connect'
+    updateInteractiveState()
   }
 }
 
@@ -318,6 +555,31 @@ refreshConsolesButton.addEventListener('click', () => {
   void loadConsoles()
 })
 
+disconnectButton.addEventListener('click', () => {
+  void disconnectFromConsole()
+})
+
+consoleList.addEventListener('click', (event) => {
+  const target = event.target
+
+  if (!(target instanceof Element)) {
+    return
+  }
+
+  const button = target.closest<HTMLButtonElement>('.console-connect')
+
+  if (!button || button.disabled) {
+    return
+  }
+
+  const card = button.closest<HTMLElement>('.console-card')
+  const serverId = card?.dataset.serverId
+
+  if (serverId) {
+    void connectToConsole(serverId, button)
+  }
+})
+
 window.captureLink.onXboxAuthOutput((message) => {
   authOutput.textContent += message
   authOutput.scrollTop = authOutput.scrollHeight
@@ -331,6 +593,15 @@ window.captureLink.onXboxAuthComplete((result) => {
   } else {
     setSignedOut()
   }
+})
+
+window.captureLink.onXboxStreamStatus((status) => {
+  setStreamStatus(status)
+})
+
+window.addEventListener('beforeunload', () => {
+  destroyPlayer()
+  void window.captureLink.stopXboxStream()
 })
 
 void refreshAuthStatus()

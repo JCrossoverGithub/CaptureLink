@@ -4,9 +4,14 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
+import {
+  type LocalIceCandidate,
+  XboxHomeManager
+} from './xbox/xhome'
 
 let mainWindow: BrowserWindow | null = null
 let authProcessRunning = false
+const xboxHome = new XboxHomeManager()
 
 function getAuthDirectory(): string {
   const directory = join(app.getPath('userData'), 'xbox-auth')
@@ -27,6 +32,14 @@ function getXboxAuthExecutable(): string {
     'node_modules',
     '.bin',
     executable
+  )
+}
+
+function emitStreamStatus(status: string): void {
+  console.log(`[CaptureLink] ${status}`)
+  mainWindow?.webContents.send(
+    'capturelink:xbox-stream-status',
+    status
   )
 }
 
@@ -168,6 +181,35 @@ ipcMain.handle('capturelink:xbox-consoles', async () => {
   return await getXboxConsoles()
 })
 
+ipcMain.handle(
+  'capturelink:xbox-stream-start',
+  async (_event, serverId: string) => {
+    return await xboxHome.start(serverId, emitStreamStatus)
+  }
+)
+
+ipcMain.handle(
+  'capturelink:xbox-stream-sdp',
+  async (_event, sdp: string) => {
+    emitStreamStatus('Exchanging WebRTC session description...')
+    return await xboxHome.exchangeSdp(sdp)
+  }
+)
+
+ipcMain.handle(
+  'capturelink:xbox-stream-ice',
+  async (_event, candidates: LocalIceCandidate[]) => {
+    emitStreamStatus('Exchanging WebRTC network candidates...')
+    return await xboxHome.exchangeIce(candidates)
+  }
+)
+
+ipcMain.handle('capturelink:xbox-stream-stop', async () => {
+  emitStreamStatus('Stopping Remote Play...')
+  await xboxHome.stop()
+  emitStreamStatus('Remote Play stopped.')
+})
+
 app.whenReady().then(() => {
   createMainWindow()
 
@@ -176,6 +218,10 @@ app.whenReady().then(() => {
       createMainWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  void xboxHome.stop()
 })
 
 app.on('window-all-closed', () => {
