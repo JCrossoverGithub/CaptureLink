@@ -109,21 +109,41 @@ declare global {
 
       stopXboxStream(): Promise<void>
 
-      saveAudioRecording(
-        data: ArrayBuffer,
+
+      beginRecording(
+        kind: 'audio' | 'video',
         suggestedName: string
       ): Promise<{
-        saved: boolean
+        started: boolean
+        recordingId?: string
         filePath?: string
+        availableBytes?: number
       }>
 
-      saveVideoRecording(
-        data: ArrayBuffer,
-        suggestedName: string
+      appendRecordingChunk(
+        recordingId: string,
+        data: ArrayBuffer
+      ): Promise<{
+        bytesWritten: number
+        availableBytes: number
+      }>
+
+      finalizeRecording(
+        recordingId: string
       ): Promise<{
         saved: boolean
-        filePath?: string
+        filePath: string
+        bytesWritten: number
       }>
+
+      cancelRecording(
+        recordingId: string
+      ): Promise<{
+        canceled: boolean
+        filePath: string
+        bytesWritten: number
+      }>
+
 
       onXboxAuthOutput(
         callback: (message: string) => void
@@ -136,6 +156,10 @@ declare global {
             message: string
           }
         ) => void
+      ): void
+
+      onRecordingStopRequested(
+        callback: () => void
       ): void
 
       onXboxStreamStatus(

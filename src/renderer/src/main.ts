@@ -101,6 +101,8 @@ root.innerHTML = `
           </span>
           <span id="recording-timer" class="recording-timer">00:00</span>
           <span id="recording-status" class="recording-status">Ready</span>
+          <span id="recording-size" class="recording-size">0 B</span>
+          <span id="recording-space" class="recording-space">— free</span>
           <button
             id="record-audio"
             type="button"
@@ -408,6 +410,12 @@ const recordingTimer =
 const recordingStatus =
   requireElement<HTMLSpanElement>('#recording-status')
 
+const recordingSize =
+  requireElement<HTMLSpanElement>('#recording-size')
+
+const recordingSpace =
+  requireElement<HTMLSpanElement>('#recording-space')
+
 const refreshAudioDevicesButton =
   requireElement<HTMLButtonElement>('#refresh-audio-devices')
 
@@ -515,11 +523,14 @@ type RecordingKind = 'audio' | 'video'
 
 let mediaRecorder: MediaRecorder | null = null
 let recordingKind: RecordingKind | null = null
-let recordingChunks: Blob[] = []
+let recordingFilePath = ''
+let recordingBytesWritten = 0
+let recordingAvailableBytes: number | null = null
 let recordingStartedAt: number | null = null
 let recordingTimerHandle: ReturnType<typeof setInterval> | null = null
-let recordingSuggestedName = ''
 let recordingSaving = false
+let recordingWriteQueue: Promise<void> = Promise.resolve()
+let recordingWriteError: Error | null = null
 let recordingStopPromise: Promise<void> | null = null
 let recordingStopResolve: (() => void) | null = null
 
@@ -1185,6 +1196,27 @@ function formatRecordingDuration(elapsedMs: number): string {
     .join(':')
 }
 
+function formatRecordingBytes(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = Math.max(0, bytes)
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  const decimals = unitIndex === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`
+}
+
+function updateRecordingStorageUi(): void {
+  recordingSize.textContent = formatRecordingBytes(recordingBytesWritten)
+  recordingSpace.textContent = recordingAvailableBytes === null
+    ? '— free'
+    : `${formatRecordingBytes(recordingAvailableBytes)} free`
+}
+
 function createRecordingName(
   kind: RecordingKind,
   date = new Date()
@@ -1313,14 +1345,14 @@ function setRecordingUi(
         kind === 'video' ? 'Recording video' : 'Recording audio'
       break
     case 'saving':
-      activeButton.textContent = 'Saving…'
-      recordingStatus.textContent = 'Saving'
+      activeButton.textContent = 'Finalizing…'
+      recordingStatus.textContent = 'Finalizing'
       break
     case 'saved':
       recordingStatus.textContent = 'Saved'
       break
     case 'canceled':
-      recordingStatus.textContent = 'Not saved'
+      recordingStatus.textContent = 'Not started'
       break
     case 'error':
       recordingStatus.textContent = 'Error'
@@ -1337,10 +1369,48 @@ function finishRecordingStop(): void {
   resolve?.()
 }
 
+function recordingErrorMessage(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : 'Unknown recording error'
+}
+
+function queueRecordingChunk(blob: Blob, recordingId: string): void {
+  if (blob.size === 0 || recordingWriteError) {
+    return
+  }
+
+  recordingWriteQueue = recordingWriteQueue
+    .then(async () => {
+      const data = await blob.arrayBuffer()
+      const result = await window.captureLink.appendRecordingChunk(
+        recordingId,
+        data
+      )
+
+      recordingBytesWritten = result.bytesWritten
+      recordingAvailableBytes = result.availableBytes
+      updateRecordingStorageUi()
+    })
+    .catch((error) => {
+      if (!recordingWriteError) {
+        recordingWriteError = error instanceof Error
+          ? error
+          : new Error('CaptureLink could not write the recording to disk.')
+
+        console.error('[CaptureLink] Recording write failed:', error)
+        setStreamStatus(
+          `Recording stopped: ${recordingErrorMessage(recordingWriteError)}`
+        )
+
+        void stopRecording()
+      }
+    })
+}
+
 async function finalizeRecording(
-  recorder: MediaRecorder,
   kind: RecordingKind,
-  suggestedName: string
+  recordingId: string
 ): Promise<void> {
   recordingSaving = true
   stopRecordingTimer()
@@ -1348,54 +1418,45 @@ async function finalizeRecording(
   updateInteractiveState()
 
   try {
-    const type = recorder.mimeType || (
-      kind === 'video' ? 'video/webm' : 'audio/webm'
-    )
-    const blob = new Blob(recordingChunks, { type })
+    await recordingWriteQueue
 
-    if (blob.size === 0) {
-      throw new Error(`The ${kind} recorder produced an empty file.`)
-    }
+    const result = await window.captureLink.finalizeRecording(recordingId)
+    recordingBytesWritten = result.bytesWritten
+    updateRecordingStorageUi()
 
-    const data = await blob.arrayBuffer()
-    const result = kind === 'video'
-      ? await window.captureLink.saveVideoRecording(data, suggestedName)
-      : await window.captureLink.saveAudioRecording(data, suggestedName)
-
-    if (result.saved) {
-      setRecordingUi('saved', kind)
+    if (recordingWriteError) {
+      setRecordingUi('error', kind)
       setStreamStatus(
-        result.filePath
-          ? `${kind === 'video' ? 'Video' : 'Audio'} recording saved: ${result.filePath}`
-          : `${kind === 'video' ? 'Video' : 'Audio'} recording saved`
+        `${kind === 'video' ? 'Video' : 'Audio'} recording stopped early: ` +
+        `${recordingWriteError.message}. Partial file preserved: ${result.filePath}`
       )
     } else {
-      setRecordingUi('canceled', kind)
+      setRecordingUi('saved', kind)
       setStreamStatus(
-        `${kind === 'video' ? 'Video' : 'Audio'} recording was not saved`
+        `${kind === 'video' ? 'Video' : 'Audio'} recording saved: ${result.filePath}`
       )
     }
   } catch (error) {
-    console.error(`[CaptureLink] ${kind} recording save failed:`, error)
+    console.error(`[CaptureLink] ${kind} recording finalize failed:`, error)
     setRecordingUi('error', kind)
     setStreamStatus(
-      error instanceof Error
-        ? `${kind === 'video' ? 'Video' : 'Audio'} recording failed: ${error.message}`
-        : `${kind === 'video' ? 'Video' : 'Audio'} recording failed`
+      `${kind === 'video' ? 'Video' : 'Audio'} recording failed: ` +
+      recordingErrorMessage(error)
     )
   } finally {
     mediaRecorder = null
     recordingKind = null
-    recordingChunks = []
+    recordingFilePath = ''
     recordingStartedAt = null
-    recordingSuggestedName = ''
     recordingSaving = false
+    recordingWriteQueue = Promise.resolve()
+    recordingWriteError = null
     updateInteractiveState()
     finishRecordingStop()
   }
 }
 
-function startRecording(kind: RecordingKind): void {
+async function startRecording(kind: RecordingKind): Promise<void> {
   if (
     mediaRecorder ||
     recordingSaving ||
@@ -1426,45 +1487,103 @@ function startRecording(kind: RecordingKind): void {
   }
 
   const mimeType = chooseRecordingMimeType(kind)
-  const recorder = mimeType
-    ? new MediaRecorder(stream, { mimeType })
-    : new MediaRecorder(stream)
+  let recorder: MediaRecorder
 
+  try {
+    recorder = mimeType
+      ? new MediaRecorder(stream, { mimeType })
+      : new MediaRecorder(stream)
+  } catch (error) {
+    setRecordingUi('error', kind)
+    setStreamStatus(
+      `Could not create ${kind} recorder: ${recordingErrorMessage(error)}`
+    )
+    return
+  }
+
+  const suggestedName = createRecordingName(kind)
+  setStreamStatus('Choose where to save the recording...')
+
+  let beginResult: Awaited<ReturnType<typeof window.captureLink.beginRecording>>
+
+  try {
+    beginResult = await window.captureLink.beginRecording(kind, suggestedName)
+  } catch (error) {
+    setRecordingUi('error', kind)
+    setStreamStatus(
+      `Could not start ${kind} recording: ${recordingErrorMessage(error)}`
+    )
+    return
+  }
+
+  if (
+    !beginResult.started ||
+    !beginResult.recordingId ||
+    !beginResult.filePath
+  ) {
+    setRecordingUi('canceled', kind)
+    setStreamStatus(`${kind === 'video' ? 'Video' : 'Audio'} recording not started`)
+    return
+  }
+
+  const recordingId = beginResult.recordingId
   mediaRecorder = recorder
   recordingKind = kind
-  recordingChunks = []
+  recordingFilePath = beginResult.filePath
+  recordingBytesWritten = 0
+  recordingAvailableBytes = beginResult.availableBytes ?? null
   recordingStartedAt = Date.now()
-  recordingSuggestedName = createRecordingName(kind)
+  recordingWriteQueue = Promise.resolve()
+  recordingWriteError = null
+  updateRecordingStorageUi()
 
   recorder.ondataavailable = (event: BlobEvent) => {
-    if (event.data.size > 0) {
-      recordingChunks.push(event.data)
-    }
+    queueRecordingChunk(event.data, recordingId)
   }
 
   recorder.onerror = (event) => {
     console.error(`[CaptureLink] ${kind} MediaRecorder error:`, event)
-    setStreamStatus(
-      `${kind === 'video' ? 'Video' : 'Audio'} recorder reported an error`
-    )
+
+    if (!recordingWriteError) {
+      recordingWriteError = new Error(
+        `${kind === 'video' ? 'Video' : 'Audio'} recorder reported an error.`
+      )
+    }
+
+    void stopRecording()
   }
 
   recorder.onstop = () => {
-    void finalizeRecording(
-      recorder,
-      kind,
-      recordingSuggestedName
-    )
+    void finalizeRecording(kind, recordingId)
   }
 
-  recorder.start(1000)
+  try {
+    recorder.start(1000)
+  } catch (error) {
+    mediaRecorder = null
+    recordingKind = null
+    recordingFilePath = ''
+    recordingStartedAt = null
+
+    await window.captureLink.cancelRecording(recordingId).catch((cancelError) => {
+      console.warn('[CaptureLink] Failed to cancel unopened recording:', cancelError)
+    })
+
+    setRecordingUi('error', kind)
+    setStreamStatus(
+      `Could not start ${kind} recorder: ${recordingErrorMessage(error)}`
+    )
+    updateInteractiveState()
+    return
+  }
+
   updateRecordingTimer()
   recordingTimerHandle = setInterval(updateRecordingTimer, 250)
   setRecordingUi('recording', kind)
   setStreamStatus(
     kind === 'video'
-      ? 'Recording Xbox video with incoming game and game-chat audio'
-      : 'Recording incoming Xbox audio'
+      ? `Recording Xbox video to ${recordingFilePath}`
+      : `Recording Xbox audio to ${recordingFilePath}`
   )
   updateInteractiveState()
 }
@@ -1505,7 +1624,7 @@ async function toggleRecording(kind: RecordingKind): Promise<void> {
     return
   }
 
-  startRecording(kind)
+  await startRecording(kind)
 }
 
 function updateInteractiveState(): void {
@@ -1797,8 +1916,17 @@ async function connectToConsole(
 
       if (state === 'failed' || state === 'disconnected') {
         webRtcConnected = false
-        showStreamPlaceholder(`WebRTC ${state}. Disconnect and try again.`)
-        updateInteractiveState()
+
+        if (mediaRecorder || recordingSaving) {
+          setStreamStatus(`WebRTC ${state}; finalizing recording...`)
+          void stopRecording().finally(() => {
+            showStreamPlaceholder(`WebRTC ${state}. Disconnect and try again.`)
+            updateInteractiveState()
+          })
+        } else {
+          showStreamPlaceholder(`WebRTC ${state}. Disconnect and try again.`)
+          updateInteractiveState()
+        }
       }
     })
 
@@ -2013,6 +2141,11 @@ recordAudioButton.addEventListener('click', () => {
 
 recordVideoButton.addEventListener('click', () => {
   void toggleRecording('video')
+})
+
+window.captureLink.onRecordingStopRequested(() => {
+  setStreamStatus('Stopping recording before CaptureLink closes...')
+  void stopRecording()
 })
 
 refreshAudioDevicesButton.addEventListener('click', () => {

@@ -36,23 +36,36 @@ contextBridge.exposeInMainWorld('captureLink', {
     ipcRenderer.invoke('capturelink:xbox-stream-stop'),
 
 
-  saveAudioRecording: (
-    data: ArrayBuffer,
+  beginRecording: (
+    kind: 'audio' | 'video',
     suggestedName: string
   ) =>
     ipcRenderer.invoke(
-      'capturelink:recording-save-audio',
-      { data, suggestedName }
+      'capturelink:recording-begin',
+      { kind, suggestedName }
     ),
 
-  saveVideoRecording: (
-    data: ArrayBuffer,
-    suggestedName: string
+  appendRecordingChunk: (
+    recordingId: string,
+    data: ArrayBuffer
   ) =>
     ipcRenderer.invoke(
-      'capturelink:recording-save-video',
-      { data, suggestedName }
+      'capturelink:recording-append',
+      { recordingId, data }
     ),
+
+  finalizeRecording: (recordingId: string) =>
+    ipcRenderer.invoke(
+      'capturelink:recording-finalize',
+      recordingId
+    ),
+
+  cancelRecording: (recordingId: string) =>
+    ipcRenderer.invoke(
+      'capturelink:recording-cancel',
+      recordingId
+    ),
+
 
   onXboxAuthOutput: (
     callback: (message: string) => void
@@ -74,6 +87,15 @@ contextBridge.exposeInMainWorld('captureLink', {
     ipcRenderer.on(
       'capturelink:xbox-auth-complete',
       (_event, result) => callback(result)
+    )
+  },
+
+  onRecordingStopRequested: (
+    callback: () => void
+  ) => {
+    ipcRenderer.on(
+      'capturelink:recording-stop-request',
+      () => callback()
     )
   },
 

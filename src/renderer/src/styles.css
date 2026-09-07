@@ -603,6 +603,19 @@ h1 {
   font-size: 12px;
 }
 
+.recording-size,
+.recording-space {
+  min-width: 62px;
+  color: #9da6b1;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.recording-space {
+  min-width: 84px;
+}
+
 .controls .record--active {
   border-color: #6c3c3c;
   background: #2a1719;

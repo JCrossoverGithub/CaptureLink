@@ -54,15 +54,15 @@
 ## M4 — Video + audio recording
 
 - [x] Record received video + audio together
-- [ ] Maintain A/V synchronization under real gameplay testing
+- [x] Maintain A/V synchronization under real gameplay testing
 - [x] Save locally
-- [ ] Handle long recordings safely
-- [ ] Warn on low disk space
-- [ ] Warn before closing during active recording
+- [x] Handle long recordings safely with disk-backed chunk streaming
+- [x] Check disk space before and during recording
+- [x] Warn before closing during active recording
 
 ## M5 — Recording library / export
 
-- [ ] User-selected save location
+- [x] User-selected save location
 - [ ] Recording history
 - [ ] Open file / open folder
 - [ ] Delete recording

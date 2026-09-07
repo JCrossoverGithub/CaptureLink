@@ -82,3 +82,19 @@ Exit condition:
 - local mute, volume, and speaker routing do not alter the saved media
 
 MP4/MP3/WAV are export targets for a later milestone; M4 keeps WebM as the native capture container.
+
+## Checkpoint 9 — Recording hardening
+
+Move MediaRecorder output off the renderer heap by writing one-second chunks through the Electron main process directly to the user-selected file. Choose the destination before recording starts so long sessions do not require a second full-file copy.
+
+Exit condition:
+
+- recording memory usage no longer scales with recording duration
+- file size and remaining disk space are visible while recording
+- CaptureLink checks free space before recording and before each chunk write
+- an unexpected WebRTC disconnect stops/finalizes the current recording
+- closing CaptureLink during recording requires an explicit stop-and-close choice
+- renderer failure preserves the bytes already written instead of discarding the entire session
+- no hidden temporary recording file is required
+
+With M4 hardened, the next product milestone is the recording library and export layer. MP4, MP3, and WAV remain export targets rather than live-capture formats.
