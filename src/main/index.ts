@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getXboxConsoles } from './xbox/consoles'
 
 let mainWindow: BrowserWindow | null = null
 let authProcessRunning = false
@@ -161,6 +162,10 @@ ipcMain.handle('capturelink:xbox-auth-start', async () => {
   return {
     started: true
   }
+})
+
+ipcMain.handle('capturelink:xbox-consoles', async () => {
+  return await getXboxConsoles()
 })
 
 app.whenReady().then(() => {

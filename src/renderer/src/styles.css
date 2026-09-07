@@ -160,3 +160,48 @@ h1 {
   border-color: #59636f;
   background: #1d2229;
 }
+
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.console-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.console-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px;
+  border: 1px solid #242a31;
+  border-radius: 12px;
+  background: #11151a;
+}
+
+.console-name {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.console-model {
+  margin-top: 4px;
+  color: #cbd1d8;
+}
+
+.console-power {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #89929d;
+}
+
+.console-connect {
+  min-width: 100px;
+}

@@ -93,6 +93,41 @@ root.innerHTML = `
   </main>
 `
 
+const grid = document.querySelector<HTMLElement>('.grid')
+
+if (!grid) {
+  throw new Error('CaptureLink content grid not found')
+}
+
+grid.insertAdjacentHTML(
+  'beforeend',
+  `
+    <article>
+      <div class="section-heading">
+        <div>
+          <h2>Your consoles</h2>
+          <p id="console-message">
+            Sign in to discover your Xbox consoles.
+          </p>
+        </div>
+
+        <button
+          id="refresh-consoles"
+          type="button"
+          disabled
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div
+        id="console-list"
+        class="console-list"
+      ></div>
+    </article>
+  `
+)
+
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector)
 
@@ -115,6 +150,101 @@ const authMessage =
 const authOutput =
   requireElement<HTMLPreElement>('#auth-output')
 
+const consoleMessage =
+  requireElement<HTMLParagraphElement>('#console-message')
+
+const consoleList =
+  requireElement<HTMLDivElement>('#console-list')
+
+const refreshConsolesButton =
+  requireElement<HTMLButtonElement>('#refresh-consoles')
+
+function formatConsoleType(consoleType: string): string {
+  switch (consoleType) {
+    case 'XboxSeriesX':
+      return 'Xbox Series X'
+    case 'XboxSeriesS':
+      return 'Xbox Series S'
+    case 'XboxOne':
+      return 'Xbox One'
+    case 'XboxOneS':
+      return 'Xbox One S'
+    case 'XboxOneX':
+      return 'Xbox One X'
+    default:
+      return consoleType
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('\"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+async function loadConsoles(): Promise<void> {
+  consoleMessage.textContent = 'Looking for Xbox consoles...'
+  consoleList.innerHTML = ''
+  refreshConsolesButton.disabled = true
+
+  try {
+    const consoles = await window.captureLink.getXboxConsoles()
+
+    if (consoles.length === 0) {
+      consoleMessage.textContent =
+        'No Xbox consoles were found for this account.'
+      return
+    }
+
+    consoleMessage.textContent =
+      `${consoles.length} console${consoles.length === 1 ? '' : 's'} found.`
+
+    consoleList.innerHTML = consoles
+      .map(
+        (console) => `
+          <div
+            class="console-card"
+            data-server-id="${escapeHtml(console.serverId)}"
+          >
+            <div>
+              <div class="console-name">
+                ${escapeHtml(console.deviceName)}
+              </div>
+
+              <div class="console-model">
+                ${escapeHtml(formatConsoleType(console.consoleType))}
+              </div>
+
+              <div class="console-power">
+                ${escapeHtml(console.powerState)}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="console-connect"
+              disabled
+              title="Remote Play connection comes in the next milestone"
+            >
+              Connect
+            </button>
+          </div>
+        `
+      )
+      .join('')
+  } catch (error) {
+    consoleMessage.textContent =
+      error instanceof Error
+        ? error.message
+        : 'Xbox console discovery failed.'
+  } finally {
+    refreshConsolesButton.disabled = false
+  }
+}
+
 function setAuthenticated(): void {
   accountStatus.textContent = 'Signed in'
   authMessage.textContent =
@@ -122,6 +252,9 @@ function setAuthenticated(): void {
 
   signInButton.textContent = 'Signed in'
   signInButton.disabled = true
+
+  refreshConsolesButton.disabled = false
+  void loadConsoles()
 }
 
 function setSignedOut(): void {
@@ -131,6 +264,11 @@ function setSignedOut(): void {
 
   signInButton.textContent = 'Sign in with Microsoft'
   signInButton.disabled = false
+
+  refreshConsolesButton.disabled = true
+  consoleList.innerHTML = ''
+  consoleMessage.textContent =
+    'Sign in to discover your Xbox consoles.'
 }
 
 async function refreshAuthStatus(): Promise<void> {
@@ -174,6 +312,10 @@ signInButton.addEventListener('click', async () => {
     signInButton.disabled = false
     signInButton.textContent = 'Sign in with Microsoft'
   }
+})
+
+refreshConsolesButton.addEventListener('click', () => {
+  void loadConsoles()
 })
 
 window.captureLink.onXboxAuthOutput((message) => {

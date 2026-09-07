@@ -10,6 +10,15 @@ declare global {
         authenticated: boolean
       }>
 
+      getXboxConsoles(): Promise<
+        Array<{
+          serverId: string
+          deviceName: string
+          powerState: string
+          consoleType: string
+        }>
+      >
+
       startXboxAuth(): Promise<{
         started: boolean
         reason?: string
