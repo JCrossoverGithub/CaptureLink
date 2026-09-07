@@ -10,28 +10,34 @@
 
 ## M1 — Known-good Remote Play parity
 
-- [ ] Integrate Xbox authentication
-- [ ] Persist tokens securely outside the repository
-- [ ] Discover owned/available Xbox consoles
-- [ ] Select a console
-- [ ] Start xHome session
-- [ ] Complete SDP negotiation in Electron Chromium
-- [ ] Complete ICE negotiation
-- [ ] Render Xbox video
-- [ ] Play Xbox audio
-- [ ] Reconfirm incoming game-chat audio
-- [ ] Stop/disconnect cleanly
+- [x] Integrate Xbox authentication
+- [x] Persist tokens securely outside the repository
+- [x] Discover owned/available Xbox consoles
+- [x] Select a console
+- [x] Start xHome session
+- [x] Complete SDP negotiation in Electron Chromium
+- [x] Complete ICE negotiation
+- [x] Render Xbox video
+- [x] Play Xbox audio
+- [x] Reconfirm incoming game-chat audio
+- [x] Stop/disconnect cleanly
 
 **Exit criterion:** CaptureLink reproduces the exact behavior proven by the XboxLink protocol spike without depending on localhost + an external browser.
 
 ## M2 — Existing controls and diagnostics
 
-- [ ] Controller attach/detach
-- [ ] Microphone start/stop
-- [ ] Supported keyboard/mouse path, if retained
-- [ ] Touch path, if retained
-- [ ] WebRTC/debug statistics
-- [ ] Connection state and error UX
+- [x] Controller attach/detach
+- [x] Microphone start/stop foundation and chat SDP renegotiation
+- [x] Keyboard input through the upstream gamepad adapter
+- [x] Stream mute and volume controls
+- [x] Microphone input selector and live input meter
+- [x] Speaker/output selector with Chromium sink routing
+- [x] Live WebRTC statistics
+- [x] Connection state and error UX
+- [ ] Validate microphone audibility with another player
+- [ ] Decide whether touch or dedicated mouse input belongs in the Windows-first product
+
+**Exit criterion:** controller input, selected-device microphone chat uplink, audio routing controls, and diagnostics all work reliably during a live xHome session.
 
 ## M3 — Audio recording
 

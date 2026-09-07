@@ -269,3 +269,293 @@ h1 {
     max-width: none;
   }
 }
+
+/* M2 session controls */
+.audio-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid #303740;
+  border-radius: 10px;
+  background: #11151a;
+  color: #9da6b1;
+  font-size: 13px;
+}
+
+.audio-controls button {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.audio-controls label {
+  font-weight: 650;
+}
+
+.audio-controls input[type="range"] {
+  width: 120px;
+  accent-color: #d9dee5;
+}
+
+.audio-controls input[type="range"]:disabled {
+  opacity: .48;
+}
+
+#audio-volume-value {
+  min-width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.diagnostics-panel {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid #242a31;
+  border-radius: 16px;
+  background: #101318;
+}
+
+.diagnostics-panel[hidden] {
+  display: none;
+}
+
+.diagnostics-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.diagnostics-heading h2 {
+  margin: 6px 0 0;
+  font-size: 20px;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.diagnostic-group {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #242a31;
+  border-radius: 12px;
+  background: #0c0f13;
+}
+
+.diagnostic-group h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.diagnostic-group dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.diagnostic-group dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.diagnostic-group dt {
+  color: #89929d;
+}
+
+.diagnostic-group dd {
+  margin: 0;
+  color: #d8dde3;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .audio-controls {
+    flex: 1 1 100%;
+  }
+
+  .audio-controls input[type="range"] {
+    flex: 1;
+    width: auto;
+  }
+}
+
+/* M2 audio device routing */
+.audio-devices-panel {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid #242a31;
+  border-radius: 16px;
+  background: #101318;
+}
+
+.audio-devices-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.audio-devices-heading h2 {
+  margin: 6px 0 0;
+  font-size: 20px;
+}
+
+.audio-devices-heading button,
+.audio-device-card button,
+.audio-device-card select {
+  min-height: 40px;
+  border: 1px solid #303740;
+  border-radius: 10px;
+  background: #171b21;
+  color: #d8dde3;
+  font: inherit;
+}
+
+.audio-devices-heading button,
+.audio-device-card button {
+  padding: 0 14px;
+}
+
+.audio-device-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.audio-device-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #242a31;
+  border-radius: 12px;
+  background: #0c0f13;
+}
+
+.audio-device-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.audio-device-title h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.audio-device-title p {
+  margin: 5px 0 0;
+  color: #89929d;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.device-state {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid #303740;
+  border-radius: 999px;
+  color: #b6bec8;
+  font-size: 12px;
+}
+
+.device-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+  color: #9da6b1;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.device-field select {
+  width: 100%;
+  padding: 0 12px;
+}
+
+.device-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.device-message {
+  min-height: 40px;
+  margin: 12px 0 0;
+  color: #89929d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mic-meter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mic-meter {
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid #303740;
+  border-radius: 999px;
+  background: #080a0d;
+}
+
+.mic-meter-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #77818c 0%, #c2cad3 72%, #f2f4f6 100%);
+  transition: width 70ms linear;
+}
+
+#mic-level-value {
+  color: #aeb6bf;
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.audio-device-card button:not(:disabled),
+.audio-devices-heading button:not(:disabled),
+.audio-device-card select:not(:disabled) {
+  cursor: pointer;
+}
+
+.audio-device-card button:disabled,
+.audio-devices-heading button:disabled,
+.audio-device-card select:disabled {
+  opacity: .48;
+}
+
+@media (max-width: 900px) {
+  .audio-device-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .audio-devices-heading,
+  .audio-device-title {
+    flex-direction: column;
+  }
+
+  .audio-devices-heading button {
+    width: 100%;
+  }
+}

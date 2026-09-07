@@ -63,6 +63,26 @@ function createMainWindow(): void {
 
   mainWindow = window
 
+  window.webContents.session.setPermissionCheckHandler(
+    (webContents, permission) => {
+      const isCaptureLinkWindow = webContents === null || webContents.id === window.webContents.id
+      return isCaptureLinkWindow && (
+        permission === 'media' ||
+        permission === 'speaker-selection'
+      )
+    }
+  )
+
+  window.webContents.session.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      const isCaptureLinkWindow = webContents.id === window.webContents.id
+      callback(isCaptureLinkWindow && (
+        permission === 'media' ||
+        permission === 'speaker-selection'
+      ))
+    }
+  )
+
   window.once('ready-to-show', () => window.show())
 
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -201,6 +221,14 @@ ipcMain.handle(
   async (_event, candidates: LocalIceCandidate[]) => {
     emitStreamStatus('Exchanging WebRTC network candidates...')
     return await xboxHome.exchangeIce(candidates)
+  }
+)
+
+ipcMain.handle(
+  'capturelink:xbox-stream-chat-sdp',
+  async (_event, sdp: string) => {
+    emitStreamStatus('Negotiating microphone audio...')
+    return await xboxHome.exchangeSdp(sdp, true)
   }
 )
 

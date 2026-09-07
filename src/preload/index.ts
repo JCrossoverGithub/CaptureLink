@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('captureLink', {
   exchangeXboxIce: (candidates: IceCandidatePayload[]) =>
     ipcRenderer.invoke('capturelink:xbox-stream-ice', candidates),
 
+  exchangeXboxChatSdp: (sdp: string) =>
+    ipcRenderer.invoke('capturelink:xbox-stream-chat-sdp', sdp),
+
   stopXboxStream: () =>
     ipcRenderer.invoke('capturelink:xbox-stream-stop'),
 

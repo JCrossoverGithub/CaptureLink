@@ -8,9 +8,27 @@ declare global {
     usernameFragment: string | null
   }
 
+  interface CaptureLinkGamepad {
+    attach(player: CaptureLinkPlayer): void
+    detach(): void
+  }
+
   interface CaptureLinkPlayer {
+    _peerConnection: RTCPeerConnection
+    _channels: {
+      chat: {
+        startMicrophone(): void
+        stopMicrophone(): void
+        _micStream?: MediaStream
+      }
+    }
+
     onConnectionStateChange(
       callback: (state: string) => void
+    ): void
+
+    setChatSdpHandler(
+      callback: (offer: RTCSessionDescriptionInit) => void
     ): void
 
     createOffer(): Promise<RTCSessionDescriptionInit>
@@ -21,21 +39,33 @@ declare global {
 
     setRemoteIceCandidates(candidates: unknown[]): void
 
+    getAudioElement(): HTMLAudioElement | undefined
+
+    toggleDebugOverlay(): void
+
     destroy(): void
   }
 
-  interface Window {
-    xCloudPlayer?: {
-      Player?: new (
-        elementId: string,
-        options?: Record<string, unknown>
-      ) => CaptureLinkPlayer
-      default?: {
-        Player: new (
-          elementId: string,
-          options?: Record<string, unknown>
-        ) => CaptureLinkPlayer
+  interface CaptureLinkPlayerExports {
+    Player?: new (
+      elementId: string,
+      options?: Record<string, unknown>
+    ) => CaptureLinkPlayer
+
+    Gamepad?: new (
+      index: number,
+      options?: {
+        enable_keyboard?: boolean
+        enable_gamepad?: boolean
+        enable_vibration?: boolean
+        gamepad_force_capture?: boolean
       }
+    ) => CaptureLinkGamepad
+  }
+
+  interface Window {
+    xCloudPlayer?: CaptureLinkPlayerExports & {
+      default?: CaptureLinkPlayerExports
     }
 
     captureLink: {
@@ -72,6 +102,10 @@ declare global {
       exchangeXboxIce(
         candidates: CaptureLinkIceCandidate[]
       ): Promise<unknown[]>
+
+      exchangeXboxChatSdp(sdp: string): Promise<{
+        sdp: string
+      }>
 
       stopXboxStream(): Promise<void>
 

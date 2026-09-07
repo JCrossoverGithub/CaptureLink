@@ -38,3 +38,18 @@ Exit condition:
 Only after Checkpoint 4 passes should recording work begin.
 
 The first recording implementation should consume the already-received `MediaStream`; it should not modify Xbox protocol negotiation.
+
+
+## Checkpoint 6 — Session controls and diagnostics
+
+Add controller attach/detach, microphone chat renegotiation, local stream volume/mute, and live WebRTC diagnostics without changing the proven xHome media path.
+
+Exit condition:
+
+- controller or keyboard input reaches the Xbox
+- microphone can be enabled and disabled during a session
+- another player can confirm the microphone uplink is audible
+- local stream mute/volume works
+- diagnostics report connection, audio, and video statistics
+
+Recording remains disabled until this checkpoint is stable.
