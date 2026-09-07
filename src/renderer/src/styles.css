@@ -134,3 +134,29 @@ h1 {
   .grid { grid-template-columns: 1fr; }
   .controls .record { margin-left: 0; }
 }
+
+.auth-output {
+  min-height: 80px;
+  max-height: 220px;
+  overflow: auto;
+  margin: 16px 0 0;
+  padding: 14px;
+  border: 1px solid #242a31;
+  border-radius: 10px;
+  background: #090b0e;
+  color: #cbd1d8;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.controls button:not(:disabled) {
+  cursor: pointer;
+}
+
+.controls button:not(:disabled):hover {
+  border-color: #59636f;
+  background: #1d2229;
+}

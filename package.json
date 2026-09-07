@@ -40,5 +40,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
+  },
+  "dependencies": {
+    "xal-node": "^1.1.5"
   }
 }
