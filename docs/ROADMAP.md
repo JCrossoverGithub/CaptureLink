@@ -43,7 +43,7 @@
 
 - [x] Tap the incoming Remote Play audio stream
 - [x] Start/stop audio recording
-- [ ] Verify saved recordings contain game audio + incoming game chat
+- [x] Verify saved recordings contain game audio + incoming game chat
 - [x] Save locally through an Electron save dialog
 - [x] Recording timer
 - [x] Clear recording indicator
@@ -53,9 +53,9 @@
 
 ## M4 — Video + audio recording
 
-- [ ] Record received video + audio together
-- [ ] Maintain A/V synchronization
-- [ ] Save locally
+- [x] Record received video + audio together
+- [ ] Maintain A/V synchronization under real gameplay testing
+- [x] Save locally
 - [ ] Handle long recordings safely
 - [ ] Warn on low disk space
 - [ ] Warn before closing during active recording
@@ -66,7 +66,11 @@
 - [ ] Recording history
 - [ ] Open file / open folder
 - [ ] Delete recording
-- [ ] Export/conversion strategy (MP4/WAV only after native capture is stable)
+- [ ] Export/conversion strategy
+- [ ] MP3 export for audio-only recordings
+- [ ] MP4 export for video recordings
+- [ ] WAV export for lossless/editing workflows
+- [ ] Preserve original WebM capture when requested
 
 ## M6 — Windows release
 

@@ -91,7 +91,7 @@ root.innerHTML = `
           Diagnostics
         </button>
 
-        <div class="recording-controls" aria-label="Audio recording controls">
+        <div class="recording-controls" aria-label="Recording controls">
           <span
             id="recording-indicator"
             class="recording-indicator"
@@ -109,6 +109,16 @@ root.innerHTML = `
             title="Record incoming Xbox game and game-chat audio"
           >
             Record Audio
+          </button>
+
+          <button
+            id="record-video"
+            type="button"
+            class="record"
+            disabled
+            title="Record Xbox video with incoming game and game-chat audio"
+          >
+            Record Video
           </button>
         </div>
       </div>
@@ -281,8 +291,8 @@ root.innerHTML = `
         <h2>Current milestone</h2>
 
         <p>
-          Remote Play integration: xHome session signalling plus Chromium
-          WebRTC video, game audio, and incoming game-chat audio.
+          Local capture: audio-only recording plus synchronized Xbox video,
+          game audio, and incoming game-chat recording.
         </p>
       </article>
     </section>
@@ -385,6 +395,9 @@ const diagnosticsButton =
 
 const recordAudioButton =
   requireElement<HTMLButtonElement>('#record-audio')
+
+const recordVideoButton =
+  requireElement<HTMLButtonElement>('#record-video')
 
 const recordingIndicator =
   requireElement<HTMLSpanElement>('#recording-indicator')
@@ -498,14 +511,17 @@ let previousStatsSample: {
   videoBytes: number
   outboundAudioBytes: number
 } | null = null
-let audioRecorder: MediaRecorder | null = null
-let audioRecordingChunks: Blob[] = []
-let audioRecordingStartedAt: number | null = null
-let audioRecordingTimer: ReturnType<typeof setInterval> | null = null
-let audioRecordingSuggestedName = ''
-let audioRecordingSaving = false
-let audioRecordingStopPromise: Promise<void> | null = null
-let audioRecordingStopResolve: (() => void) | null = null
+type RecordingKind = 'audio' | 'video'
+
+let mediaRecorder: MediaRecorder | null = null
+let recordingKind: RecordingKind | null = null
+let recordingChunks: Blob[] = []
+let recordingStartedAt: number | null = null
+let recordingTimerHandle: ReturnType<typeof setInterval> | null = null
+let recordingSuggestedName = ''
+let recordingSaving = false
+let recordingStopPromise: Promise<void> | null = null
+let recordingStopResolve: (() => void) | null = null
 
 function formatConsoleType(consoleType: string): string {
   switch (consoleType) {
@@ -1169,14 +1185,18 @@ function formatRecordingDuration(elapsedMs: number): string {
     .join(':')
 }
 
-function createAudioRecordingName(date = new Date()): string {
+function createRecordingName(
+  kind: RecordingKind,
+  date = new Date()
+): string {
   const stamp = date
     .toISOString()
     .replace('T', '_')
     .replace(/[:.]/g, '-')
     .replace('Z', '')
 
-  return `CaptureLink-Audio-${stamp}.webm`
+  const label = kind === 'video' ? 'Video' : 'Audio'
+  return `CaptureLink-${label}-${stamp}.webm`
 }
 
 function getIncomingAudioRecordingStream(): MediaStream | null {
@@ -1196,135 +1216,189 @@ function getIncomingAudioRecordingStream(): MediaStream | null {
     : null
 }
 
-function chooseAudioRecordingMimeType(): string {
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/webm'
-  ]
+function getIncomingVideoRecordingStream(): MediaStream | null {
+  const video = streamHolder.querySelector<HTMLVideoElement>('video')
+  const videoSource = video?.srcObject
+  const audioSource = getIncomingAudioRecordingStream()
+
+  if (!(videoSource instanceof MediaStream) || !audioSource) {
+    return null
+  }
+
+  const videoTracks = videoSource
+    .getVideoTracks()
+    .filter((track) => track.readyState === 'live')
+
+  const audioTracks = audioSource
+    .getAudioTracks()
+    .filter((track) => track.readyState === 'live')
+
+  if (videoTracks.length === 0 || audioTracks.length === 0) {
+    return null
+  }
+
+  return new MediaStream([
+    ...videoTracks,
+    ...audioTracks
+  ])
+}
+
+function chooseRecordingMimeType(kind: RecordingKind): string {
+  const candidates = kind === 'video'
+    ? [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm'
+      ]
+    : [
+        'audio/webm;codecs=opus',
+        'audio/webm'
+      ]
 
   return candidates.find((candidate) =>
     MediaRecorder.isTypeSupported(candidate)
   ) ?? ''
 }
 
-function stopAudioRecordingTimer(): void {
-  if (audioRecordingTimer) {
-    clearInterval(audioRecordingTimer)
-    audioRecordingTimer = null
+function stopRecordingTimer(): void {
+  if (recordingTimerHandle) {
+    clearInterval(recordingTimerHandle)
+    recordingTimerHandle = null
   }
 }
 
-function updateAudioRecordingTimer(): void {
-  if (audioRecordingStartedAt === null) {
+function updateRecordingTimer(): void {
+  if (recordingStartedAt === null) {
     recordingTimer.textContent = '00:00'
     return
   }
 
   recordingTimer.textContent = formatRecordingDuration(
-    Date.now() - audioRecordingStartedAt
+    Date.now() - recordingStartedAt
   )
 }
 
-function setAudioRecordingUi(
-  state: 'ready' | 'recording' | 'saving' | 'saved' | 'canceled' | 'error'
+function resetRecordingButtonLabels(): void {
+  recordAudioButton.textContent = 'Record Audio'
+  recordVideoButton.textContent = 'Record Video'
+}
+
+function setRecordingUi(
+  state: 'ready' | 'recording' | 'saving' | 'saved' | 'canceled' | 'error',
+  kind: RecordingKind | null = recordingKind
 ): void {
   const recording = state === 'recording'
 
   recordingIndicator.hidden = !recording
   recordingIndicator.classList.toggle('recording-indicator--active', recording)
-  recordAudioButton.classList.toggle('record--active', recording)
+  recordAudioButton.classList.toggle(
+    'record--active',
+    recording && kind === 'audio'
+  )
+  recordVideoButton.classList.toggle(
+    'record--active',
+    recording && kind === 'video'
+  )
+
+  resetRecordingButtonLabels()
+
+  const activeButton = kind === 'video'
+    ? recordVideoButton
+    : recordAudioButton
 
   switch (state) {
     case 'recording':
-      recordAudioButton.textContent = 'Stop Recording'
-      recordingStatus.textContent = 'Recording'
+      activeButton.textContent = 'Stop Recording'
+      recordingStatus.textContent =
+        kind === 'video' ? 'Recording video' : 'Recording audio'
       break
     case 'saving':
-      recordAudioButton.textContent = 'Saving…'
+      activeButton.textContent = 'Saving…'
       recordingStatus.textContent = 'Saving'
       break
     case 'saved':
-      recordAudioButton.textContent = 'Record Audio'
       recordingStatus.textContent = 'Saved'
       break
     case 'canceled':
-      recordAudioButton.textContent = 'Record Audio'
       recordingStatus.textContent = 'Not saved'
       break
     case 'error':
-      recordAudioButton.textContent = 'Record Audio'
       recordingStatus.textContent = 'Error'
       break
     default:
-      recordAudioButton.textContent = 'Record Audio'
       recordingStatus.textContent = 'Ready'
   }
 }
 
-function finishAudioRecordingStop(): void {
-  const resolve = audioRecordingStopResolve
-  audioRecordingStopResolve = null
-  audioRecordingStopPromise = null
+function finishRecordingStop(): void {
+  const resolve = recordingStopResolve
+  recordingStopResolve = null
+  recordingStopPromise = null
   resolve?.()
 }
 
-async function finalizeAudioRecording(
+async function finalizeRecording(
   recorder: MediaRecorder,
+  kind: RecordingKind,
   suggestedName: string
 ): Promise<void> {
-  audioRecordingSaving = true
-  stopAudioRecordingTimer()
-  setAudioRecordingUi('saving')
+  recordingSaving = true
+  stopRecordingTimer()
+  setRecordingUi('saving', kind)
   updateInteractiveState()
 
   try {
-    const type = recorder.mimeType || 'audio/webm'
-    const blob = new Blob(audioRecordingChunks, { type })
+    const type = recorder.mimeType || (
+      kind === 'video' ? 'video/webm' : 'audio/webm'
+    )
+    const blob = new Blob(recordingChunks, { type })
 
     if (blob.size === 0) {
-      throw new Error('The audio recorder produced an empty file.')
+      throw new Error(`The ${kind} recorder produced an empty file.`)
     }
 
     const data = await blob.arrayBuffer()
-    const result = await window.captureLink.saveAudioRecording(
-      data,
-      suggestedName
-    )
+    const result = kind === 'video'
+      ? await window.captureLink.saveVideoRecording(data, suggestedName)
+      : await window.captureLink.saveAudioRecording(data, suggestedName)
 
     if (result.saved) {
-      setAudioRecordingUi('saved')
+      setRecordingUi('saved', kind)
       setStreamStatus(
         result.filePath
-          ? `Audio recording saved: ${result.filePath}`
-          : 'Audio recording saved'
+          ? `${kind === 'video' ? 'Video' : 'Audio'} recording saved: ${result.filePath}`
+          : `${kind === 'video' ? 'Video' : 'Audio'} recording saved`
       )
     } else {
-      setAudioRecordingUi('canceled')
-      setStreamStatus('Audio recording was not saved')
+      setRecordingUi('canceled', kind)
+      setStreamStatus(
+        `${kind === 'video' ? 'Video' : 'Audio'} recording was not saved`
+      )
     }
   } catch (error) {
-    console.error('[CaptureLink] Audio recording save failed:', error)
-    setAudioRecordingUi('error')
+    console.error(`[CaptureLink] ${kind} recording save failed:`, error)
+    setRecordingUi('error', kind)
     setStreamStatus(
       error instanceof Error
-        ? `Audio recording failed: ${error.message}`
-        : 'Audio recording failed'
+        ? `${kind === 'video' ? 'Video' : 'Audio'} recording failed: ${error.message}`
+        : `${kind === 'video' ? 'Video' : 'Audio'} recording failed`
     )
   } finally {
-    audioRecorder = null
-    audioRecordingChunks = []
-    audioRecordingStartedAt = null
-    audioRecordingSuggestedName = ''
-    audioRecordingSaving = false
+    mediaRecorder = null
+    recordingKind = null
+    recordingChunks = []
+    recordingStartedAt = null
+    recordingSuggestedName = ''
+    recordingSaving = false
     updateInteractiveState()
-    finishAudioRecordingStop()
+    finishRecordingStop()
   }
 }
 
-function startAudioRecording(): void {
+function startRecording(kind: RecordingKind): void {
   if (
-    audioRecorder ||
-    audioRecordingSaving ||
+    mediaRecorder ||
+    recordingSaving ||
     !activePlayer ||
     !webRtcConnected
   ) {
@@ -1332,86 +1406,106 @@ function startAudioRecording(): void {
   }
 
   if (typeof MediaRecorder === 'undefined') {
-    setAudioRecordingUi('error')
+    setRecordingUi('error', kind)
     setStreamStatus('This Chromium build does not support MediaRecorder')
     return
   }
 
-  const stream = getIncomingAudioRecordingStream()
+  const stream = kind === 'video'
+    ? getIncomingVideoRecordingStream()
+    : getIncomingAudioRecordingStream()
 
   if (!stream) {
-    setAudioRecordingUi('error')
-    setStreamStatus('Xbox audio stream is not available for recording')
+    setRecordingUi('error', kind)
+    setStreamStatus(
+      kind === 'video'
+        ? 'Xbox video and audio streams are not both available for recording'
+        : 'Xbox audio stream is not available for recording'
+    )
     return
   }
 
-  const mimeType = chooseAudioRecordingMimeType()
+  const mimeType = chooseRecordingMimeType(kind)
   const recorder = mimeType
     ? new MediaRecorder(stream, { mimeType })
     : new MediaRecorder(stream)
 
-  audioRecorder = recorder
-  audioRecordingChunks = []
-  audioRecordingStartedAt = Date.now()
-  audioRecordingSuggestedName = createAudioRecordingName()
+  mediaRecorder = recorder
+  recordingKind = kind
+  recordingChunks = []
+  recordingStartedAt = Date.now()
+  recordingSuggestedName = createRecordingName(kind)
 
   recorder.ondataavailable = (event: BlobEvent) => {
     if (event.data.size > 0) {
-      audioRecordingChunks.push(event.data)
+      recordingChunks.push(event.data)
     }
   }
 
   recorder.onerror = (event) => {
-    console.error('[CaptureLink] MediaRecorder error:', event)
-    setStreamStatus('Audio recorder reported an error')
+    console.error(`[CaptureLink] ${kind} MediaRecorder error:`, event)
+    setStreamStatus(
+      `${kind === 'video' ? 'Video' : 'Audio'} recorder reported an error`
+    )
   }
 
   recorder.onstop = () => {
-    void finalizeAudioRecording(
+    void finalizeRecording(
       recorder,
-      audioRecordingSuggestedName
+      kind,
+      recordingSuggestedName
     )
   }
 
   recorder.start(1000)
-  updateAudioRecordingTimer()
-  audioRecordingTimer = setInterval(updateAudioRecordingTimer, 250)
-  setAudioRecordingUi('recording')
-  setStreamStatus('Recording incoming Xbox audio')
+  updateRecordingTimer()
+  recordingTimerHandle = setInterval(updateRecordingTimer, 250)
+  setRecordingUi('recording', kind)
+  setStreamStatus(
+    kind === 'video'
+      ? 'Recording Xbox video with incoming game and game-chat audio'
+      : 'Recording incoming Xbox audio'
+  )
   updateInteractiveState()
 }
 
-function stopAudioRecording(): Promise<void> {
-  if (audioRecordingStopPromise) {
-    return audioRecordingStopPromise
+function stopRecording(): Promise<void> {
+  if (recordingStopPromise) {
+    return recordingStopPromise
   }
 
-  if (!audioRecorder) {
+  if (!mediaRecorder) {
     return Promise.resolve()
   }
 
-  audioRecordingStopPromise = new Promise<void>((resolve) => {
-    audioRecordingStopResolve = resolve
+  recordingStopPromise = new Promise<void>((resolve) => {
+    recordingStopResolve = resolve
   })
 
-  if (audioRecorder.state === 'recording' || audioRecorder.state === 'paused') {
-    setAudioRecordingUi('saving')
+  if (
+    mediaRecorder.state === 'recording' ||
+    mediaRecorder.state === 'paused'
+  ) {
+    setRecordingUi('saving', recordingKind)
     recordingStatus.textContent = 'Stopping…'
-    audioRecorder.stop()
-  } else if (!audioRecordingSaving) {
-    finishAudioRecordingStop()
+    mediaRecorder.stop()
+  } else if (!recordingSaving) {
+    finishRecordingStop()
   }
 
   updateInteractiveState()
-  return audioRecordingStopPromise ?? Promise.resolve()
+  return recordingStopPromise ?? Promise.resolve()
 }
 
-async function toggleAudioRecording(): Promise<void> {
-  if (audioRecorder) {
-    await stopAudioRecording()
-  } else {
-    startAudioRecording()
+async function toggleRecording(kind: RecordingKind): Promise<void> {
+  if (mediaRecorder) {
+    if (recordingKind === kind) {
+      await stopRecording()
+    }
+    return
   }
+
+  startRecording(kind)
 }
 
 function updateInteractiveState(): void {
@@ -1429,10 +1523,16 @@ function updateInteractiveState(): void {
   audioMuteButton.disabled = !mediaReady
   audioVolume.disabled = !mediaReady
   diagnosticsButton.disabled = !mediaReady
-  const recordingActive = audioRecorder?.state === 'recording' ||
-    audioRecorder?.state === 'paused'
-  recordAudioButton.disabled = audioRecordingSaving ||
-    (!recordingActive && !mediaReady)
+  const recordingActive = mediaRecorder?.state === 'recording' ||
+    mediaRecorder?.state === 'paused'
+  recordAudioButton.disabled = recordingSaving ||
+    (recordingActive
+      ? recordingKind !== 'audio'
+      : !mediaReady)
+  recordVideoButton.disabled = recordingSaving ||
+    (recordingActive
+      ? recordingKind !== 'video'
+      : !mediaReady)
 
   consoleList
     .querySelectorAll<HTMLButtonElement>('.console-connect')
@@ -1553,8 +1653,8 @@ async function refreshAuthStatus(): Promise<void> {
 }
 
 function destroyPlayer(): void {
-  if (audioRecorder && !audioRecordingSaving) {
-    void stopAudioRecording()
+  if (mediaRecorder && !recordingSaving) {
+    void stopRecording()
   }
 
   detachController()
@@ -1584,9 +1684,9 @@ async function disconnectFromConsole(): Promise<void> {
     return
   }
 
-  if (audioRecorder || audioRecordingSaving) {
-    setStreamStatus('Stopping audio recording before disconnect...')
-    await stopAudioRecording()
+  if (mediaRecorder || recordingSaving) {
+    setStreamStatus('Stopping recording before disconnect...')
+    await stopRecording()
   }
 
   streamBusy = true
@@ -1908,7 +2008,11 @@ diagnosticsButton.addEventListener('click', () => {
 
 
 recordAudioButton.addEventListener('click', () => {
-  void toggleAudioRecording()
+  void toggleRecording('audio')
+})
+
+recordVideoButton.addEventListener('click', () => {
+  void toggleRecording('video')
 })
 
 refreshAudioDevicesButton.addEventListener('click', () => {

@@ -561,9 +561,10 @@ h1 {
 }
 
 
-/* M3 audio recording */
+/* M3/M4 local recording */
 .recording-controls {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-left: auto;
@@ -597,7 +598,7 @@ h1 {
 }
 
 .recording-status {
-  min-width: 52px;
+  min-width: 96px;
   color: #9da6b1;
   font-size: 12px;
 }

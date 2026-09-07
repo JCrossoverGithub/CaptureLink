@@ -117,6 +117,14 @@ declare global {
         filePath?: string
       }>
 
+      saveVideoRecording(
+        data: ArrayBuffer,
+        suggestedName: string
+      ): Promise<{
+        saved: boolean
+        filePath?: string
+      }>
+
       onXboxAuthOutput(
         callback: (message: string) => void
       ): void

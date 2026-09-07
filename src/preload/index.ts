@@ -45,6 +45,15 @@ contextBridge.exposeInMainWorld('captureLink', {
       { data, suggestedName }
     ),
 
+  saveVideoRecording: (
+    data: ArrayBuffer,
+    suggestedName: string
+  ) =>
+    ipcRenderer.invoke(
+      'capturelink:recording-save-video',
+      { data, suggestedName }
+    ),
+
   onXboxAuthOutput: (
     callback: (message: string) => void
   ) => {

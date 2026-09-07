@@ -44,6 +44,20 @@ function sanitizeRecordingName(name: string): string {
     : `${candidate}.webm`
 }
 
+function sanitizeVideoRecordingName(name: string): string {
+  const safe = name
+    .replace(/[<>:\"/\\|?*\u0000-\u001F]/g, '_')
+    .replace(/[. ]+$/g, '')
+    .trim()
+
+  const fallback = `CaptureLink-Video-${Date.now()}.webm`
+  const candidate = safe || fallback
+
+  return candidate.toLowerCase().endsWith('.webm')
+    ? candidate
+    : `${candidate}.webm`
+}
+
 function getXboxAuthExecutable(): string {
   const executable =
     process.platform === 'win32' ? 'xbox-auth.cmd' : 'xbox-auth'
@@ -304,6 +318,58 @@ ipcMain.handle(
     )
 
     console.log(`[CaptureLink] Audio recording saved: ${result.filePath}`)
+
+    return {
+      saved: true,
+      filePath: result.filePath
+    }
+  }
+)
+
+ipcMain.handle(
+  'capturelink:recording-save-video',
+  async (
+    _event,
+    payload: {
+      data: ArrayBuffer
+      suggestedName: string
+    }
+  ) => {
+    if (!payload?.data || typeof payload.data.byteLength !== 'number') {
+      throw new Error('Video recording data is missing.')
+    }
+
+    if (payload.data.byteLength === 0) {
+      throw new Error('Video recording is empty.')
+    }
+
+    const suggestedName = sanitizeVideoRecordingName(payload.suggestedName)
+    const defaultPath = join(getRecordingDirectory(), suggestedName)
+
+    const options = {
+      title: 'Save CaptureLink video recording',
+      defaultPath,
+      filters: [
+        { name: 'WebM video', extensions: ['webm'] }
+      ]
+    }
+
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, options)
+      : await dialog.showSaveDialog(options)
+
+    if (result.canceled || !result.filePath) {
+      return {
+        saved: false
+      }
+    }
+
+    await writeFile(
+      result.filePath,
+      Buffer.from(payload.data)
+    )
+
+    console.log(`[CaptureLink] Video recording saved: ${result.filePath}`)
 
     return {
       saved: true,

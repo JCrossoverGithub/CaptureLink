@@ -66,3 +66,19 @@ Exit condition:
 - the saved file contains game audio
 - the saved file contains incoming in-game chat
 - recording state and elapsed time are obvious in the UI
+
+## Checkpoint 8 — Video + audio recording
+
+Combine the live Xbox video track with the same incoming audio stream already proven by the audio-only recorder. Keep Remote Play signalling unchanged and record the received tracks with Chromium `MediaRecorder`.
+
+Exit condition:
+
+- audio-only recording still works
+- video recording can start and stop during Remote Play
+- a save dialog writes the recording as WebM video
+- the saved video contains Xbox gameplay video
+- the saved video contains game audio and incoming in-game chat
+- audio and video remain synchronized during a real gameplay sample
+- local mute, volume, and speaker routing do not alter the saved media
+
+MP4/MP3/WAV are export targets for a later milestone; M4 keeps WebM as the native capture container.
