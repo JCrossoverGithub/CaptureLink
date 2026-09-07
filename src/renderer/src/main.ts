@@ -49,16 +49,18 @@ root.innerHTML = `
           id="controller-toggle"
           type="button"
           disabled
+          aria-pressed="false"
         >
-          Controller Off
+          Enable Controller
         </button>
 
         <button
           id="microphone-toggle"
           type="button"
           disabled
+          aria-pressed="false"
         >
-          Microphone Off
+          Enable Microphone
         </button>
 
         <div class="audio-controls" aria-label="Stream audio controls">
@@ -101,8 +103,8 @@ root.innerHTML = `
           </span>
           <span id="recording-timer" class="recording-timer">00:00</span>
           <span id="recording-status" class="recording-status">Ready</span>
-          <span id="recording-size" class="recording-size">0 B</span>
-          <span id="recording-space" class="recording-space">— free</span>
+          <span id="recording-size" class="recording-size" hidden>0 B</span>
+          <span id="recording-space" class="recording-space" hidden>— free</span>
           <button
             id="record-audio"
             type="button"
@@ -1110,12 +1112,13 @@ function clearMicrophoneTimeout(): void {
 
 function updateMicrophoneButton(): void {
   if (microphonePending) {
-    microphoneButton.textContent = 'Microphone Starting…'
+    microphoneButton.textContent = 'Starting Microphone…'
   } else {
     microphoneButton.textContent = microphoneActive
-      ? 'Microphone On'
-      : 'Microphone Off'
+      ? 'Disable Microphone'
+      : 'Enable Microphone'
   }
+  microphoneButton.setAttribute('aria-pressed', String(microphoneActive))
 }
 
 function detachController(): void {
@@ -1129,7 +1132,8 @@ function detachController(): void {
 
   activeGamepad = null
   controllerAttached = false
-  controllerButton.textContent = 'Controller Off'
+  controllerButton.textContent = 'Enable Controller'
+  controllerButton.setAttribute('aria-pressed', 'false')
 }
 
 function stopMicrophone(): void {
@@ -1902,6 +1906,10 @@ function setRecordingUi(
   kind: RecordingKind | null = recordingKind
 ): void {
   const recording = state === 'recording'
+  const showStorage = recording || state === 'saving'
+
+  recordingSize.hidden = !showStorage
+  recordingSpace.hidden = !showStorage
 
   recordingIndicator.hidden = !recording
   recordingIndicator.classList.toggle('recording-indicator--active', recording)
@@ -2235,6 +2243,8 @@ function updateInteractiveState(): void {
   const sessionActive = activeServerId !== null
   const locked = streamBusy || sessionActive
   const mediaReady = sessionActive && webRtcConnected && !streamBusy
+
+  document.body.classList.toggle('session-connected', webRtcConnected)
 
   refreshConsolesButton.disabled = !signedIn || locked
   disconnectButton.disabled = !sessionActive || streamBusy
@@ -2618,7 +2628,8 @@ function toggleController(): void {
     gamepad.attach(activePlayer)
     activeGamepad = gamepad
     controllerAttached = true
-    controllerButton.textContent = 'Controller On'
+    controllerButton.textContent = 'Disable Controller'
+    controllerButton.setAttribute('aria-pressed', 'true')
     setStreamStatus('Controller and keyboard input enabled')
   } catch (error) {
     console.error('[CaptureLink] Controller attach failed:', error)

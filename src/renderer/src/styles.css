@@ -957,3 +957,51 @@ input:focus-visible {
 .auth-output:empty {
   display: none;
 }
+
+/* Connected sessions prioritize the live stream over first-run onboarding. */
+.session-connected .grid {
+  display: none;
+}
+
+.session-connected .stream-card {
+  order: 1;
+  margin-top: 0;
+}
+
+.session-connected .audio-devices-panel {
+  order: 2;
+}
+
+.session-connected .diagnostics-panel {
+  order: 3;
+}
+
+.session-connected .recording-library-panel {
+  order: 4;
+}
+
+.session-connected .topbar {
+  padding-top: 18px;
+  padding-bottom: 14px;
+}
+
+.session-connected .topbar h1,
+.session-connected .topbar .subtitle {
+  display: none;
+}
+
+.session-connected .topbar .eyebrow {
+  margin: 0;
+}
+
+.recording-size[hidden],
+.recording-space[hidden] {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .session-connected .topbar {
+    padding-top: 14px;
+    padding-bottom: 10px;
+  }
+}
