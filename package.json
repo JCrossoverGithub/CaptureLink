@@ -14,7 +14,9 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "dist:win": "npm run build && electron-builder --win nsis",
-    "vendor:xbox-player": "node scripts/vendor-xbox-player.mjs"
+    "vendor:xbox-player": "node scripts/vendor-xbox-player.mjs",
+    "predev": "npm run vendor:xbox-player",
+    "prebuild": "npm run vendor:xbox-player"
   },
   "devDependencies": {
     "electron": "44.2.0",
