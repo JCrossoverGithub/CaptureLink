@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { unlink } from 'node:fs/promises'
+import { join } from 'node:path'
 
 export type RecordingExportFormat = 'mp4' | 'mp3' | 'wav'
 
@@ -24,7 +26,42 @@ export interface FfmpegExportOptions {
 
 function getFfmpegCommand(): string {
   const configured = process.env.CAPTURELINK_FFMPEG?.trim()
-  return configured || 'ffmpeg'
+
+  if (configured) {
+    return configured
+  }
+
+  const executable =
+    process.platform === 'win32'
+      ? 'ffmpeg.exe'
+      : 'ffmpeg'
+
+  // Packaged CaptureLink builds place FFmpeg outside app.asar so the
+  // operating system can execute the native binary directly.
+  const bundled = join(
+    process.resourcesPath,
+    'ffmpeg',
+    executable
+  )
+
+  if (existsSync(bundled)) {
+    return bundled
+  }
+
+  // Development installs use the binary provided by ffmpeg-static.
+  const development = join(
+    process.cwd(),
+    'node_modules',
+    'ffmpeg-static',
+    executable
+  )
+
+  if (existsSync(development)) {
+    return development
+  }
+
+  // Final fallback supports developer machines with FFmpeg on PATH.
+  return executable
 }
 
 export async function getFfmpegSupport(): Promise<FfmpegSupport> {
@@ -62,7 +99,7 @@ export async function getFfmpegSupport(): Promise<FfmpegSupport> {
 
     child.on('error', (error: NodeJS.ErrnoException) => {
       const detail = error.code === 'ENOENT'
-        ? 'FFmpeg was not found. Install FFmpeg or set CAPTURELINK_FFMPEG to the executable path.'
+        ? 'CaptureLink could not find its FFmpeg runtime. Reinstall CaptureLink or set CAPTURELINK_FFMPEG to a valid executable.'
         : `FFmpeg could not start: ${error.message}`
 
       finish(false, detail)
@@ -223,7 +260,7 @@ async function runFfmpegExport(
 
     child.on('error', (error: NodeJS.ErrnoException) => {
       const message = error.code === 'ENOENT'
-        ? 'FFmpeg was not found. Install FFmpeg or set CAPTURELINK_FFMPEG to the executable path.'
+        ? 'CaptureLink could not find its FFmpeg runtime. Reinstall CaptureLink or set CAPTURELINK_FFMPEG to a valid executable.'
         : `FFmpeg could not start: ${error.message}`
 
       fail(new Error(message))

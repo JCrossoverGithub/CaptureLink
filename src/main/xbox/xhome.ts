@@ -296,7 +296,10 @@ export class XboxHomeManager {
       const state = stateResponse.state ?? 'Unknown'
 
       if (state !== previousState) {
-        console.log(`[CaptureLink] xHome session state: ${state}`)
+        console.log(
+          `[CaptureLink] xHome session state: ${state}`,
+          stateResponse
+        )
         onStatus(`Xbox session: ${state}`)
         previousState = state
       }
@@ -330,11 +333,26 @@ export class XboxHomeManager {
         }
       }
 
-      if (state === 'Error') {
+      if (state === 'Failed' || state === 'Error') {
+        console.error(
+          '[CaptureLink] xHome session failure:',
+          describeBody(stateResponse)
+        )
+
+        const code = stateResponse.errorDetails?.code
+        const message = stateResponse.errorDetails?.message
+
         throw new Error(
-          stateResponse.errorDetails?.message ??
-            stateResponse.errorDetails?.code ??
-            'Xbox session entered the Error state.'
+          [
+            `Xbox session entered the ${state} state.`,
+            code ? `Code: ${code}.` : '',
+            message ? `Message: ${message}` : '',
+            !code && !message
+              ? `Response: ${describeBody(stateResponse)}`
+              : ''
+          ]
+            .filter(Boolean)
+            .join(' ')
         )
       }
 

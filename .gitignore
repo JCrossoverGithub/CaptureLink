@@ -36,4 +36,3 @@ Thumbs.db
 
 # Generated third-party browser bundle for local Remote Play development
 src/renderer/public/vendor/xCloudPlayer.min.js
-third_party/xbox-xcloud-player/SOURCE.json

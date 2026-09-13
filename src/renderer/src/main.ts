@@ -46,6 +46,24 @@ root.innerHTML = `
         </button>
 
         <button
+          id="fullscreen-video"
+          type="button"
+          disabled
+          title="Show the Xbox stream fullscreen"
+        >
+          Fullscreen
+        </button>
+
+        <button
+          id="picture-in-picture"
+          type="button"
+          disabled
+          title="Show the Xbox stream in a floating Picture-in-Picture window"
+        >
+          Picture in Picture
+        </button>
+
+        <button
           id="controller-toggle"
           type="button"
           disabled
@@ -439,6 +457,12 @@ const streamStatus =
 
 const disconnectButton =
   requireElement<HTMLButtonElement>('#disconnect-session')
+
+const fullscreenVideoButton =
+  requireElement<HTMLButtonElement>('#fullscreen-video')
+
+const pictureInPictureButton =
+  requireElement<HTMLButtonElement>('#picture-in-picture')
 
 const controllerButton =
   requireElement<HTMLButtonElement>('#controller-toggle')
@@ -2248,6 +2272,11 @@ function updateInteractiveState(): void {
 
   refreshConsolesButton.disabled = !signedIn || locked
   disconnectButton.disabled = !sessionActive || streamBusy
+  fullscreenVideoButton.disabled = !sessionActive || streamBusy
+  pictureInPictureButton.disabled =
+    !sessionActive ||
+    streamBusy ||
+    !document.pictureInPictureEnabled
   controllerButton.disabled = !mediaReady
   microphoneButton.disabled = !mediaReady || microphonePending
   microphoneDeviceSelect.disabled = microphoneActive || microphonePending || microphoneMonitorStream !== null
@@ -2913,6 +2942,152 @@ refreshConsolesButton.addEventListener('click', () => {
   void loadConsoles()
 })
 
+function getStreamVideoElement(): HTMLVideoElement | null {
+  return streamHolder.querySelector<HTMLVideoElement>('video')
+}
+
+let nativeVideoFullscreen = false
+
+function applyVideoFullscreenState(fullscreen: boolean): void {
+  nativeVideoFullscreen = fullscreen
+
+  document.body.classList.toggle(
+    'capturelink-native-fullscreen',
+    fullscreen
+  )
+
+  streamHolder.classList.toggle(
+    'capturelink-video-fullscreen',
+    fullscreen
+  )
+
+  syncVideoPresentationButtons()
+}
+
+function syncVideoPresentationButtons(): void {
+  fullscreenVideoButton.textContent =
+    nativeVideoFullscreen
+      ? 'Exit Fullscreen'
+      : 'Fullscreen'
+
+  pictureInPictureButton.textContent =
+    document.pictureInPictureElement
+      ? 'Exit PiP'
+      : 'Picture in Picture'
+}
+
+fullscreenVideoButton.addEventListener('click', () => {
+  void (async () => {
+    const video = getStreamVideoElement()
+
+    if (!video) {
+      setStreamStatus(
+        'Xbox video is not available for fullscreen'
+      )
+      return
+    }
+
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      }
+
+      const result =
+        await window.captureLink.setWindowFullscreen(
+          !nativeVideoFullscreen
+        )
+
+      applyVideoFullscreenState(result.fullscreen)
+    } catch (error) {
+      console.error(
+        '[CaptureLink] Native fullscreen failed:',
+        error
+      )
+
+      setStreamStatus(
+        error instanceof Error
+          ? `Fullscreen failed: ${error.message}`
+          : 'Fullscreen failed.'
+      )
+    }
+  })()
+})
+
+pictureInPictureButton.addEventListener('click', () => {
+  void (async () => {
+    const video = getStreamVideoElement()
+
+    if (!video) {
+      setStreamStatus(
+        'Xbox video is not available for Picture in Picture'
+      )
+      return
+    }
+
+    if (
+      !document.pictureInPictureEnabled ||
+      typeof video.requestPictureInPicture !== 'function'
+    ) {
+      setStreamStatus(
+        'Picture in Picture is not available in this Chromium build'
+      )
+      return
+    }
+
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      } else {
+        if (nativeVideoFullscreen) {
+          await window.captureLink.setWindowFullscreen(false)
+        }
+
+        video.addEventListener(
+          'leavepictureinpicture',
+          syncVideoPresentationButtons,
+          { once: true }
+        )
+
+        await video.requestPictureInPicture()
+      }
+
+      syncVideoPresentationButtons()
+    } catch (error) {
+      console.error(
+        '[CaptureLink] Picture in Picture failed:',
+        error
+      )
+
+      setStreamStatus(
+        error instanceof Error
+          ? `Picture in Picture failed: ${error.message}`
+          : 'Picture in Picture failed.'
+      )
+    }
+  })()
+})
+
+window.captureLink.onWindowFullscreenChanged(
+  (fullscreen) => {
+    applyVideoFullscreenState(fullscreen)
+  }
+)
+
+document.addEventListener(
+  'keydown',
+  (event) => {
+    if (
+      event.key === 'Escape' &&
+      nativeVideoFullscreen
+    ) {
+      event.preventDefault()
+      event.stopPropagation()
+
+      void window.captureLink.setWindowFullscreen(false)
+    }
+  },
+  true
+)
 disconnectButton.addEventListener('click', () => {
   void disconnectFromConsole()
 })

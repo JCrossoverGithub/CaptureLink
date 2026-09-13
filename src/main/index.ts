@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { Msal, TokenStore } from 'xal-node'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
@@ -280,18 +281,6 @@ async function preserveActiveRecording(reason: string): Promise<void> {
   }
 }
 
-function getXboxAuthExecutable(): string {
-  const executable =
-    process.platform === 'win32' ? 'xbox-auth.cmd' : 'xbox-auth'
-
-  return join(
-    app.getAppPath(),
-    'node_modules',
-    '.bin',
-    executable
-  )
-}
-
 function emitStreamStatus(status: string): void {
   console.log(`[CaptureLink] ${status}`)
   mainWindow?.webContents.send(
@@ -302,6 +291,9 @@ function emitStreamStatus(status: string): void {
 
 function createMainWindow(): void {
   const window = new BrowserWindow({
+    icon: app.isPackaged
+      ? join(process.resourcesPath, 'CaptureLink.ico')
+      : join(process.cwd(), 'build', 'CaptureLink.ico'),
     width: 1280,
     height: 820,
     minWidth: 960,
@@ -319,6 +311,19 @@ function createMainWindow(): void {
   })
 
   mainWindow = window
+  window.on('enter-full-screen', () => {
+    window.webContents.send(
+      'capturelink:window-fullscreen-changed',
+      true
+    )
+  })
+
+  window.on('leave-full-screen', () => {
+    window.webContents.send(
+      'capturelink:window-fullscreen-changed',
+      false
+    )
+  })
 
   window.webContents.session.setPermissionCheckHandler(
     (webContents, permission) => {
@@ -400,6 +405,26 @@ function createMainWindow(): void {
   })
 }
 
+ipcMain.handle(
+  'capturelink:window-set-fullscreen',
+  (event, fullscreen: boolean) => {
+    if (typeof fullscreen !== 'boolean') {
+      throw new Error('Fullscreen state must be a boolean.')
+    }
+
+    const window = BrowserWindow.fromWebContents(event.sender)
+
+    if (!window) {
+      throw new Error('CaptureLink window is not available.')
+    }
+
+    window.setFullScreen(fullscreen)
+
+    return {
+      fullscreen
+    }
+  }
+)
 ipcMain.handle('capturelink:xbox-auth-status', () => {
   return {
     authenticated: existsSync(getTokenPath())
@@ -414,86 +439,79 @@ ipcMain.handle('capturelink:xbox-auth-start', async () => {
     }
   }
 
-  const executable = getXboxAuthExecutable()
-
-  if (!existsSync(executable)) {
-    throw new Error(`Xbox authentication executable not found: ${executable}`)
-  }
-
   authProcessRunning = true
-
-  const authDirectory = getAuthDirectory()
-
-  const child = spawn(
-    executable,
-    ['auth', '--auth', 'msal'],
-    {
-      cwd: authDirectory,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe']
-    }
-  )
-
-  let microsoftLinkOpened = false
 
   const emit = (message: string): void => {
     mainWindow?.webContents.send(
       'capturelink:xbox-auth-output',
       message
     )
-
-    if (
-      !microsoftLinkOpened &&
-      message.includes('https://www.microsoft.com/link')
-    ) {
-      microsoftLinkOpened = true
-      void shell.openExternal('https://www.microsoft.com/link')
-    }
   }
 
-  child.stdout.on('data', (chunk: Buffer) => {
-    emit(chunk.toString())
-  })
+  void (async () => {
+    try {
+      const tokenPath = getTokenPath()
+      const tokenStore = new TokenStore()
 
-  child.stderr.on('data', (chunk: Buffer) => {
-    emit(chunk.toString())
-  })
+      // Loading also establishes the file path that TokenStore will save to.
+      tokenStore.load(tokenPath, true)
 
-  child.on('error', (error) => {
-    authProcessRunning = false
+      const msal = new Msal(tokenStore)
 
-    mainWindow?.webContents.send(
-      'capturelink:xbox-auth-complete',
-      {
-        success: false,
-        message: error.message
-      }
-    )
-  })
+      emit('Requesting a Microsoft device code...')
 
-  child.on('close', (code) => {
-    authProcessRunning = false
+      const deviceCodeDetails =
+        await msal.doDeviceCodeAuth()
 
-    const success =
-      code === 0 &&
-      existsSync(getTokenPath())
+      emit(deviceCodeDetails.message)
 
-    mainWindow?.webContents.send(
-      'capturelink:xbox-auth-complete',
-      {
-        success,
-        message: success
-          ? 'Authentication succeeded.'
-          : `Authentication failed with exit code ${code ?? 'unknown'}.`
-      }
-    )
-  })
+      await shell.openExternal(
+        deviceCodeDetails.verification_uri
+      )
+
+      await msal.doPollForDeviceCodeAuth(
+        deviceCodeDetails.device_code,
+        deviceCodeDetails.expires_in * 1000
+      )
+
+      // Polling saves automatically; this makes persistence explicit.
+      tokenStore.save()
+
+      const success = existsSync(tokenPath)
+
+      mainWindow?.webContents.send(
+        'capturelink:xbox-auth-complete',
+        {
+          success,
+          message: success
+            ? 'Authentication succeeded.'
+            : 'Authentication completed, but the Xbox token file was not created.'
+        }
+      )
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error)
+
+      emit(`Authentication failed: ${message}`)
+
+      mainWindow?.webContents.send(
+        'capturelink:xbox-auth-complete',
+        {
+          success: false,
+          message
+        }
+      )
+    } finally {
+      authProcessRunning = false
+    }
+  })()
 
   return {
     started: true
   }
 })
-
 ipcMain.handle('capturelink:xbox-consoles', async () => {
   return await getXboxConsoles()
 })
@@ -982,6 +1000,11 @@ ipcMain.handle(
 
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.capturelink.desktop')
+  }
+
+  Menu.setApplicationMenu(null)
   createMainWindow()
 
   app.on('activate', () => {

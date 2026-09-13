@@ -121,6 +121,12 @@ declare global {
 
       stopXboxStream(): Promise<void>
 
+      setWindowFullscreen(
+        fullscreen: boolean
+      ): Promise<{
+        fullscreen: boolean
+      }>
+
 
       beginRecording(
         kind: 'audio' | 'video',
@@ -218,6 +224,9 @@ declare global {
         }) => void
       ): void
 
+      onWindowFullscreenChanged(
+        callback: (fullscreen: boolean) => void
+      ): void
       onXboxStreamStatus(
         callback: (status: string) => void
       ): void
