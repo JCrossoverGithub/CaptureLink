@@ -38,11 +38,17 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "executableName": "CaptureLink"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "CaptureLink-Setup-${version}.${ext}",
+      "shortcutName": "CaptureLink",
+      "uninstallDisplayName": "CaptureLink",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
     "extraResources": [
       {
@@ -53,5 +59,11 @@
   },
   "dependencies": {
     "xal-node": "^1.1.5"
+  },
+  "author": "Josh Schultz",
+  "homepage": "https://github.com/JCrossoverGithub/CaptureLink",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JCrossoverGithub/CaptureLink.git"
   }
 }

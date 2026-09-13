@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { Msal, TokenStore } from 'xal-node'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -997,6 +997,11 @@ ipcMain.handle(
 
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.capturelink.desktop')
+  }
+
+  Menu.setApplicationMenu(null)
   createMainWindow()
 
   app.on('activate', () => {
