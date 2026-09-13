@@ -35,6 +35,12 @@ contextBridge.exposeInMainWorld('captureLink', {
   stopXboxStream: () =>
     ipcRenderer.invoke('capturelink:xbox-stream-stop'),
 
+  setWindowFullscreen: (fullscreen: boolean) =>
+    ipcRenderer.invoke(
+      'capturelink:window-set-fullscreen',
+      fullscreen
+    ),
+
 
   beginRecording: (
     kind: 'audio' | 'video',
@@ -148,6 +154,14 @@ contextBridge.exposeInMainWorld('captureLink', {
     )
   },
 
+  onWindowFullscreenChanged: (
+    callback: (fullscreen: boolean) => void
+  ) => {
+    ipcRenderer.on(
+      'capturelink:window-fullscreen-changed',
+      (_event, fullscreen: boolean) => callback(fullscreen)
+    )
+  },
   onXboxStreamStatus: (
     callback: (status: string) => void
   ) => {

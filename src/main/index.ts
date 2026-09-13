@@ -308,6 +308,19 @@ function createMainWindow(): void {
   })
 
   mainWindow = window
+  window.on('enter-full-screen', () => {
+    window.webContents.send(
+      'capturelink:window-fullscreen-changed',
+      true
+    )
+  })
+
+  window.on('leave-full-screen', () => {
+    window.webContents.send(
+      'capturelink:window-fullscreen-changed',
+      false
+    )
+  })
 
   window.webContents.session.setPermissionCheckHandler(
     (webContents, permission) => {
@@ -389,6 +402,26 @@ function createMainWindow(): void {
   })
 }
 
+ipcMain.handle(
+  'capturelink:window-set-fullscreen',
+  (event, fullscreen: boolean) => {
+    if (typeof fullscreen !== 'boolean') {
+      throw new Error('Fullscreen state must be a boolean.')
+    }
+
+    const window = BrowserWindow.fromWebContents(event.sender)
+
+    if (!window) {
+      throw new Error('CaptureLink window is not available.')
+    }
+
+    window.setFullScreen(fullscreen)
+
+    return {
+      fullscreen
+    }
+  }
+)
 ipcMain.handle('capturelink:xbox-auth-status', () => {
   return {
     authenticated: existsSync(getTokenPath())
