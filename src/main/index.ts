@@ -291,6 +291,9 @@ function emitStreamStatus(status: string): void {
 
 function createMainWindow(): void {
   const window = new BrowserWindow({
+    icon: app.isPackaged
+      ? join(process.resourcesPath, 'CaptureLink.ico')
+      : join(process.cwd(), 'build', 'CaptureLink.ico'),
     width: 1280,
     height: 820,
     minWidth: 960,

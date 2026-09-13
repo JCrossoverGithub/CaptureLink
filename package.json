@@ -29,7 +29,8 @@
     "appId": "com.capturelink.desktop",
     "productName": "CaptureLink",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "out/**/*",
@@ -39,7 +40,8 @@
       "target": [
         "nsis"
       ],
-      "executableName": "CaptureLink"
+      "executableName": "CaptureLink",
+      "icon": "build/CaptureLink.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -48,12 +50,19 @@
       "shortcutName": "CaptureLink",
       "uninstallDisplayName": "CaptureLink",
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "build/CaptureLink.ico",
+      "uninstallerIcon": "build/CaptureLink.ico",
+      "installerHeaderIcon": "build/CaptureLink.ico"
     },
     "extraResources": [
       {
         "from": "node_modules/ffmpeg-static/ffmpeg.exe",
         "to": "ffmpeg/ffmpeg.exe"
+      },
+      {
+        "from": "build/CaptureLink.ico",
+        "to": "CaptureLink.ico"
       }
     ]
   },
