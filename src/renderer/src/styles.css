@@ -1005,3 +1005,32 @@ input:focus-visible {
     padding-bottom: 10px;
   }
 }
+
+/* Native fullscreen Xbox presentation */
+body.capturelink-native-fullscreen {
+  overflow: hidden !important;
+}
+
+.capturelink-video-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  z-index: 2147483647 !important;
+  background: #000 !important;
+}
+
+.capturelink-video-fullscreen video {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
+}
