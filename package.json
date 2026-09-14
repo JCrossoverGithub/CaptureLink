@@ -63,6 +63,26 @@
       {
         "from": "build/CaptureLink.ico",
         "to": "CaptureLink.ico"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "licenses/THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "third_party/licenses",
+        "to": "licenses"
+      },
+      {
+        "from": "third_party/xbox-xcloud-player/SOURCE.json",
+        "to": "licenses/xbox-xcloud-player/SOURCE.json"
+      },
+      {
+        "from": "third_party/xbox-xcloud-player/UPSTREAM_PACKAGE.json",
+        "to": "licenses/xbox-xcloud-player/UPSTREAM_PACKAGE.json"
+      },
+      {
+        "from": "third_party/xbox-xcloud-player/README.md",
+        "to": "licenses/xbox-xcloud-player/README.md"
       }
     ]
   },

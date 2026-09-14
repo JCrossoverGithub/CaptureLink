@@ -1,93 +1,161 @@
 # CaptureLink Roadmap
 
-## M0 — Clean desktop foundation
+CaptureLink has completed the original protocol-parity and core recording milestones.
 
-- [x] Create standalone CaptureLink repository
-- [x] Use Chromium-based Electron runtime
-- [x] Establish secure main/preload/renderer boundaries
-- [x] Add initial product shell
-- [ ] Establish automated checks
+The project is now primarily in Windows release-readiness work for v0.1.
 
-## M1 — Known-good Remote Play parity
+## Completed foundation
 
-- [x] Integrate Xbox authentication
-- [x] Persist tokens securely outside the repository
-- [x] Discover owned/available Xbox consoles
-- [x] Select a console
-- [x] Start xHome session
-- [x] Complete SDP negotiation in Electron Chromium
-- [x] Complete ICE negotiation
-- [x] Render Xbox video
-- [x] Play Xbox audio
-- [x] Reconfirm incoming game-chat audio
-- [x] Stop/disconnect cleanly
+### M0 - Desktop foundation
 
-**Exit criterion:** CaptureLink reproduces the exact behavior proven by the XboxLink protocol spike without depending on localhost + an external browser.
+- [x] Standalone CaptureLink repository
+- [x] Chromium-based Electron runtime
+- [x] main/preload/renderer boundaries
+- [x] initial application shell
 
-## M2 — Existing controls and diagnostics
+### M1 - Xbox Remote Play parity
 
-- [x] Controller attach/detach
-- [x] Microphone start/stop foundation and chat SDP renegotiation
-- [x] Keyboard input through the upstream gamepad adapter
-- [x] Stream mute and volume controls
-- [x] Microphone input selector and live input meter
-- [x] Speaker/output selector with Chromium sink routing
-- [x] Live WebRTC statistics
-- [x] Connection state and error UX
-- [x] Validate microphone audibility with another player
-- [ ] Decide whether touch or dedicated mouse input belongs in the Windows-first product
+- [x] Microsoft/Xbox authentication
+- [x] authentication persistence outside the repository
+- [x] Xbox console discovery
+- [x] console selection
+- [x] xHome session creation
+- [x] SDP negotiation
+- [x] ICE negotiation
+- [x] Xbox video
+- [x] Xbox audio
+- [x] incoming in-game voice-chat validation
+- [x] clean disconnect behavior
 
-**Exit criterion:** controller input, selected-device microphone chat uplink, audio routing controls, and diagnostics all work reliably during a live xHome session.
+### M2 - Controls and diagnostics
 
-## M3 — Audio recording
+- [x] controller attach/detach
+- [x] keyboard input through the player adapter
+- [x] microphone device selection
+- [x] microphone input meter
+- [x] microphone chat uplink
+- [x] microphone start/stop
+- [x] local stream mute
+- [x] local volume
+- [x] supported speaker/output selection
+- [x] WebRTC diagnostics
+- [x] microphone audibility validation with another player
 
-- [x] Tap the incoming Remote Play audio stream
-- [x] Start/stop audio recording
-- [x] Verify saved recordings contain game audio + incoming game chat
-- [x] Save locally through an Electron save dialog
-- [x] Recording timer
-- [x] Clear recording indicator
-- [x] Preserve local mute/volume independence from recorded media
+### M3 - Audio recording
 
-**Exit criterion:** a saved file audibly contains the same game and game-chat audio heard live.
+- [x] capture incoming Xbox audio
+- [x] audio-only recording
+- [x] game-audio validation
+- [x] incoming game-chat validation
+- [x] recording state and elapsed time
+- [x] local playback controls remain independent from captured media
 
-## M4 — Video + audio recording
+### M4 - Video recording and hardening
 
-- [x] Record received video + audio together
-- [x] Maintain A/V synchronization under real gameplay testing
-- [x] Save locally
-- [x] Handle long recordings safely with disk-backed chunk streaming
-- [x] Check disk space before and during recording
-- [x] Warn before closing during active recording
+- [x] combined video + Xbox audio recording
+- [x] real gameplay A/V validation
+- [x] disk-backed recording chunks
+- [x] pre-recording disk-space checks
+- [x] continued disk-space checks while recording
+- [x] recording preservation during supported failure paths
+- [x] close-during-recording protection
 
-## M5 — Recording library / export
+### M5 - Recording library and exports
 
-- [x] User-selected save location
-- [x] Recording history
-- [x] Open file / open folder
-- [x] Rename/delete recording
-- [x] Export/conversion strategy
-- [x] MP3 export for audio-only recordings
-- [x] MP4 export for video recordings
-- [x] WAV export for lossless/editing workflows
-- [x] Preserve/export original WebM capture when requested
+- [x] persisted recording metadata
+- [x] recording library
+- [x] open recording
+- [x] reveal in folder
+- [x] rename
+- [x] delete
+- [x] missing-file handling
+- [x] original WebM export
+- [x] MP4 export
+- [x] MP3 export
+- [x] WAV export
+- [x] conversion progress
+- [x] MP4 frame-timing correction
 
-## Pre-M6 polish — audio control and usability
+### Pre-release usability
 
-- [x] Independent microphone gain for saved recordings
-- [x] Final UI/UX pass for onboarding, focus states, and destructive actions
-- [x] Manual local audio resync without reconnecting the Xbox session
-- [x] Conservative automatic resync when WebRTC reports sustained audio-late A/V offset
-- [x] Surface A/V offset and average audio jitter-buffer delay in diagnostics
-- [ ] Re-test long-session audio drift in the native Windows build to determine whether the remaining delay is WSLg-specific
+- [x] optional local microphone recording mix
+- [x] independent recording-only microphone gain
+- [x] onboarding/session UI polish
+- [x] A/V timing diagnostics
+- [x] audio jitter-buffer diagnostics
+- [x] manual audio resync
+- [x] conservative automatic audio resync
+- [x] fullscreen
+- [x] Picture-in-Picture
 
-## M6 — Windows release
+### Windows runtime and packaging
 
-- [ ] Product naming/trademark review
-- [ ] Microsoft/Xbox terms review
-- [ ] Third-party attribution review
-- [ ] Privacy/recording disclosure
-- [ ] Installer signing strategy
-- [ ] NSIS installer
-- [ ] Private alpha
-- [ ] Public technical preview decision
+- [x] native Windows authentication foundation
+- [x] improved session failure diagnostics
+- [x] vendored/pinned Xbox player bundle
+- [x] SHA-256 verification for Xbox player bundle
+- [x] bundled FFmpeg runtime
+- [x] application identity
+- [x] application icon
+- [x] installer branding
+- [x] NSIS installer
+- [x] desktop shortcut
+- [x] Start Menu shortcut
+- [x] packaged-build smoke testing foundation
+
+## Current phase - v0.1 release readiness
+
+- [x] merge completed implementation into `main`
+- [x] remove historical feature branches
+- [x] begin full repository documentation refresh
+- [ ] complete documentation refresh
+- [ ] complete third-party notices
+- [ ] preserve required third-party license texts
+- [ ] Microsoft/Xbox service-terms review
+- [ ] product naming/trademark review
+- [ ] FFmpeg binary redistribution review
+- [ ] choose CaptureLink's own repository license
+- [ ] add user-facing recording/privacy disclosure
+- [ ] repeat long-session testing on native Windows
+- [ ] final installed-build regression pass
+- [ ] decide code-signing strategy
+- [ ] decide public technical-preview readiness
+
+## Post-v0.1 candidates
+
+These are possibilities, not commitments.
+
+### Reliability
+
+- reconnect action that cleanly rebuilds the xHome/WebRTC session
+- broader title-specific controller-ownership testing
+- additional long-duration recording tests
+- improved recovery from console sleep/network changes
+- more detailed diagnostic export
+
+### Recording
+
+- additional codec/export choices
+- configurable export presets
+- recording notes/tags
+- richer recording-library search and filtering
+- optional lightweight trimming
+
+### Input
+
+- evaluate dedicated mouse-input support
+- evaluate touch controls
+- investigate Remote Play controller ownership/player-slot behavior further
+
+### Platform
+
+- evaluate macOS feasibility
+- evaluate Linux feasibility
+
+Cross-platform support should not compromise the known-good Windows/Chromium implementation.
+
+### Optional future services
+
+Possible future features such as transcription, cloud storage, remote workflows, or GPU-assisted processing should remain optional extensions.
+
+They are not prerequisites for CaptureLink's core local Xbox recording use case.
