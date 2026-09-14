@@ -1,8 +1,11 @@
 {
-    "name":  "xbox-xcloud-player",
-    "version":  "1.0.0-beta7",
-    "license":  "MIT",
-    "repository":  "https://github.com/unknownskl/xbox-xcloud-player",
-    "bundle":  "xCloudPlayer.min.js",
-    "sha256":  "9ca5944163470f239c6c066e3f75e5006e96647d62f9c5dfef33e4310848b62f"
+  "name": "xbox-xcloud-player",
+  "version": "1.0.0-beta7",
+  "author": "Jim Kroon <UnknownSKL>",
+  "license": "MIT",
+  "repository": "https://github.com/unknownskl/xbox-xcloud-player",
+  "bundle": "xCloudPlayer.min.js",
+  "sha256": "9ca5944163470f239c6c066e3f75e5006e96647d62f9c5dfef33e4310848b62f",
+  "upstreamPackageMetadata": "UPSTREAM_PACKAGE.json",
+  "upstreamLicenseFile": null
 }

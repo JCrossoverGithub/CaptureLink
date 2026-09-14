@@ -1,5 +1,11 @@
 # Known-good XboxLink protocol spike
 
+> **Historical reference**
+>
+> This document records the XboxLink protocol spike that preceded CaptureLink.
+> CaptureLink has since reproduced and extended this functionality inside the
+> standalone Electron application. For current implementation status, see the
+> repository README, `docs/ARCHITECTURE.md`, and `docs/PROJECT_HISTORY.md`.
 This document records the experimental state that CaptureLink is intended to reproduce.
 
 ## Environment

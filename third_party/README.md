@@ -1,12 +1,35 @@
-# Third-party work
+# Third-Party Work
 
-Do not paste or vendor upstream Xbox Remote Play code into this directory without recording:
+CaptureLink uses third-party open-source software and platform services.
 
-- project name
-- repository URL
-- exact commit/tag
-- license
-- files or concepts incorporated
-- required attribution notices
+This directory exists to make material third-party source artifacts and provenance explicit rather than hiding them inside generated build output.
 
-The XboxLink research spike used `unknownskl/xbox-xcloud-player` as a reference implementation. CaptureLink begins clean and should document any later reuse explicitly.
+## Current vendored component
+
+CaptureLink currently checks in a browser bundle from:
+
+```text
+xbox-xcloud-player
+Jim Kroon / UnknownSKL
+https://github.com/unknownskl/xbox-xcloud-player
+```
+
+See:
+
+```text
+third_party/xbox-xcloud-player/
+```
+
+The bundle is used for the browser-side Xbox xCloud/xHome WebRTC player and control layer.
+
+CaptureLink's vendoring script verifies the bundle SHA-256 before copying it into the renderer's generated public assets.
+
+## Other important dependencies
+
+Other material dependencies, including `xal-node`, Electron, and FFmpeg/`ffmpeg-static`, are installed through npm rather than copied into this directory.
+
+See:
+
+```text
+THIRD_PARTY_NOTICES.md
+```
