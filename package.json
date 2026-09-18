@@ -57,10 +57,6 @@
     },
     "extraResources": [
       {
-        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-        "to": "ffmpeg/ffmpeg.exe"
-      },
-      {
         "from": "build/CaptureLink.ico",
         "to": "CaptureLink.ico"
       },

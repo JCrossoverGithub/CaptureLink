@@ -79,27 +79,45 @@ Release-readiness tasks:
 
 ## FFmpeg and ffmpeg-static
 
-CaptureLink currently packages an FFmpeg executable supplied through `ffmpeg-static`.
+CaptureLink uses FFmpeg for optional post-recording conversion.
 
-The `ffmpeg-static` npm package used by CaptureLink declares `GPL-3.0-or-later`.
+The FFmpeg binary previously bundled through `ffmpeg-static@5.3.0` was audited during v0.1 release preparation.
 
-FFmpeg itself can be distributed under different LGPL/GPL terms depending on the exact build configuration and enabled components.
+The exact binary was identified as:
 
-Therefore the relevant compliance target is the exact executable being redistributed, not a generic statement that all FFmpeg builds have one license.
+- FFmpeg 6.1.1
+- Gyan.dev essentials build
+- static Windows x64 executable
+- GPL version 3
+- `--enable-gpl`
+- `--enable-version3`
+- `--enable-static`
+- `--enable-libx264`
+- `--enable-libx265`
+- no `--enable-nonfree`
+- SHA-256 `04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00`
 
-Before distributing the current Windows installer broadly:
+The original Gyan.dev archive was independently downloaded and its `ffmpeg.exe` matched the executable previously packaged by CaptureLink exactly by SHA-256.
 
-- [ ] Identify the exact source/build provenance of the Windows FFmpeg binary installed by `ffmpeg-static`.
-- [ ] Record the binary version and build configuration.
-- [ ] Determine the exact license that applies to that binary.
-- [ ] Preserve all notices required by that build.
-- [ ] Satisfy corresponding-source/source-offer obligations where applicable.
-- [ ] Decide whether continuing to bundle this build is preferable to another FFmpeg distribution strategy.
-- [ ] Document the final decision in `THIRD_PARTY_NOTICES.md`.
+The archive records FFmpeg source commit `e38092ef93`, its build configuration, and versions of its external libraries.
 
-CaptureLink invokes FFmpeg as a separate process.
+Because this is a statically linked GPLv3 build incorporating numerous external libraries, CaptureLink would need a complete corresponding-source distribution strategy before redistributing that executable confidently.
 
-No conclusion about CaptureLink's own license should be inferred solely from that implementation detail without an actual licensing review.
+### v0.1 decision
+
+- [x] Identify the exact previously redistributed binary.
+- [x] Identify its effective license as GPLv3.
+- [x] Confirm that `--enable-nonfree` is not enabled.
+- [x] Confirm original Gyan.dev binary provenance by SHA-256.
+- [x] Record its FFmpeg source revision and external-library versions.
+- [x] Stop redistributing the FFmpeg executable in the v0.1 Windows installer.
+- [x] Preserve FFmpeg and `ffmpeg-static` provenance documentation.
+- [x] Keep converted exports available through externally supplied FFmpeg.
+
+CaptureLink invokes FFmpeg as a separate external process.
+
+See `docs/FFMPEG.md`.
+
 
 ## Other npm dependencies
 

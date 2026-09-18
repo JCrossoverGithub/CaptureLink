@@ -35,28 +35,23 @@ CaptureLink invokes FFmpeg as a separate process after recording.
 Current executable resolution order:
 
 1. `CAPTURELINK_FFMPEG`, when explicitly configured
-2. the FFmpeg executable bundled with a packaged CaptureLink build
-3. the `ffmpeg-static` development dependency
-4. an `ffmpeg` executable available on `PATH`
-
-This means development and packaged builds can use different executable locations while sharing the same export pipeline.
+2. the `ffmpeg-static` executable in a development environment, when present
+3. an `ffmpeg` executable available on `PATH`
 
 ## Packaged Windows builds
 
-The Windows distribution currently includes the FFmpeg executable supplied through `ffmpeg-static`.
+CaptureLink v0.1 does not include an FFmpeg executable in the Windows installer.
 
-electron-builder copies it into the packaged application resources at:
+MP4, MP3, and WAV conversion therefore requires an external FFmpeg runtime supplied through:
 
-```text
-resources/ffmpeg/ffmpeg.exe
-```
+- `CAPTURELINK_FFMPEG`, or
+- an `ffmpeg` executable available on `PATH`
 
-This replaced the earlier development-only strategy in which CaptureLink depended exclusively on an externally installed FFmpeg executable.
-
-The redistribution/license obligations of the selected FFmpeg build remain part of the release-readiness review.
+The original WebM master does not require FFmpeg and remains available if no conversion runtime is configured.
 
 See:
 
+- `docs/FFMPEG.md`
 - `THIRD_PARTY_NOTICES.md`
 - `docs/LEGAL_REVIEW.md`
 

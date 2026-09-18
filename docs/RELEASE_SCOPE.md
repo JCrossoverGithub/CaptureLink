@@ -78,7 +78,7 @@ It is not intended to be a complete streaming platform or cloud service.
 - MP3 export for audio
 - WAV export for audio
 - export progress
-- bundled FFmpeg runtime in packaged Windows builds
+- external FFmpeg integration for MP4, MP3, and WAV export
 
 ### Windows distribution
 
@@ -131,7 +131,7 @@ Before calling v0.1 a public technical preview, the project still needs to compl
 - Microsoft/Xbox service-terms review
 - trademark/product-naming review
 - third-party licensing and attribution review
-- FFmpeg redistribution review
+- FFmpeg redistribution review completed; v0.1 does not bundle the audited GPLv3 executable
 - application-license decision
 - user-facing recording/privacy disclosure
 - native-Windows regression testing
