@@ -58,25 +58,20 @@ CaptureLink does not claim authorship of xal-node.
 **Repository:** https://github.com/eugeneware/ffmpeg-static
 **Package license metadata:** GPL-3.0-or-later
 
-CaptureLink uses the FFmpeg executable supplied through ffmpeg-static for post-recording media conversion.
+CaptureLink uses FFmpeg as an optional external process for post-recording conversion.
 
-Current uses include:
+The `ffmpeg-static` package remains a development dependency, but CaptureLink v0.1 does not redistribute its `ffmpeg.exe` in the Windows installer.
 
-- WebM video to MP4
-- WebM audio to MP3
-- WebM audio to WAV
+The previously bundled executable was audited as Gyan.dev FFmpeg 6.1.1 essentials, GPLv3, with SHA-256:
 
-Packaged Windows builds currently redistribute the selected FFmpeg executable as a separate process under CaptureLink's application resources.
+`04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00`
 
-FFmpeg licensing depends on the exact build configuration and incorporated components. Before broad binary redistribution, CaptureLink must identify and satisfy the license, source, and notice obligations of the exact binary being shipped.
+The `ffmpeg-static` package license text is preserved at:
 
-The ffmpeg-static package license text is preserved at:
+- `third_party/licenses/ffmpeg-static-LICENSE.txt`
 
-- third_party/licenses/ffmpeg-static-LICENSE.txt
+See `docs/FFMPEG.md` for the audit and v0.1 distribution decision.
 
-This package license alone does not resolve the redistribution obligations of the exact FFmpeg executable bundled by CaptureLink.
-
-See docs/LEGAL_REVIEW.md for the release-readiness review.
 
 ## Electron
 

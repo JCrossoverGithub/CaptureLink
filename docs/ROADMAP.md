@@ -94,7 +94,7 @@ The project is now primarily in Windows release-readiness work for v0.1.
 - [x] improved session failure diagnostics
 - [x] vendored/pinned Xbox player bundle
 - [x] SHA-256 verification for Xbox player bundle
-- [x] bundled FFmpeg runtime
+- [x] FFmpeg export integration
 - [x] application identity
 - [x] application icon
 - [x] installer branding
@@ -113,7 +113,7 @@ The project is now primarily in Windows release-readiness work for v0.1.
 - [ ] preserve required third-party license texts
 - [ ] Microsoft/Xbox service-terms review
 - [ ] product naming/trademark review
-- [ ] FFmpeg binary redistribution review
+- [x] FFmpeg binary redistribution review - v0.1 does not bundle the audited GPLv3 executable
 - [ ] choose CaptureLink's own repository license
 - [ ] add user-facing recording/privacy disclosure
 - [ ] repeat long-session testing on native Windows
@@ -159,3 +159,63 @@ Cross-platform support should not compromise the known-good Windows/Chromium imp
 Possible future features such as transcription, cloud storage, remote workflows, or GPU-assisted processing should remain optional extensions.
 
 They are not prerequisites for CaptureLink's core local Xbox recording use case.
+
+## Future: Remote Local Multiplayer
+
+A future CaptureLink generation should investigate remote second-player controller support.
+
+The goal is to allow another CaptureLink user on a different computer or network to contribute controller input to the host user's Xbox session as though a second controller were physically connected locally.
+
+A representative use case is NBA 2K Blacktop.
+
+Player 1 owns and runs the Xbox and CaptureLink session. Player 1 launches a local multiplayer mode that normally expects two controllers connected to the same Xbox.
+
+Player 2 is somewhere else and joins Player 1 through CaptureLink. Player 2 connects a controller to their own PC. CaptureLink transports that controller state over the network to Player 1's CaptureLink session and presents it to the Xbox as a distinct second local controller.
+
+The game should therefore behave as though Player 1 and Player 2 are sitting together with two locally connected controllers even though Player 2 is remote.
+
+This differs from normal Xbox online multiplayer. CaptureLink would effectively extend a game's local multiplayer controller interface across the network.
+
+### Desired architecture
+
+Player 2 controller
+-> Player 2 CaptureLink client
+-> low-latency encrypted controller-input transport
+-> Player 1 CaptureLink host
+-> second logical Xbox controller/input channel
+-> host Xbox
+-> local multiplayer game
+
+Player 2 would also receive the host Remote Play video/audio stream so the remote player has the feedback needed to play.
+
+### Research questions
+
+Future work should investigate:
+
+- whether xHome or Xbox Remote Play supports multiple independent controller/input slots
+- whether xbox-xcloud-player can represent more than one controller
+- whether a second logical controller can be negotiated directly with the Xbox
+- whether Windows virtual-gamepad technology is required
+- how controller identity and player-slot assignment are represented
+- how Player 2 joins and leaves without disturbing Player 1
+- latency requirements for sports, fighting, racing, and other timing-sensitive games
+- synchronization between Player 2 input and the Remote Play stream
+- secure invitation and explicit host authorization
+- prevention of unauthorized remote input
+- controller disconnect and reconnect behavior
+- vibration and other controller return-channel features
+
+### Product goal
+
+The eventual experience should be simple:
+
+1. Player 1 starts CaptureLink.
+2. Player 1 chooses an option such as **Invite Remote Controller**.
+3. Player 2 joins the CaptureLink session.
+4. Player 2 connects or selects their controller.
+5. CaptureLink assigns that controller as Player 2 on the host Xbox.
+6. The Xbox game sees two local controllers even though one player is remote.
+
+The game itself should not need to support online multiplayer.
+
+This feature is intentionally deferred beyond v0.1. The current Remote Play, controller, recording, and stability foundations should remain stable before multi-user controller transport is introduced.

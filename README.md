@@ -58,7 +58,7 @@ The current implementation supports:
 - MP4 video export
 - MP3 audio export
 - WAV audio export
-- bundled FFmpeg runtime in packaged Windows builds
+- optional external FFmpeg integration for MP4, MP3, and WAV exports
 - NSIS Windows installer
 - CaptureLink application and installer branding
 

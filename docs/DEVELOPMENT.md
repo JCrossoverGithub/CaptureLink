@@ -163,7 +163,6 @@ release/win-unpacked/
 The current Windows package includes:
 
 ```text
-resources/ffmpeg/ffmpeg.exe
 resources/CaptureLink.ico
 resources/licenses/THIRD_PARTY_NOTICES.md
 resources/licenses/xal-node-LICENSE.txt
@@ -202,11 +201,10 @@ Get-Item .\release\win-unpacked\CaptureLink.exe |
     Format-List
 ```
 
-Confirm bundled resources:
+Confirm packaged resources and verify that FFmpeg is not embedded:
 
 ```powershell
 Get-Item .\release\win-unpacked\resources\CaptureLink.ico
-Get-Item .\release\win-unpacked\resources\ffmpeg\ffmpeg.exe
 ```
 
 ## Installed-build smoke test

@@ -36,18 +36,6 @@ function getFfmpegCommand(): string {
       ? 'ffmpeg.exe'
       : 'ffmpeg'
 
-  // Packaged CaptureLink builds place FFmpeg outside app.asar so the
-  // operating system can execute the native binary directly.
-  const bundled = join(
-    process.resourcesPath,
-    'ffmpeg',
-    executable
-  )
-
-  if (existsSync(bundled)) {
-    return bundled
-  }
-
   // Development installs use the binary provided by ffmpeg-static.
   const development = join(
     process.cwd(),
@@ -60,7 +48,7 @@ function getFfmpegCommand(): string {
     return development
   }
 
-  // Final fallback supports developer machines with FFmpeg on PATH.
+  // Packaged builds and developer machines can use FFmpeg from PATH.
   return executable
 }
 
@@ -99,7 +87,7 @@ export async function getFfmpegSupport(): Promise<FfmpegSupport> {
 
     child.on('error', (error: NodeJS.ErrnoException) => {
       const detail = error.code === 'ENOENT'
-        ? 'CaptureLink could not find its FFmpeg runtime. Reinstall CaptureLink or set CAPTURELINK_FFMPEG to a valid executable.'
+        ? 'CaptureLink could not find FFmpeg. Install FFmpeg and make it available on PATH, or set CAPTURELINK_FFMPEG to a valid executable.'
         : `FFmpeg could not start: ${error.message}`
 
       finish(false, detail)
@@ -260,7 +248,7 @@ async function runFfmpegExport(
 
     child.on('error', (error: NodeJS.ErrnoException) => {
       const message = error.code === 'ENOENT'
-        ? 'CaptureLink could not find its FFmpeg runtime. Reinstall CaptureLink or set CAPTURELINK_FFMPEG to a valid executable.'
+        ? 'CaptureLink could not find FFmpeg. Install FFmpeg and make it available on PATH, or set CAPTURELINK_FFMPEG to a valid executable.'
         : `FFmpeg could not start: ${error.message}`
 
       fail(new Error(message))

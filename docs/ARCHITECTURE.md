@@ -395,7 +395,7 @@ FFmpeg runs as a separate native process.
 Runtime resolution currently supports, in order:
 
 1. `CAPTURELINK_FFMPEG`, when explicitly configured
-2. the FFmpeg executable bundled in packaged application resources
+2. the `ffmpeg-static` development executable, when present
 3. the `ffmpeg-static` development dependency
 4. an FFmpeg executable available on `PATH`
 
