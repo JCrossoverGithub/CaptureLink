@@ -2375,7 +2375,51 @@ async function loadConsoles(): Promise<void> {
   }
 }
 
+// CAPTURELINK_REMOTE_PLAY_SETUP_UI
+const signOutButton = document.createElement('button')
+signOutButton.id = 'sign-out-xbox'
+signOutButton.type = 'button'
+signOutButton.className = 'xbox-sign-out'
+signOutButton.textContent = 'Sign out'
+signOutButton.hidden = true
+signInButton.insertAdjacentElement('afterend', signOutButton)
+
+const xboxSetupBanner = document.createElement('aside')
+xboxSetupBanner.className = 'xbox-setup-banner'
+xboxSetupBanner.setAttribute('aria-label', 'Xbox Remote Play setup')
+xboxSetupBanner.innerHTML = `
+  <div class="xbox-setup-banner__heading">
+    <strong>Xbox setup required for Remote Play</strong>
+  </div>
+  <p>
+    Before connecting, enable Remote Play on the Xbox you want CaptureLink to use.
+  </p>
+  <ol>
+    <li>Press the <strong>Xbox button</strong> on your controller.</li>
+    <li>
+      Go to
+      <strong>Profile &amp; system → Settings → Devices &amp; connections → Remote features</strong>.
+    </li>
+    <li>Turn on <strong>Enable remote features</strong>.</li>
+    <li>Run <strong>Test remote play</strong> if it is available.</li>
+    <li>
+      Under <strong>Power options</strong>, choose <strong>Sleep</strong> so the console
+      can be reached and woken for Remote Play.
+    </li>
+  </ol>
+  <p class="xbox-setup-banner__note">
+    CaptureLink uses Xbox Remote Play / Remote features. This is separate from Xbox Cloud Gaming.
+  </p>
+`
+
+const consoleListParent = consoleList.parentElement
+
+if (consoleListParent) {
+  consoleListParent.insertBefore(xboxSetupBanner, consoleList)
+}
+
 function setAuthenticated(): void {
+  signOutButton.hidden = false
   signedIn = true
   accountStatus.textContent = 'Signed in'
   authMessage.textContent =
@@ -2389,6 +2433,7 @@ function setAuthenticated(): void {
 }
 
 function setSignedOut(): void {
+  signOutButton.hidden = true
   signedIn = false
   accountStatus.textContent = 'Signed out'
   authMessage.textContent =
@@ -2904,6 +2949,30 @@ chooseSpeakerButton.addEventListener('click', () => {
 
 navigator.mediaDevices?.addEventListener('devicechange', () => {
   void refreshAudioDevices()
+})
+
+// CAPTURELINK_XBOX_SIGN_OUT_HANDLER
+signOutButton.addEventListener('click', () => {
+  void (async () => {
+    signOutButton.disabled = true
+    setStreamStatus('Signing out of Xbox...')
+
+    try {
+      // This also finalizes an active recording before the Remote Play
+      // session is torn down.
+      await disconnectFromConsole()
+      await window.captureLink.signOutXbox()
+      setSignedOut()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown Xbox sign-out error'
+
+      console.error('[CaptureLink] Xbox sign-out failed:', error)
+      setStreamStatus(`Xbox sign-out failed: ${message}`)
+    } finally {
+      signOutButton.disabled = false
+    }
+  })()
 })
 
 signInButton.addEventListener('click', async () => {

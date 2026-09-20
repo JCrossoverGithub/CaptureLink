@@ -1034,3 +1034,39 @@ body.capturelink-native-fullscreen {
   max-height: none !important;
   object-fit: contain !important;
 }
+
+/* CAPTURELINK_XBOX_ACCOUNT_AND_SETUP */
+.xbox-sign-out {
+  margin-left: 0.5rem;
+}
+
+.xbox-setup-banner {
+  margin: 1rem 0;
+  padding: 1rem 1.125rem;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.xbox-setup-banner__heading {
+  margin-bottom: 0.45rem;
+}
+
+.xbox-setup-banner p {
+  margin: 0.35rem 0 0.65rem;
+}
+
+.xbox-setup-banner ol {
+  margin: 0.5rem 0 0.7rem;
+  padding-left: 1.35rem;
+}
+
+.xbox-setup-banner li + li {
+  margin-top: 0.35rem;
+}
+
+.xbox-setup-banner__note {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  opacity: 0.78;
+}

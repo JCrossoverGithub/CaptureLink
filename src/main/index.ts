@@ -431,6 +431,30 @@ ipcMain.handle('capturelink:xbox-auth-status', () => {
   }
 })
 
+ipcMain.handle('capturelink:xbox-auth-sign-out', async () => {
+  if (authProcessRunning) {
+    throw new Error(
+      'Wait for the Microsoft/Xbox sign-in flow to finish before signing out.'
+    )
+  }
+
+  emitStreamStatus('Signing out of Xbox...')
+
+  // End any active Remote Play session before removing persisted credentials.
+  await xboxHome.stop()
+
+  const tokenPath = getTokenPath()
+
+  if (existsSync(tokenPath)) {
+    const { unlink } = await import('node:fs/promises')
+    await unlink(tokenPath)
+  }
+
+  emitStreamStatus('Signed out of Xbox.')
+
+  return { signedOut: true }
+})
+
 ipcMain.handle('capturelink:xbox-auth-start', async () => {
   if (authProcessRunning) {
     return {

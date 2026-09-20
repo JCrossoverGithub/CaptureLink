@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('captureLink', {
   getXboxAuthStatus: () =>
     ipcRenderer.invoke('capturelink:xbox-auth-status'),
 
+  signOutXbox: () =>
+    ipcRenderer.invoke('capturelink:xbox-auth-sign-out'),
+
   getXboxConsoles: () =>
     ipcRenderer.invoke('capturelink:xbox-consoles'),
 

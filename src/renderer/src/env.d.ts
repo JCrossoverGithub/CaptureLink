@@ -88,6 +88,8 @@ declare global {
         authenticated: boolean
       }>
 
+      signOutXbox(): Promise<{ signedOut: boolean }>
+
       getXboxConsoles(): Promise<
         Array<{
           serverId: string
