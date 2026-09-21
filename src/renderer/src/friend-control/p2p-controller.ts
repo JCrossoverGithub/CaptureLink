@@ -12,6 +12,12 @@ const CONTROLLER_CHANNEL =
 const GAMEPAD_SAMPLE_INTERVAL_MS = 16
 const ICE_GATHER_TIMEOUT_MS = 10_000
 
+// Competitive gameplay mode.
+// Request a very small WebRTC playout buffer.
+// The browser may choose a somewhat larger actual target
+// based on network conditions.
+const COMPETITIVE_JITTER_BUFFER_TARGET_MS = 10
+
 /*
  * F2.5 direct internet P2P experiment.
  *
@@ -345,6 +351,59 @@ function capturePhysicalGamepad(
   }
 }
 
+type CaptureLinkLowLatencyReceiver =
+  RTCRtpReceiver & {
+    jitterBufferTarget?: number
+  }
+
+function configureLowLatencyReceiver(
+  receiver: RTCRtpReceiver
+): void {
+  const lowLatencyReceiver =
+    receiver as CaptureLinkLowLatencyReceiver
+
+  if (
+    !(
+      'jitterBufferTarget' in
+      lowLatencyReceiver
+    )
+  ) {
+    console.warn(
+      '[CaptureLink:F3.1] jitterBufferTarget is unavailable:',
+      receiver.track.kind
+    )
+
+    return
+  }
+
+  try {
+    lowLatencyReceiver.jitterBufferTarget =
+      COMPETITIVE_JITTER_BUFFER_TARGET_MS
+
+    console.log(
+      '[CaptureLink:F3.1] Low-latency receiver configured:',
+      {
+        kind:
+          receiver.track.kind,
+        requestedTargetMs:
+          COMPETITIVE_JITTER_BUFFER_TARGET_MS,
+        receiverTargetMs:
+          lowLatencyReceiver
+            .jitterBufferTarget
+      }
+    )
+  } catch (error) {
+    console.warn(
+      '[CaptureLink:F3.1] Could not configure low-latency receiver:',
+      {
+        kind:
+          receiver.track.kind,
+        error
+      }
+    )
+  }
+}
+
 export class FriendControllerPeer {
   private peer: RTCPeerConnection | null = null
   private channel: RTCDataChannel | null = null
@@ -505,6 +564,10 @@ export class FriendControllerPeer {
       new MediaStream()
 
     this.peer.ontrack = (event) => {
+      configureLowLatencyReceiver(
+        event.receiver
+      )
+
       const stream =
         this.remoteMediaStream
 
