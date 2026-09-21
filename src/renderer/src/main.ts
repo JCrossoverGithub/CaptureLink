@@ -14,9 +14,55 @@ root.innerHTML = `
       </div>
 
       <div class="topbar-account">
-        <span id="account-status" class="status status--idle">
+        <span id="account-status" class="status status--idle topbar-account-status">
           Checking account...
         </span>
+
+        <span
+          id="topbar-account-divider"
+          class="topbar-account-divider"
+          aria-hidden="true"
+          hidden
+        ></span>
+
+        <details id="topbar-account-menu" class="topbar-account-menu" hidden>
+          <summary
+            id="topbar-account-trigger"
+            class="topbar-account-trigger"
+            aria-label="Xbox account menu"
+          >
+            <span class="topbar-account-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M7.5 8.2c2.7-2.2 6.3-2.2 9 0M8 16.5c1.1-3.1 2.7-5.5 4-7 1.3 1.5 2.9 3.9 4 7"/>
+              </svg>
+            </span>
+
+            <span class="topbar-account-copy">
+              <strong>Xbox account</strong>
+              <small>Remote Play</small>
+            </span>
+
+            <svg class="topbar-account-chevron" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m8 10 4 4 4-4"/>
+            </svg>
+          </summary>
+
+          <div id="topbar-account-popover" class="topbar-account-popover">
+            <div class="topbar-account-popover__identity">
+              <span class="topbar-account-avatar topbar-account-avatar--large" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M7.5 8.2c2.7-2.2 6.3-2.2 9 0M8 16.5c1.1-3.1 2.7-5.5 4-7 1.3 1.5 2.9 3.9 4 7"/>
+                </svg>
+              </span>
+              <div>
+                <strong>Microsoft / Xbox</strong>
+                <span>Signed in for Remote Play</span>
+              </div>
+            </div>
+          </div>
+        </details>
 
         <button
           id="sign-in"
@@ -102,7 +148,7 @@ root.innerHTML = `
               <div class="connect-card__copy">
                 <div class="connect-card__label">Xbox account</div>
                 <strong id="connect-account-state">Checking account…</strong>
-                <p id="auth-message">Checking authentication status...</p>
+                <p id="auth-message" aria-live="polite">Checking authentication status...</p>
               </div>
 
               <div class="connect-card__status" id="connect-account-badge">
@@ -146,7 +192,7 @@ root.innerHTML = `
               <div>
                 <div class="eyebrow">CONSOLES</div>
                 <h2>Your Xboxes</h2>
-                <p id="console-message">Sign in to discover your Xbox consoles.</p>
+                <p id="console-message" aria-live="polite">Sign in to discover your Xbox consoles.</p>
               </div>
 
               <button id="refresh-consoles" type="button" disabled>
@@ -182,7 +228,7 @@ root.innerHTML = `
                     </span>
                   </div>
 
-                  <div class="stream-meta__recording">
+                  <div class="stream-meta__recording" aria-live="polite" aria-atomic="true">
                     <span id="recording-indicator" class="recording-indicator" hidden>
                       ● REC
                     </span>
@@ -194,56 +240,13 @@ root.innerHTML = `
                 </div>
               </section>
 
-              <div class="controls control-dock">
-                <div class="control-group">
-                  <div class="control-group__label">SESSION</div>
-
-                  <button
-                    id="disconnect-session"
-                    class="dock-button dock-button--danger icon-disconnect"
-                    type="button"
-                    disabled
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1"/><path d="M15 12a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7.1 7.1"/><path d="m4 4 16 16"/></svg><span class="dock-button__label">Disconnect</span>
-                  </button>
-
-                  <button
-                    id="fullscreen-video"
-                    class="dock-button icon-fullscreen"
-                    type="button"
-                    disabled
-                    title="Show the Xbox stream fullscreen"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg><span class="dock-button__label">Fullscreen</span>
-                  </button>
-
-                  <button
-                    id="picture-in-picture"
-                    class="dock-button icon-pip"
-                    type="button"
-                    disabled
-                    title="Show the Xbox stream in a floating Picture-in-Picture window"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1"/></svg><span class="dock-button__label">Picture in Picture</span>
-                  </button>
-                </div>
-
-                <div class="control-group">
-                  <div class="control-group__label">INPUT &amp; AUDIO</div>
-
-                  <button
-                    id="controller-toggle"
-                    class="dock-button icon-controller"
-                    type="button"
-                    disabled
-                    aria-pressed="false"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12a3 3 0 0 1 2.7 4.3l-1.4 3a2 2 0 0 1-3.2.6L14 17h-4l-2.1 1.9a2 2 0 0 1-3.2-.6l-1.4-3A3 3 0 0 1 6 11Z"/><path d="M8 14v2M7 15h2M16 14h.01M18 16h.01"/></svg><span class="dock-button__label">Enable Controller</span>
-                  </button>
+              <div class="controls control-dock control-dock--mockup">
+                <div class="control-group control-group--audio">
+                  <div class="control-group__label">AUDIO</div>
 
                   <button
                     id="microphone-toggle"
-                    class="dock-button icon-mic"
+                    class="dock-button dock-button--square icon-mic"
                     type="button"
                     disabled
                     aria-pressed="false"
@@ -269,80 +272,164 @@ root.innerHTML = `
                   </div>
                 </div>
 
-                <div class="control-group control-group--capture">
-                  <div class="control-group__label">CAPTURE</div>
+                <div class="control-group control-group--stream-controls">
+                  <div class="control-group__label">STREAM CONTROLS</div>
 
-                  <div class="recording-controls" aria-label="Recording controls">
-                    <button
-                      id="record-audio"
-                      type="button"
-                      class="record dock-button icon-record-audio"
-                      disabled
-                      title="Record Xbox game audio, incoming game chat, and your microphone when enabled"
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M4 12h2M18 12h2"/></svg><span class="dock-button__label">Record Audio</span>
-                    </button>
+                  <button
+                    id="controller-toggle"
+                    class="dock-button dock-button--square icon-controller"
+                    type="button"
+                    disabled
+                    aria-pressed="false"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12a3 3 0 0 1 2.7 4.3l-1.4 3a2 2 0 0 1-3.2.6L14 17h-4l-2.1 1.9a2 2 0 0 1-3.2-.6l-1.4-3A3 3 0 0 1 6 11Z"/><path d="M8 14v2M7 15h2M16 14h.01M18 16h.01"/></svg><span class="dock-button__label">Enable Controller</span>
+                  </button>
 
-                    <button
-                      id="record-video"
-                      type="button"
-                      class="record dock-button dock-button--record icon-record-video"
-                      disabled
-                      title="Record Xbox video with game audio, incoming game chat, and your microphone when enabled"
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3Z"/></svg><span class="dock-button__label">Record Video</span>
-                    </button>
-                  </div>
+                  <button
+                    id="picture-in-picture"
+                    data-static-title="true"
+                    class="dock-button dock-button--square icon-pip"
+                    type="button"
+                    disabled
+                    title="Show the Xbox stream in a floating Picture-in-Picture window"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1"/></svg><span class="dock-button__label">Picture in Picture</span>
+                  </button>
+
+                  <button
+                    id="record-video"
+                    data-static-title="true"
+                    type="button"
+                    class="record dock-button dock-button--primary-record icon-record-video"
+                    disabled
+                    title="Record Xbox video with game audio, incoming game chat, and your microphone when enabled"
+                  >
+                    <span class="primary-record-dot" aria-hidden="true"></span>
+                    <span class="dock-button__label">Record Video</span>
+                  </button>
+
+                  <button
+                    id="fullscreen-video"
+                    data-static-title="true"
+                    class="dock-button dock-button--square icon-fullscreen"
+                    type="button"
+                    disabled
+                    title="Show the Xbox stream fullscreen"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg><span class="dock-button__label">Fullscreen</span>
+                  </button>
+                </div>
+
+                <div class="control-group control-group--actions">
+                  <div class="control-group__label">ACTIONS</div>
+
+                  <button
+                    id="record-audio"
+                    data-static-title="true"
+                    type="button"
+                    class="record dock-button dock-button--action-label icon-record-audio"
+                    disabled
+                    title="Record Xbox game audio, incoming game chat, and your microphone when enabled"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M4 12h2M18 12h2"/></svg><span class="dock-button__label">Record Audio</span>
+                  </button>
 
                   <button
                     id="diagnostics-toggle"
-                    class="dock-button dock-button--quiet icon-diagnostics"
+                    class="dock-button dock-button--action-label dock-button--quiet icon-diagnostics"
                     type="button"
+                    aria-pressed="false"
                     disabled
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg><span class="dock-button__label">Diagnostics</span>
+                  </button>
+
+                  <button
+                    id="disconnect-session"
+                    class="dock-button dock-button--action-label dock-button--danger icon-disconnect"
+                    type="button"
+                    disabled
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1"/><path d="M15 12a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7.1 7.1"/><path d="m4 4 16 16"/></svg><span class="dock-button__label">Disconnect</span>
                   </button>
                 </div>
               </div>
             </div>
 
             <aside class="context-rail" aria-label="Stream context">
-              <article class="rail-card">
+              <article class="rail-card rail-card--console">
                 <div class="rail-card__heading">
                   <span>Console</span>
                   <span id="rail-console-status" class="rail-status">Idle</span>
                 </div>
 
-                <div class="rail-console">
-                  <div class="rail-console__icon">X</div>
-                  <div>
+                <div class="rail-console rail-console--select">
+                  <div class="rail-console__icon rail-console__icon--device" aria-hidden="true">
+                    <svg viewBox="0 0 32 32">
+                      <rect x="7" y="3.5" width="11" height="25" rx="2"/>
+                      <circle cx="12.5" cy="8" r="1.2"/>
+                      <path d="M21 18.5h4.5a3 3 0 0 1 2.7 4.3l-.9 1.9a1.7 1.7 0 0 1-2.8.5L23 24h-3l-1.5 1.2"/>
+                    </svg>
+                  </div>
+
+                  <div class="rail-console__copy">
                     <strong id="rail-console-name">No console selected</strong>
                     <span id="rail-console-detail">Choose one in Connect</span>
                   </div>
+
+                  <svg class="rail-console__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m8 10 4 4 4-4"/>
+                  </svg>
                 </div>
 
-                <button class="rail-link view-jump" type="button" data-view-target="connect">
-                  Manage consoles
+                <button class="rail-link rail-link--with-icon view-jump" type="button" data-view-target="connect">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 6v5h-5M4 18v-5h5"/>
+                    <path d="M6.1 9a7 7 0 0 1 11.4-2.4L20 11M4 13l2.5 4.4A7 7 0 0 0 17.9 15"/>
+                  </svg>
+                  <span>Manage consoles</span>
                 </button>
               </article>
 
-              <article class="rail-card">
+              <article class="rail-card rail-card--session">
                 <div class="rail-card__heading">
                   <span>Session</span>
                   <span id="rail-session-state" class="rail-status">Idle</span>
                 </div>
 
-                <dl class="session-facts">
+                <dl class="session-facts session-facts--visual">
                   <div>
-                    <dt>Connection</dt>
+                    <dt>
+                      <span class="session-fact__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                          <path d="M5 12.5a10 10 0 0 1 14 0M8 15.5a6 6 0 0 1 8 0M11 18.5a2 2 0 0 1 2 0"/>
+                        </svg>
+                      </span>
+                      <span>Network</span>
+                    </dt>
                     <dd id="rail-session-connection">Waiting</dd>
                   </div>
                   <div>
-                    <dt>Video</dt>
+                    <dt>
+                      <span class="session-fact__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                          <rect x="3" y="5" width="18" height="13" rx="2"/>
+                          <path d="M8 21h8M12 18v3"/>
+                        </svg>
+                      </span>
+                      <span>Video</span>
+                    </dt>
                     <dd id="rail-session-video">—</dd>
                   </div>
                   <div>
-                    <dt>Latency</dt>
+                    <dt>
+                      <span class="session-fact__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                          <path d="M5 19v-3M9 19v-6M13 19V9M17 19V6M21 19V3"/>
+                        </svg>
+                      </span>
+                      <span>Latency</span>
+                    </dt>
                     <dd id="rail-session-latency">—</dd>
                   </div>
                 </dl>
@@ -364,8 +451,11 @@ root.innerHTML = `
                   </div>
                 </div>
 
-                <button class="rail-link view-jump" type="button" data-view-target="recordings">
-                  Open recordings
+                <button class="rail-link rail-link--with-icon view-jump" type="button" data-view-target="recordings">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 7h7l2 2h9v10H3Z"/>
+                  </svg>
+                  <span>Open recordings</span>
                 </button>
               </article>
             </aside>
@@ -463,7 +553,7 @@ root.innerHTML = `
                   </button>
                 </div>
 
-                <p id="microphone-device-message" class="device-message">
+                <p id="microphone-device-message" class="device-message" aria-live="polite">
                   Choose a microphone, then test it before enabling Xbox chat.
                 </p>
               </article>
@@ -495,6 +585,7 @@ root.innerHTML = `
 
                   <button
                     id="resync-audio"
+                    data-static-title="true"
                     type="button"
                     disabled
                     title="Rebuild local audio playback without reconnecting to Xbox"
@@ -515,7 +606,7 @@ root.innerHTML = `
                   </span>
                 </label>
 
-                <p id="speaker-device-message" class="device-message">
+                <p id="speaker-device-message" class="device-message" aria-live="polite">
                   CaptureLink uses the system default output until another device is selected.
                 </p>
               </article>
@@ -578,10 +669,10 @@ root.innerHTML = `
               </label>
 
               <div class="recording-toolbar__status">
-                <span id="recording-library-message">
+                <span id="recording-library-message" role="status" aria-live="polite">
                   Finished recordings will appear here automatically.
                 </span>
-                <span id="recording-export-status">
+                <span id="recording-export-status" role="status" aria-live="polite">
                   Checking export support…
                 </span>
               </div>
@@ -747,6 +838,9 @@ function requireElement<T extends Element>(selector: string): T {
 
   return element
 }
+
+const workspace =
+  requireElement<HTMLElement>('.workspace')
 
 const signInButton =
   requireElement<HTMLButtonElement>('#sign-in')
@@ -947,6 +1041,12 @@ const settingsSignOutButton =
   requireElement<HTMLButtonElement>('#settings-sign-out')
 const settingsDiagnosticsButton =
   requireElement<HTMLButtonElement>('#settings-diagnostics-toggle')
+const topbarAccountDivider =
+  requireElement<HTMLElement>('#topbar-account-divider')
+const topbarAccountMenu =
+  requireElement<HTMLDetailsElement>('#topbar-account-menu')
+const topbarAccountPopover =
+  requireElement<HTMLElement>('#topbar-account-popover')
 
 const railConsoleName =
   requireElement<HTMLElement>('#rail-console-name')
@@ -992,6 +1092,9 @@ function setActiveView(view: CaptureLinkView): void {
   viewPanels.forEach((panel) => {
     panel.classList.toggle('is-active', panel.dataset.panel === view)
   })
+
+  document.body.dataset.activeView = view
+  workspace.scrollTop = 0
 }
 
 navItems.forEach((item) => {
@@ -1000,6 +1103,31 @@ navItems.forEach((item) => {
     if (view) {
       setActiveView(view)
     }
+  })
+})
+
+navItems.forEach((item, index) => {
+  item.addEventListener('keydown', (event) => {
+    let nextIndex: number | null = null
+
+    if (event.key === 'ArrowDown') {
+      nextIndex = (index + 1) % navItems.length
+    } else if (event.key === 'ArrowUp') {
+      nextIndex = (index - 1 + navItems.length) % navItems.length
+    } else if (event.key === 'Home') {
+      nextIndex = 0
+    } else if (event.key === 'End') {
+      nextIndex = navItems.length - 1
+    }
+
+    if (nextIndex === null) {
+      return
+    }
+
+    event.preventDefault()
+    const nextItem = navItems[nextIndex]
+    nextItem?.focus()
+    nextItem?.click()
   })
 })
 
@@ -1113,10 +1241,129 @@ function setButtonLabel(button: HTMLButtonElement, label: string): void {
 
   button.setAttribute('aria-label', label)
 
-  if (!button.hasAttribute('title')) {
+  if (!button.dataset.staticTitle) {
     button.title = label
   }
 }
+
+function setInlineButtonLabel(
+  button: HTMLButtonElement,
+  label: string
+): void {
+  const labelElement = button.querySelector<HTMLElement>('span')
+
+  if (labelElement) {
+    labelElement.textContent = label
+  } else {
+    button.textContent = label
+  }
+
+  button.setAttribute('aria-label', label)
+
+  if (!button.dataset.staticTitle) {
+    button.title = label
+  }
+}
+
+type StatusTone = 'success' | 'busy' | 'warning' | 'danger' | 'muted'
+
+function statusToneForText(value: string): StatusTone {
+  const text = value.trim().toLowerCase()
+
+  if (
+    text.includes('failed') ||
+    text.includes('error') ||
+    text.includes('unavailable')
+  ) {
+    return 'danger'
+  }
+
+  if (
+    text.includes('checking') ||
+    text.includes('signing') ||
+    text.includes('connecting') ||
+    text.includes('starting') ||
+    text.includes('opening') ||
+    text.includes('resyncing') ||
+    text.includes('sampling') ||
+    text.includes('testing') ||
+    text.includes('finalizing') ||
+    text.includes('stopping') ||
+    text.includes('recording')
+  ) {
+    return 'busy'
+  }
+
+  if (
+    text.includes('audio late') ||
+    text.includes('check metrics') ||
+    text.includes('disconnected') ||
+    text.includes('unsupported') ||
+    text.includes('not connected')
+  ) {
+    return 'warning'
+  }
+
+  if (
+    text.includes('signed in') ||
+    text === 'ready' ||
+    text.includes('online') ||
+    text === 'connected' ||
+    text === 'healthy' ||
+    text === 'live' ||
+    text === 'synced' ||
+    text === 'saved' ||
+    text.includes('export ready') ||
+    text.startsWith('exported')
+  ) {
+    return 'success'
+  }
+
+  return 'muted'
+}
+
+function applyStatusTone(element: HTMLElement): void {
+  const tone = statusToneForText(element.textContent ?? '')
+
+  element.classList.remove(
+    'status-tone--success',
+    'status-tone--busy',
+    'status-tone--warning',
+    'status-tone--danger',
+    'status-tone--muted'
+  )
+  element.classList.add(`status-tone--${tone}`)
+}
+
+const statusToneElements = [
+  accountStatus,
+  connectAccountBadge,
+  railConsoleStatus,
+  railSessionState,
+  microphoneDeviceState,
+  speakerDeviceState,
+  diagnosticsHealth,
+  recordingStatus,
+  recordingLibraryMessage,
+  recordingExportStatus
+]
+
+const statusToneObserver = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (mutation.target instanceof HTMLElement) {
+      applyStatusTone(mutation.target)
+    }
+  })
+})
+
+statusToneElements.forEach((element) => {
+  applyStatusTone(element)
+  statusToneObserver.observe(element, {
+    childList: true,
+    characterData: true,
+    subtree: true
+  })
+})
 
 function setRailConsole(
   name: string,
@@ -1261,11 +1508,16 @@ function populateDeviceSelect(
 }
 
 async function refreshAudioDevices(): Promise<void> {
+  refreshAudioDevicesButton.classList.add('is-busy')
+  refreshAudioDevicesButton.setAttribute('aria-busy', 'true')
+
   if (!navigator.mediaDevices?.enumerateDevices) {
     microphoneDeviceMessage.textContent =
       'This Chromium build does not expose media device enumeration.'
     speakerDeviceMessage.textContent =
       'This Chromium build does not expose media device enumeration.'
+    refreshAudioDevicesButton.classList.remove('is-busy')
+    refreshAudioDevicesButton.setAttribute('aria-busy', 'false')
     return
   }
 
@@ -1308,6 +1560,9 @@ async function refreshAudioDevices(): Promise<void> {
     const message = error instanceof Error ? error.message : 'Device enumeration failed.'
     microphoneDeviceMessage.textContent = message
     speakerDeviceMessage.textContent = message
+  } finally {
+    refreshAudioDevicesButton.classList.remove('is-busy')
+    refreshAudioDevicesButton.setAttribute('aria-busy', 'false')
   }
 }
 
@@ -1434,7 +1689,7 @@ function stopMicrophoneMonitor(): void {
     stopMicrophoneMeter()
   }
 
-  microphoneTestButton.textContent = 'Test Microphone'
+  setInlineButtonLabel(microphoneTestButton, 'Test Microphone')
 
   if (!microphoneActive && !microphonePending) {
     microphoneDeviceState.textContent = 'Idle'
@@ -1465,7 +1720,7 @@ async function toggleMicrophoneMonitor(): Promise<void> {
 
     microphoneMonitorStream = stream
     await startMicrophoneMeter(stream, 'test')
-    microphoneTestButton.textContent = 'Stop Test'
+    setInlineButtonLabel(microphoneTestButton, 'Stop Test')
     microphoneDeviceState.textContent = 'Testing'
     microphoneDeviceMessage.textContent =
       `Listening locally to ${stream.getAudioTracks()[0]?.label || 'selected microphone'}. Nothing is being sent to Xbox.`
@@ -1552,7 +1807,7 @@ async function resyncAudioPlayback(reason: 'manual' | 'automatic'): Promise<bool
   }
 
   audioResyncInProgress = true
-  resyncAudioButton.textContent = 'Resyncing…'
+  setInlineButtonLabel(resyncAudioButton, 'Resyncing…')
   speakerDeviceState.textContent = 'Resyncing'
   updateInteractiveState()
 
@@ -1589,7 +1844,7 @@ async function resyncAudioPlayback(reason: 'manual' | 'automatic'): Promise<bool
     return false
   } finally {
     audioResyncInProgress = false
-    resyncAudioButton.textContent = 'Resync Audio'
+    setInlineButtonLabel(resyncAudioButton, 'Resync')
     updateInteractiveState()
   }
 }
@@ -1842,7 +2097,9 @@ async function refreshDiagnostics(): Promise<void> {
     : '—'
   diagVideoLost.textContent = String(video?.packetsLost ?? 0)
 
-  railSessionConnection.textContent = peerConnection.connectionState
+  railSessionConnection.textContent = peerConnection.connectionState === 'connected'
+    ? 'Connected'
+    : peerConnection.connectionState
   railSessionLatency.textContent = diagRtt.textContent
   railSessionVideo.textContent = [
     diagVideoResolution.textContent,
@@ -1913,6 +2170,7 @@ function setDiagnosticsVisible(visible: boolean): void {
   settingsDiagnosticsButton.textContent =
     visible ? 'Hide diagnostics' : 'Show diagnostics'
   settingsDiagnosticsButton.setAttribute('aria-pressed', String(visible))
+  diagnosticsButton.setAttribute('aria-pressed', String(visible))
 
   // Sync monitoring stays active during a connected session even when the
   // diagnostics panel is hidden. This lets conservative auto-resync work
@@ -2080,6 +2338,8 @@ async function refreshRecordingExportSupport(): Promise<void> {
 
 async function refreshRecordingLibrary(): Promise<void> {
   refreshRecordingLibraryButton.disabled = true
+  refreshRecordingLibraryButton.classList.add('is-busy')
+  recordingLibraryList.setAttribute('aria-busy', 'true')
   recordingLibraryMessage.textContent = 'Refreshing recordings…'
 
   try {
@@ -2092,6 +2352,8 @@ async function refreshRecordingLibrary(): Promise<void> {
       : 'Could not load recordings.'
   } finally {
     refreshRecordingLibraryButton.disabled = false
+    refreshRecordingLibraryButton.classList.remove('is-busy')
+    recordingLibraryList.setAttribute('aria-busy', 'false')
   }
 }
 
@@ -2807,8 +3069,16 @@ function updateInteractiveState(): void {
   const sessionActive = activeServerId !== null
   const locked = streamBusy || sessionActive
   const mediaReady = sessionActive && webRtcConnected && !streamBusy
+  const recordingActive = mediaRecorder?.state === 'recording' ||
+    mediaRecorder?.state === 'paused'
 
   document.body.classList.toggle('session-connected', webRtcConnected)
+  document.body.classList.toggle(
+    'session-connecting',
+    sessionActive && streamBusy && !webRtcConnected
+  )
+  document.body.classList.toggle('session-recording', recordingActive)
+  document.body.classList.toggle('session-saving', recordingSaving)
 
   refreshConsolesButton.disabled = !signedIn || locked
   disconnectButton.disabled = !sessionActive || streamBusy
@@ -2819,7 +3089,10 @@ function updateInteractiveState(): void {
     !document.pictureInPictureEnabled
   controllerButton.disabled = !mediaReady
   microphoneButton.disabled = !mediaReady || microphonePending
-  microphoneDeviceSelect.disabled = microphoneActive || microphonePending || microphoneMonitorStream !== null
+  microphoneDeviceSelect.disabled =
+    microphoneActive ||
+    microphonePending ||
+    microphoneMonitorStream !== null
   microphoneTestButton.disabled = microphoneActive || microphonePending
   refreshAudioDevicesButton.disabled = microphonePending
   audioMuteButton.disabled = !mediaReady
@@ -2827,8 +3100,6 @@ function updateInteractiveState(): void {
   resyncAudioButton.disabled = !mediaReady || audioResyncInProgress
   diagnosticsButton.disabled = !mediaReady
   settingsDiagnosticsButton.disabled = !mediaReady
-  const recordingActive = mediaRecorder?.state === 'recording' ||
-    mediaRecorder?.state === 'paused'
   recordAudioButton.disabled = recordingSaving ||
     (recordingActive
       ? recordingKind !== 'audio'
@@ -2853,14 +3124,42 @@ function resetConsoleButtonLabels(): void {
     })
 }
 
+function renderConsoleState(
+  state: 'loading' | 'empty' | 'error' | 'signed-out',
+  title: string,
+  message: string
+): void {
+  const icon = state === 'loading'
+    ? '<span class="console-list-state__spinner" aria-hidden="true"></span>'
+    : state === 'error'
+      ? '<span aria-hidden="true">!</span>'
+      : '<span aria-hidden="true">X</span>'
+
+  consoleList.innerHTML = `
+    <div class="console-list-state console-list-state--${state}" role="${state === 'error' ? 'alert' : 'status'}">
+      <div class="console-list-state__icon">${icon}</div>
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(message)}</span>
+      </div>
+    </div>
+  `
+}
+
 async function loadConsoles(): Promise<void> {
   if (streamBusy || activeServerId) {
     return
   }
 
   consoleMessage.textContent = 'Looking for Xbox consoles...'
-  consoleList.innerHTML = ''
+  consoleList.setAttribute('aria-busy', 'true')
+  renderConsoleState(
+    'loading',
+    'Discovering Xbox consoles',
+    'Checking the consoles available to this Microsoft account.'
+  )
   refreshConsolesButton.disabled = true
+  refreshConsolesButton.classList.add('is-busy')
 
   try {
     const consoles = await window.captureLink.getXboxConsoles()
@@ -2868,6 +3167,11 @@ async function loadConsoles(): Promise<void> {
     if (consoles.length === 0) {
       consoleMessage.textContent =
         'No Xbox consoles were found for this account.'
+      renderConsoleState(
+        'empty',
+        'No Xbox consoles found',
+        'Check the account and confirm Remote features are enabled on the console.'
+      )
       setRailConsole('No console found', 'Check your Xbox account and Remote Play settings', 'Unavailable')
       return
     }
@@ -2924,12 +3228,20 @@ async function loadConsoles(): Promise<void> {
       )
       .join('')
   } catch (error) {
-    consoleMessage.textContent =
-      error instanceof Error
-        ? error.message
-        : 'Xbox console discovery failed.'
+    const message = error instanceof Error
+      ? error.message
+      : 'Xbox console discovery failed.'
+
+    consoleMessage.textContent = message
+    renderConsoleState(
+      'error',
+      'Console discovery failed',
+      message
+    )
     setRailConsole('Console unavailable', 'Discovery failed', 'Error')
   } finally {
+    consoleList.setAttribute('aria-busy', 'false')
+    refreshConsolesButton.classList.remove('is-busy')
     updateInteractiveState()
   }
 }
@@ -2941,7 +3253,7 @@ signOutButton.type = 'button'
 signOutButton.className = 'xbox-sign-out'
 signOutButton.textContent = 'Sign out'
 signOutButton.hidden = true
-signInButton.insertAdjacentElement('afterend', signOutButton)
+topbarAccountPopover.append(signOutButton)
 
 const xboxSetupBanner = document.createElement('aside')
 xboxSetupBanner.className = 'xbox-setup-banner'
@@ -2998,6 +3310,8 @@ xboxSetupDetails?.addEventListener('toggle', () => {
 function setAuthenticated(): void {
   signOutButton.hidden = false
   signInButton.hidden = true
+  topbarAccountDivider.hidden = false
+  topbarAccountMenu.hidden = false
   settingsSignOutButton.hidden = false
   signedIn = true
   accountStatus.textContent = 'Signed in'
@@ -3018,6 +3332,9 @@ function setAuthenticated(): void {
 function setSignedOut(): void {
   signOutButton.hidden = true
   signInButton.hidden = false
+  topbarAccountDivider.hidden = true
+  topbarAccountMenu.hidden = true
+  topbarAccountMenu.open = false
   settingsSignOutButton.hidden = true
   signedIn = false
   accountStatus.textContent = 'Signed out'
@@ -3031,7 +3348,11 @@ function setSignedOut(): void {
   signInButton.textContent = 'Sign in with Microsoft'
   signInButton.disabled = false
 
-  consoleList.innerHTML = ''
+  renderConsoleState(
+    'signed-out',
+    'Sign in to discover your Xbox',
+    'Use the Microsoft account associated with the console you want to capture.'
+  )
   consoleMessage.textContent =
     'Sign in to discover your Xbox consoles.'
 
@@ -3204,7 +3525,7 @@ async function connectToConsole(
         webRtcConnected = true
         hideStreamPlaceholder()
         railConsoleStatus.textContent = 'Online'
-        setRailSession('Connected', 'WebRTC connected')
+        setRailSession('Connected', 'Connected')
         scheduleAudioControlSync()
         startDiagnosticsPolling()
         updateInteractiveState()
@@ -3510,6 +3831,26 @@ recordingLibraryList.addEventListener('click', (event) => {
   }
 })
 
+document.addEventListener('click', (event) => {
+  const target = event.target
+
+  if (!(target instanceof Element)) {
+    return
+  }
+
+  document
+    .querySelectorAll<HTMLDetailsElement>('.recording-more[open]')
+    .forEach((details) => {
+      if (!details.contains(target)) {
+        details.open = false
+      }
+    })
+
+  if (topbarAccountMenu.open && !topbarAccountMenu.contains(target)) {
+    topbarAccountMenu.open = false
+  }
+})
+
 refreshAudioDevicesButton.addEventListener('click', () => {
   void refreshAudioDevices()
 })
@@ -3785,14 +4126,38 @@ window.captureLink.onWindowFullscreenChanged(
 document.addEventListener(
   'keydown',
   (event) => {
-    if (
-      event.key === 'Escape' &&
-      nativeVideoFullscreen
-    ) {
+    if (event.key !== 'Escape') {
+      return
+    }
+
+    if (nativeVideoFullscreen) {
       event.preventDefault()
       event.stopPropagation()
-
       void window.captureLink.setWindowFullscreen(false)
+      return
+    }
+
+    const openRecordingMenu =
+      document.querySelector<HTMLDetailsElement>('.recording-more[open]')
+
+    if (openRecordingMenu) {
+      event.preventDefault()
+      openRecordingMenu.open = false
+      openRecordingMenu.querySelector<HTMLElement>('summary')?.focus()
+      return
+    }
+
+    if (topbarAccountMenu.open) {
+      event.preventDefault()
+      topbarAccountMenu.open = false
+      document.querySelector<HTMLElement>('#topbar-account-trigger')?.focus()
+      return
+    }
+
+    if (xboxSetupDetails?.open) {
+      event.preventDefault()
+      xboxSetupDetails.open = false
+      connectSetupToggle.focus()
     }
   },
   true
@@ -3852,6 +4217,25 @@ window.addEventListener('beforeunload', () => {
   destroyPlayer()
   void window.captureLink.stopXboxStream()
 })
+
+const dockButtonLabels: Array<[HTMLButtonElement, string]> = [
+  [disconnectButton, 'Disconnect'],
+  [fullscreenVideoButton, 'Fullscreen'],
+  [pictureInPictureButton, 'Picture in Picture'],
+  [controllerButton, 'Enable Controller'],
+  [microphoneButton, 'Enable Microphone'],
+  [audioMuteButton, 'Mute'],
+  [recordAudioButton, 'Record Audio'],
+  [recordVideoButton, 'Record Video'],
+  [diagnosticsButton, 'Diagnostics']
+]
+
+dockButtonLabels.forEach(([button, label]) => {
+  setButtonLabel(button, label)
+})
+
+setInlineButtonLabel(microphoneTestButton, 'Test microphone')
+setInlineButtonLabel(resyncAudioButton, 'Resync')
 
 const savedRecordingMicGain = Number(
   window.localStorage.getItem('capturelink.recordingMicGain') ?? '100'
