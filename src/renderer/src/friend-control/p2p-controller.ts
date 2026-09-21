@@ -60,6 +60,14 @@ export interface FriendMediaDiagnostics {
   averageTargetBufferMs: number | null
   averageMinimumBufferMs: number | null
 
+  requestedVideoBufferMs: number | null
+  requestedAudioBufferMs: number | null
+
+  audioNetworkJitterMs: number | null
+  audioAverageJitterBufferMs: number | null
+  audioAverageTargetBufferMs: number | null
+  audioAverageMinimumBufferMs: number | null
+
   framesDropped: number | null
   packetsLost: number | null
   freezeCount: number | null
@@ -828,6 +836,10 @@ export class FriendControllerPeer {
         CaptureLinkVideoRtpStat |
         null = null
 
+      let audioStat:
+        CaptureLinkVideoRtpStat |
+        null = null
+
       report.forEach((rawStat) => {
         const stat =
           rawStat as
@@ -837,11 +849,8 @@ export class FriendControllerPeer {
           stat.kind ??
           stat.mediaType
 
-        if (kind !== 'video') {
-          return
-        }
-
         if (
+          kind === 'video' &&
           this.role === 'host' &&
           stat.type ===
             'outbound-rtp'
@@ -850,11 +859,21 @@ export class FriendControllerPeer {
         }
 
         if (
+          kind === 'video' &&
           this.role === 'guest' &&
           stat.type ===
             'inbound-rtp'
         ) {
           videoStat = stat
+        }
+
+        if (
+          kind === 'audio' &&
+          this.role === 'guest' &&
+          stat.type ===
+            'inbound-rtp'
+        ) {
+          audioStat = stat
         }
       })
 
@@ -983,6 +1002,24 @@ export class FriendControllerPeer {
             averageMinimumBufferMs:
               null,
 
+            requestedVideoBufferMs:
+              null,
+
+            requestedAudioBufferMs:
+              null,
+
+            audioNetworkJitterMs:
+              null,
+
+            audioAverageJitterBufferMs:
+              null,
+
+            audioAverageTargetBufferMs:
+              null,
+
+            audioAverageMinimumBufferMs:
+              null,
+
             framesDropped:
               stat.framesDropped ??
               null,
@@ -1074,6 +1111,92 @@ export class FriendControllerPeer {
           ? stat.jitter * 1000
           : null
 
+      const audio =
+        audioStat as
+          CaptureLinkVideoRtpStat |
+          null
+
+      const audioEmitted =
+        audio
+          ?.jitterBufferEmittedCount ??
+        0
+
+      const audioNetworkJitterMs =
+        typeof audio?.jitter ===
+          'number'
+          ? audio.jitter * 1000
+          : null
+
+      const audioAverageJitterBufferMs =
+        audioEmitted > 0 &&
+        typeof
+          audio?.jitterBufferDelay ===
+          'number'
+          ? (
+              audio.jitterBufferDelay /
+              audioEmitted
+            ) * 1000
+          : null
+
+      const audioAverageTargetBufferMs =
+        audioEmitted > 0 &&
+        typeof
+          audio
+            ?.jitterBufferTargetDelay ===
+          'number'
+          ? (
+              audio
+                .jitterBufferTargetDelay /
+              audioEmitted
+            ) * 1000
+          : null
+
+      const audioAverageMinimumBufferMs =
+        audioEmitted > 0 &&
+        typeof
+          audio
+            ?.jitterBufferMinimumDelay ===
+          'number'
+          ? (
+              audio
+                .jitterBufferMinimumDelay /
+              audioEmitted
+            ) * 1000
+          : null
+
+      const getRequestedTarget = (
+        kind: 'video' | 'audio'
+      ): number | null => {
+        const receiver =
+          peer
+            .getReceivers()
+            .find(
+              (item) =>
+                item.track.kind === kind
+            )
+
+        if (!receiver) {
+          return null
+        }
+
+        const lowLatencyReceiver =
+          receiver as
+            CaptureLinkLowLatencyReceiver
+
+        return (
+          typeof
+            lowLatencyReceiver
+              .jitterBufferTarget ===
+            'number'
+            ? roundDiagnostic(
+                lowLatencyReceiver
+                  .jitterBufferTarget,
+                2
+              )
+            : null
+        )
+      }
+
       this.options
         .onDiagnostics?.({
           role: 'guest',
@@ -1120,6 +1243,36 @@ export class FriendControllerPeer {
           averageMinimumBufferMs:
             roundDiagnostic(
               averageMinimumBufferMs
+            ),
+
+          requestedVideoBufferMs:
+            getRequestedTarget(
+              'video'
+            ),
+
+          requestedAudioBufferMs:
+            getRequestedTarget(
+              'audio'
+            ),
+
+          audioNetworkJitterMs:
+            roundDiagnostic(
+              audioNetworkJitterMs
+            ),
+
+          audioAverageJitterBufferMs:
+            roundDiagnostic(
+              audioAverageJitterBufferMs
+            ),
+
+          audioAverageTargetBufferMs:
+            roundDiagnostic(
+              audioAverageTargetBufferMs
+            ),
+
+          audioAverageMinimumBufferMs:
+            roundDiagnostic(
+              audioAverageMinimumBufferMs
             ),
 
           framesDropped:

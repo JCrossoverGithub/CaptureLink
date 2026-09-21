@@ -4270,23 +4270,53 @@ function updateFriendDiagnosticsPanel(
     )
   } else {
     lines.push(
-      `Network jitter      ${formatFriendDiagnostic(
+      `Video requested     ${formatFriendDiagnostic(
+        diagnostics.requestedVideoBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Video jitter        ${formatFriendDiagnostic(
         diagnostics.networkJitterMs,
         ' ms',
         2
       )}`,
-      `Jitter buffer       ${formatFriendDiagnostic(
+      `Video buffer        ${formatFriendDiagnostic(
         diagnostics.averageJitterBufferMs,
         ' ms',
         2
       )}`,
-      `Buffer target       ${formatFriendDiagnostic(
+      `Video target        ${formatFriendDiagnostic(
         diagnostics.averageTargetBufferMs,
         ' ms',
         2
       )}`,
-      `Minimum buffer      ${formatFriendDiagnostic(
+      `Video minimum       ${formatFriendDiagnostic(
         diagnostics.averageMinimumBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Audio requested     ${formatFriendDiagnostic(
+        diagnostics.requestedAudioBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Audio jitter        ${formatFriendDiagnostic(
+        diagnostics.audioNetworkJitterMs,
+        ' ms',
+        2
+      )}`,
+      `Audio buffer        ${formatFriendDiagnostic(
+        diagnostics.audioAverageJitterBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Audio target        ${formatFriendDiagnostic(
+        diagnostics.audioAverageTargetBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Audio minimum       ${formatFriendDiagnostic(
+        diagnostics.audioAverageMinimumBufferMs,
         ' ms',
         2
       )}`,
