@@ -2246,3 +2246,800 @@ body {
     left: 0;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* CaptureLink minimalist secondary views                                     */
+/* -------------------------------------------------------------------------- */
+
+.view-heading--compact {
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.view-heading--compact > div {
+  min-width: 0;
+}
+
+.view-heading__support {
+  max-width: 620px !important;
+  margin: 7px 0 0 !important;
+  color: var(--cl-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  text-align: left !important;
+}
+
+.view-heading__action,
+.section-heading--minimal button,
+.audio-device-actions-row button,
+.settings-card__action {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid var(--cl-border);
+  border-radius: 9px;
+  background: #131920;
+  color: #dce2e7;
+}
+
+.view-heading__action svg,
+.section-heading--minimal button svg,
+.audio-device-actions-row button svg,
+.settings-card__icon svg,
+.connect-card__icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Connect */
+.connect-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.connect-account-card,
+.connect-help-card {
+  min-height: 106px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 15px;
+}
+
+.connect-card__icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cl-border);
+  border-radius: 12px;
+  background: #0b1014;
+  color: #aab5be;
+}
+
+.connect-card__icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.connect-card__icon--xbox {
+  color: var(--cl-accent);
+  border-color: rgba(67, 224, 111, .2);
+  background: var(--cl-accent-soft);
+}
+
+.connect-card__copy {
+  min-width: 0;
+}
+
+.connect-card__label {
+  margin-bottom: 5px;
+  color: #65717c;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.connect-card__copy strong {
+  display: block;
+  overflow: hidden;
+  color: #edf1f4;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connect-card__copy p {
+  margin: 4px 0 0;
+  color: var(--cl-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.connect-card__status {
+  align-self: start;
+  padding: 5px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 999px;
+  color: var(--cl-muted);
+  background: #0d1216;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.connect-card__status.is-ready {
+  color: #bff9cf;
+  border-color: rgba(67, 224, 111, .2);
+  background: rgba(67, 224, 111, .08);
+}
+
+.connect-card__action {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: #12181e;
+  color: #d6dde2;
+  font-size: 11px;
+}
+
+.connect-account-card .auth-output {
+  grid-column: 2 / -1;
+  width: 100%;
+  margin: 0;
+}
+
+.console-surface {
+  padding: 16px;
+}
+
+.section-heading--minimal {
+  align-items: center;
+}
+
+.section-heading--minimal button {
+  flex: 0 0 auto;
+}
+
+.remote-play-setup-slot:empty {
+  display: none;
+}
+
+.remote-play-setup-slot .xbox-setup-banner {
+  margin-top: 14px;
+}
+
+.console-list--minimal {
+  gap: 8px;
+}
+
+.console-card--minimal {
+  min-height: 72px;
+  padding: 11px 12px;
+  border-color: var(--cl-border);
+}
+
+.console-card__identity,
+.console-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.console-card__device {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  background: #0a0f13;
+  color: #d5dce1;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.console-card--minimal .console-name {
+  font-size: 14px;
+}
+
+.console-card--minimal .console-model {
+  margin-top: 3px;
+  color: #83909b;
+  font-size: 11px;
+}
+
+.console-card--minimal .console-power {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8e9aa5;
+  font-size: 10px;
+}
+
+.console-power__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--cl-accent);
+  box-shadow: 0 0 8px rgba(67, 224, 111, .35);
+}
+
+/* Audio */
+.audio-devices-panel--minimal {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.audio-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.audio-summary-item {
+  min-height: 74px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--cl-border);
+  border-radius: 12px;
+  background: #0e1318;
+}
+
+.audio-summary-item__icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  background: #0a0f13;
+  color: #b8c2ca;
+}
+
+.audio-summary-item__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.audio-summary-item small,
+.audio-summary-item strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-summary-item small {
+  margin-bottom: 3px;
+  color: #6f7b86;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.audio-summary-item strong {
+  color: #e5eaee;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.audio-device-grid--minimal {
+  gap: 12px;
+}
+
+.audio-device-card--minimal {
+  min-height: 280px;
+  padding: 18px;
+  border-radius: 13px;
+}
+
+.audio-device-card--minimal .audio-device-title h3 {
+  margin-top: 5px;
+  font-size: 16px;
+}
+
+.audio-device-card--minimal .audio-device-title p {
+  max-width: 520px;
+  margin-top: 5px;
+}
+
+.audio-device-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.audio-device-actions-row button {
+  min-height: 36px;
+  font-size: 11px;
+}
+
+.toggle-field--card {
+  width: 100%;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 11px;
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  background: #0a0f13;
+}
+
+.toggle-field--card > span {
+  display: grid;
+  gap: 3px;
+}
+
+.toggle-field--card strong {
+  color: #dbe1e6;
+  font-size: 11px;
+}
+
+.toggle-field--card small {
+  color: #727e89;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.recording-mic-card {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 34%);
+  align-items: center;
+  gap: 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--cl-border);
+  border-radius: 13px;
+  background: #0e1318;
+}
+
+.recording-mic-card h3 {
+  margin: 5px 0 0;
+  font-size: 14px;
+}
+
+.recording-mic-card p {
+  margin: 5px 0 0;
+  color: var(--cl-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.recording-mic-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+}
+
+.recording-mic-control input {
+  width: 100%;
+  accent-color: var(--cl-accent);
+}
+
+.recording-mic-control output {
+  color: #dce2e7;
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Recordings */
+.recordings-heading {
+  align-items: center;
+}
+
+.recording-library-panel--minimal {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.recording-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+
+.recording-search {
+  width: min(420px, 48%);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px;
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  background: #0d1217;
+}
+
+.recording-search svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: #6f7b86;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.recording-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #e7ebee;
+  font-size: 12px;
+}
+
+.recording-search input::placeholder {
+  color: #697580;
+}
+
+.recording-toolbar__status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: #73808b;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+#recording-export-status {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recording-library-list--minimal {
+  gap: 8px;
+  margin-top: 0;
+}
+
+.recording-library-item--minimal {
+  min-height: 78px;
+  padding: 11px 12px;
+  gap: 14px;
+  border-radius: 12px;
+}
+
+.recording-library-main--minimal {
+  align-items: center;
+  gap: 11px;
+}
+
+.recording-library-item--minimal .recording-library-badge {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.recording-library-item--minimal .recording-library-badge svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.recording-library-item--minimal .recording-library-name {
+  display: block;
+  max-width: min(620px, 58vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.recording-library-item--minimal .recording-library-meta {
+  gap: 8px;
+  margin-top: 5px;
+  font-size: 10px;
+}
+
+.recording-library-item--minimal .recording-library-meta span + span::before {
+  content: "·";
+  margin-right: 8px;
+  color: #4d5963;
+}
+
+.recording-library-actions--minimal {
+  position: relative;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.recording-action {
+  min-height: 34px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px !important;
+  font-size: 10px;
+}
+
+.recording-action svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.recording-action--primary:not(:disabled) {
+  border-color: rgba(67, 224, 111, .2);
+  background: rgba(67, 224, 111, .07);
+  color: #d9fbe2;
+}
+
+.recording-more {
+  position: relative;
+}
+
+.recording-more > summary {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cl-border);
+  border-radius: 9px;
+  background: #141a20;
+  color: #9da8b1;
+  cursor: pointer;
+  list-style: none;
+  letter-spacing: .08em;
+}
+
+.recording-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.recording-more[open] > summary {
+  border-color: var(--cl-border-strong);
+  color: #e1e6ea;
+  background: #192129;
+}
+
+.recording-more__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 160px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 10px;
+  background: #10161b;
+  box-shadow: 0 18px 40px rgba(0,0,0,.38);
+}
+
+.recording-more__menu button {
+  min-height: 32px;
+  width: 100%;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #cbd3d9;
+  font-size: 10px;
+  text-align: left;
+}
+
+.recording-more__menu button:not(:disabled):hover {
+  background: #192129;
+}
+
+.recording-more__menu .recording-more__danger:not(:disabled) {
+  color: #ff9aa0;
+}
+
+.recording-library-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  border-color: var(--cl-border);
+  background: #0c1115;
+}
+
+.recording-library-empty__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+  border: 1px solid var(--cl-border);
+  border-radius: 11px;
+  color: #72808a;
+}
+
+.recording-library-empty__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.recording-library-empty strong {
+  color: #dce2e7;
+  font-size: 13px;
+}
+
+.recording-library-empty span {
+  color: #6f7b86;
+  font-size: 11px;
+}
+
+/* Settings */
+.settings-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-card {
+  min-height: 86px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+}
+
+.settings-card__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cl-border);
+  border-radius: 11px;
+  background: #0a0f13;
+  color: #9da9b2;
+}
+
+.settings-card__body {
+  min-width: 0;
+}
+
+.settings-card__body h2 {
+  margin: 5px 0 0;
+  font-size: 14px;
+}
+
+.settings-card__body p {
+  margin: 5px 0 0;
+  max-width: 720px;
+  color: var(--cl-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.settings-card__action {
+  min-width: 122px;
+  font-size: 11px;
+}
+
+.settings-card--account .settings-card__icon {
+  color: var(--cl-accent);
+}
+
+.settings-card--account .settings-card__action:not([hidden]) {
+  color: #ffb2b7;
+  border-color: rgba(255,95,104,.22);
+  background: rgba(255,95,104,.06);
+}
+
+.diagnostics-panel--settings {
+  margin-top: 12px;
+}
+
+@media (max-width: 980px) {
+  .connect-overview,
+  .audio-summary-strip,
+  .audio-device-grid--minimal {
+    grid-template-columns: 1fr;
+  }
+
+  .recording-mic-card {
+    grid-template-columns: 1fr;
+  }
+
+  .recording-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recording-search {
+    width: 100%;
+  }
+
+  .recording-toolbar__status {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .connect-account-card,
+  .connect-help-card {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .connect-card__status,
+  .connect-card__action {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .console-card--minimal {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .console-card__actions {
+    justify-content: space-between;
+  }
+
+  .recording-library-item--minimal {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recording-library-actions--minimal {
+    justify-content: flex-start;
+  }
+
+  .settings-card {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .settings-card__action {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
