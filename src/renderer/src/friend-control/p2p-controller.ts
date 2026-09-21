@@ -13,19 +13,26 @@ const GAMEPAD_SAMPLE_INTERVAL_MS = 16
 const ICE_GATHER_TIMEOUT_MS = 10_000
 
 /*
- * F2 deliberately contains NO TURN servers and NO STUN servers.
+ * F2.5 direct internet P2P experiment.
  *
- * This is the purest possible direct-P2P proof:
+ * STUN is used only for NAT/public-address discovery.
  *
- * guest <---------- WebRTC ----------> host
+ * There is intentionally NO TURN server configured.
  *
- * On the same LAN, WebRTC host candidates are sufficient.
+ * That means:
  *
- * After this passes we will add STUN-only internet traversal while
- * retaining the same direct P2P data path.
+ * - host candidates = local interfaces
+ * - srflx candidates = public NAT mappings discovered through STUN
+ * - relay candidates = impossible because no TURN server exists
+ *
+ * Controller traffic remains peer-to-peer.
  */
 const DIRECT_P2P_CONFIGURATION: RTCConfiguration = {
-  iceServers: []
+  iceServers: [
+    {
+      urls: 'stun:stun.l.google.com:19302'
+    }
+  ]
 }
 
 interface FriendControllerPeerOptions {
