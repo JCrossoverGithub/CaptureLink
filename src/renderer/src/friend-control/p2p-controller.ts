@@ -27,6 +27,18 @@ const COMPETITIVE_JITTER_BUFFER_TARGET_MS = 10
 // This affects only the friend P2P stream.
 const COMPETITIVE_VIDEO_ONLY = true
 
+// F3.3 competitive-quality experiment.
+//
+// Preserve the validated low-latency receiver configuration and
+// tune only the outbound friend-video encoder.
+//
+// 720p60 is the first quality target. If this remains stable at
+// competitive latency, the next experiment will target 1080p60.
+const COMPETITIVE_VIDEO_TARGET_HEIGHT = 720
+const COMPETITIVE_VIDEO_MAX_FRAMERATE = 60
+const COMPETITIVE_VIDEO_MAX_BITRATE_BPS =
+  6_000_000
+
 /*
  * F2.5 direct internet P2P experiment.
  *
@@ -423,6 +435,184 @@ function configureLowLatencyReceiver(
   }
 }
 
+async function configureCompetitiveVideoSenders(
+  peer: RTCPeerConnection
+): Promise<void> {
+  const videoSenders =
+    peer
+      .getSenders()
+      .filter(
+        (sender) =>
+          sender.track?.kind === 'video'
+      )
+
+  if (videoSenders.length === 0) {
+    console.warn(
+      '[CaptureLink:F3.3] No outbound video sender available for competitive tuning.'
+    )
+
+    return
+  }
+
+  for (const sender of videoSenders) {
+    const track = sender.track
+
+    if (!track) {
+      continue
+    }
+
+    try {
+      /*
+       * Tell the encoder that temporal motion is more important
+       * than static-detail preservation. Video games are exactly
+       * the intended use case for the "motion" content hint.
+       */
+      try {
+        track.contentHint = 'motion'
+      } catch (error) {
+        console.warn(
+          '[CaptureLink:F3.3] Could not apply video motion content hint:',
+          error
+        )
+      }
+
+      const settings =
+        track.getSettings()
+
+      const sourceHeight =
+        typeof settings.height === 'number'
+          ? settings.height
+          : null
+
+      /*
+       * RTCRtpSender can downscale but cannot upscale.
+       *
+       * Example:
+       *
+       *   1080p source:
+       *     1080 / 720 = 1.5
+       *
+       *   720p source:
+       *     scale = 1
+       *
+       * If the source itself is below 720p, scale remains 1 and
+       * the diagnostics below will expose that upstream limit.
+       */
+      const scaleResolutionDownBy =
+        sourceHeight !== null &&
+        sourceHeight >
+          COMPETITIVE_VIDEO_TARGET_HEIGHT
+          ? sourceHeight /
+            COMPETITIVE_VIDEO_TARGET_HEIGHT
+          : 1
+
+      const parameters =
+        sender.getParameters()
+
+      if (
+        !parameters.encodings ||
+        parameters.encodings.length === 0
+      ) {
+        console.warn(
+          '[CaptureLink:F3.3] Video sender has no configurable RTP encodings.',
+          {
+            settings,
+            parameters
+          }
+        )
+
+        continue
+      }
+
+      for (
+        const encoding
+        of parameters.encodings
+      ) {
+        encoding.active = true
+
+        encoding.maxBitrate =
+          COMPETITIVE_VIDEO_MAX_BITRATE_BPS
+
+        encoding.maxFramerate =
+          COMPETITIVE_VIDEO_MAX_FRAMERATE
+
+        encoding.scaleResolutionDownBy =
+          Math.max(
+            1,
+            scaleResolutionDownBy
+          )
+
+        encoding.priority = 'high'
+      }
+
+      /*
+       * Preserve frame rate first if bandwidth becomes constrained.
+       *
+       * We are deliberately NOT touching jitter buffering here.
+       */
+      parameters.degradationPreference =
+        'maintain-framerate'
+
+      await sender.setParameters(
+        parameters
+      )
+
+      const applied =
+        sender.getParameters()
+
+      console.log(
+        '[CaptureLink:F3.3] Competitive video sender configured:',
+        {
+          source: {
+            width:
+              settings.width ?? null,
+            height:
+              settings.height ?? null,
+            frameRate:
+              settings.frameRate ?? null
+          },
+
+          target: {
+            height:
+              COMPETITIVE_VIDEO_TARGET_HEIGHT,
+            maxFramerate:
+              COMPETITIVE_VIDEO_MAX_FRAMERATE,
+            maxBitrateMbps:
+              COMPETITIVE_VIDEO_MAX_BITRATE_BPS /
+              1_000_000
+          },
+
+          contentHint:
+            track.contentHint,
+
+          scaleResolutionDownBy:
+            Number(
+              scaleResolutionDownBy
+                .toFixed(3)
+            ),
+
+          degradationPreference:
+            applied
+              .degradationPreference,
+
+          encodings:
+            applied.encodings
+        }
+      )
+    } catch (error) {
+      /*
+       * Sender tuning must never prevent a Friend session from
+       * connecting. Log the failure and leave WebRTC defaults in
+       * place so the experiment remains recoverable.
+       */
+      console.error(
+        '[CaptureLink:F3.3] Competitive video sender configuration failed:',
+        error
+      )
+    }
+  }
+}
+
 export class FriendControllerPeer {
   private peer: RTCPeerConnection | null = null
   private channel: RTCDataChannel | null = null
@@ -757,6 +947,19 @@ export class FriendControllerPeer {
 
     await this.peer.setRemoteDescription(
       answer
+    )
+
+    /*
+     * F3.3:
+     *
+     * SDP negotiation is now complete, so the outbound sender has
+     * its negotiated encoding configuration and can be tuned safely.
+     *
+     * This changes only the HOST sender. The validated guest
+     * low-latency receiver path remains untouched.
+     */
+    await configureCompetitiveVideoSenders(
+      this.peer
     )
 
     this.startMediaDiagnostics()
