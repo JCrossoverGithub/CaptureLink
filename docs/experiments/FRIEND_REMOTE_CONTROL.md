@@ -186,6 +186,72 @@ The next networking milestone is direct internet traversal using STUN while
 preserving peer-to-peer controller transport. TURN remains outside the primary
 path and is not required for the next experiment.
 
+### F2.5 Result - PASS: Direct Internet P2P
+
+Validated September 21, 2026 using two physical Windows PCs on separate
+Internet connections.
+
+Test topology:
+
+    XLAPTOPX
+        |
+    phone hotspot
+        |
+    cellular network
+        |
+      Internet
+        |
+    home router
+        |
+      JPCMAIN
+        |
+    Xbox Remote Play
+        |
+       Xbox
+
+Configuration:
+
+- JPCMAIN remained on the host/home network
+- XLAPTOPX was moved to a separate phone-hotspot Internet connection
+- WebRTC used STUN for NAT/public-address discovery
+- No TURN server was configured
+- No router port forwarding was configured
+- SDP offer/answer signaling was exchanged manually
+- Controller state traveled over the CaptureLink WebRTC DataChannel
+
+Observed result:
+
+- The host and guest established a WebRTC connection across the Internet
+- The controller connected to XLAPTOPX successfully controlled the host Xbox
+- The existing F1 `RemoteGamepadAdapter` required no changes
+- No CaptureLink relay infrastructure was present in the controller data path
+
+Because the WebRTC configuration contained STUN but no TURN server, the
+successful connection demonstrates direct Internet peer-to-peer traversal for
+this tested network combination.
+
+Validated controller architecture:
+
+    Guest Controller
+          |
+    Guest CaptureLink
+          |
+    WebRTC DataChannel
+          |
+      Internet
+          |
+    Host CaptureLink
+          |
+    RemoteGamepadAdapter
+          |
+    Xbox Remote Play
+          |
+         Xbox
+
+This validates the preferred CaptureLink networking model: attempt direct P2P
+connectivity first, with STUN assisting NAT traversal but not carrying session
+traffic.
+
 ### F2 - Peer controller transport
 
 Create a CaptureLink-to-CaptureLink WebRTC DataChannel.
