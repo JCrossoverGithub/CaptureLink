@@ -149,6 +149,43 @@ This validates the Xbox-facing half of friend remote control.
 F2 can now transport `FriendGamepadState` messages from another
 CaptureLink installation and feed them into the same adapter.
 
+### F2 Result - PASS
+
+Validated September 21, 2026 using two physical Windows PCs:
+
+- Host: JPCMAIN
+- Guest: XLAPTOPX
+- Host maintained the Xbox xHome Remote Play session
+- Guest had a physical controller connected locally
+- CaptureLink established a WebRTC DataChannel between the two PCs
+- Guest controller state was transmitted to the host
+- Host fed the received state into the F1 `RemoteGamepadAdapter`
+- The guest controller successfully controlled the physical Xbox
+
+The test used manual SDP offer/answer exchange and no TURN relay.
+
+This proves the complete CaptureLink-to-CaptureLink remote-controller path.
+
+Current validated architecture:
+
+    Guest Controller
+          |
+    Guest CaptureLink
+          |
+    WebRTC DataChannel
+          |
+    Host CaptureLink
+          |
+    RemoteGamepadAdapter
+          |
+    Xbox Remote Play
+          |
+         Xbox
+
+The next networking milestone is direct internet traversal using STUN while
+preserving peer-to-peer controller transport. TURN remains outside the primary
+path and is not required for the next experiment.
+
 ### F2 - Peer controller transport
 
 Create a CaptureLink-to-CaptureLink WebRTC DataChannel.
