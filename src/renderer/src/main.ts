@@ -5,7 +5,8 @@ import {
 } from './friend-control/remote-gamepad'
 
 import {
-  FriendControllerPeer
+  FriendControllerPeer,
+  type FriendMediaDiagnostics
 } from './friend-control/p2p-controller'
 
 const root = document.querySelector<HTMLDivElement>('#app')
@@ -1171,6 +1172,9 @@ let friendPeerRole: 'host' | 'guest' | null = null
 
 let friendGuestMediaPanel: HTMLDivElement | null = null
 let friendGuestMediaVideo: HTMLVideoElement | null = null
+
+let friendDiagnosticsPanel:
+  HTMLDivElement | null = null
 let microphoneActive = false
 let microphonePending = false
 let microphoneTimeout: ReturnType<typeof setTimeout> | null = null
@@ -4119,12 +4123,218 @@ function showFriendGuestMedia(
     })
 }
 
+function formatFriendDiagnostic(
+  value: number | null,
+  suffix = '',
+  digits = 1
+): string {
+  if (
+    value === null ||
+    !Number.isFinite(value)
+  ) {
+    return '—'
+  }
+
+  return `${value.toFixed(digits)}${suffix}`
+}
+
+function clearFriendDiagnosticsPanel(): void {
+  friendDiagnosticsPanel?.remove()
+  friendDiagnosticsPanel = null
+}
+
+function updateFriendDiagnosticsPanel(
+  diagnostics: FriendMediaDiagnostics
+): void {
+  if (!friendDiagnosticsPanel) {
+    const panel =
+      document.createElement('div')
+
+    panel.id =
+      'capturelink-friend-diagnostics'
+
+    panel.style.position = 'fixed'
+    panel.style.right = '18px'
+    panel.style.bottom = '18px'
+    panel.style.zIndex = '2147483647'
+
+    panel.style.minWidth = '310px'
+    panel.style.maxWidth = '390px'
+
+    panel.style.padding = '14px 16px'
+
+    panel.style.border =
+      '1px solid rgba(255,255,255,0.18)'
+
+    panel.style.borderRadius = '12px'
+
+    panel.style.background =
+      'rgba(5, 8, 12, 0.92)'
+
+    panel.style.boxShadow =
+      '0 18px 60px rgba(0,0,0,0.55)'
+
+    panel.style.backdropFilter =
+      'blur(12px)'
+
+    panel.style.fontFamily =
+      'Consolas, "SFMono-Regular", monospace'
+
+    panel.style.fontSize = '12px'
+    panel.style.lineHeight = '1.55'
+
+    panel.style.color =
+      'rgba(255,255,255,0.92)'
+
+    panel.style.whiteSpace = 'pre'
+
+    panel.style.pointerEvents =
+      'none'
+
+    document.body.appendChild(
+      panel
+    )
+
+    friendDiagnosticsPanel = panel
+  }
+
+  const role =
+    diagnostics.role.toUpperCase()
+
+  const video =
+    diagnostics.resolution
+      ? `${diagnostics.resolution} @ ${
+          diagnostics.fps !== null
+            ? diagnostics.fps.toFixed(0)
+            : '—'
+        } fps`
+      : '—'
+
+  const oneWayNetworkMs =
+    diagnostics.peerRttMs !== null
+      ? diagnostics.peerRttMs / 2
+      : null
+
+  const knownReceivePathMs =
+    diagnostics.role === 'guest' &&
+    oneWayNetworkMs !== null
+      ? oneWayNetworkMs +
+        (
+          diagnostics
+            .averageJitterBufferMs ??
+          0
+        ) +
+        (
+          diagnostics
+            .averageDecodeMs ??
+          0
+        )
+      : null
+
+  const lines = [
+    'CaptureLink Friend Diagnostics',
+    `DIRECT P2P · ${role}`,
+    '',
+    `RTT                 ${formatFriendDiagnostic(
+      diagnostics.peerRttMs,
+      ' ms'
+    )}`,
+    `Video               ${video}`,
+    `Codec               ${
+      diagnostics.codec ?? '—'
+    }`,
+    `Bitrate             ${formatFriendDiagnostic(
+      diagnostics.bitrateMbps,
+      ' Mbps',
+      2
+    )}`
+  ]
+
+  if (diagnostics.role === 'host') {
+    lines.push(
+      `Encode              ${formatFriendDiagnostic(
+        diagnostics.averageEncodeMs,
+        ' ms',
+        2
+      )}`,
+      `Quality limit       ${
+        diagnostics
+          .qualityLimitationReason ??
+        '—'
+      }`,
+      `Encoder             ${
+        diagnostics
+          .encoderImplementation ??
+        '—'
+      }`
+    )
+  } else {
+    lines.push(
+      `Network jitter      ${formatFriendDiagnostic(
+        diagnostics.networkJitterMs,
+        ' ms',
+        2
+      )}`,
+      `Jitter buffer       ${formatFriendDiagnostic(
+        diagnostics.averageJitterBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Buffer target       ${formatFriendDiagnostic(
+        diagnostics.averageTargetBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Minimum buffer      ${formatFriendDiagnostic(
+        diagnostics.averageMinimumBufferMs,
+        ' ms',
+        2
+      )}`,
+      `Decode              ${formatFriendDiagnostic(
+        diagnostics.averageDecodeMs,
+        ' ms',
+        2
+      )}`,
+      `Known receive path ~${formatFriendDiagnostic(
+        knownReceivePathMs,
+        ' ms',
+        2
+      )}`,
+      `Decoder             ${
+        diagnostics
+          .decoderImplementation ??
+        '—'
+      }`
+    )
+  }
+
+  lines.push(
+    '',
+    `Dropped frames      ${
+      diagnostics.framesDropped ??
+      '—'
+    }`,
+    `Packets lost        ${
+      diagnostics.packetsLost ??
+      '—'
+    }`,
+    `Freezes             ${
+      diagnostics.freezeCount ??
+      '—'
+    }`
+  )
+
+  friendDiagnosticsPanel.textContent =
+    lines.join('\n')
+}
+
 function closeFriendControllerPeer(): void {
   friendControllerPeer?.close()
   friendControllerPeer = null
   friendPeerRole = null
 
   clearFriendGuestMedia()
+  clearFriendDiagnosticsPanel()
 }
 
 function makeFriendControllerPeer(): FriendControllerPeer {
@@ -4154,6 +4364,12 @@ function makeFriendControllerPeer(): FriendControllerPeer {
       if (friendPeerRole === 'host') {
         detachRemoteSyntheticController()
       }
+    },
+
+    onDiagnostics: (diagnostics) => {
+      updateFriendDiagnosticsPanel(
+        diagnostics
+      )
     },
 
     onRemoteMediaStream: (stream) => {

@@ -35,6 +35,34 @@ const DIRECT_P2P_CONFIGURATION: RTCConfiguration = {
   ]
 }
 
+export interface FriendMediaDiagnostics {
+  role: 'host' | 'guest'
+
+  peerRttMs: number | null
+
+  codec: string | null
+  resolution: string | null
+  fps: number | null
+  bitrateMbps: number | null
+
+  averageEncodeMs: number | null
+  averageDecodeMs: number | null
+
+  networkJitterMs: number | null
+
+  averageJitterBufferMs: number | null
+  averageTargetBufferMs: number | null
+  averageMinimumBufferMs: number | null
+
+  framesDropped: number | null
+  packetsLost: number | null
+  freezeCount: number | null
+
+  qualityLimitationReason: string | null
+  encoderImplementation: string | null
+  decoderImplementation: string | null
+}
+
 interface FriendControllerPeerOptions {
   onStatus?: (message: string) => void
 
@@ -46,6 +74,10 @@ interface FriendControllerPeerOptions {
 
   onRemoteMediaStream?: (
     stream: MediaStream
+  ) => void
+
+  onDiagnostics?: (
+    diagnostics: FriendMediaDiagnostics
   ) => void
 }
 
@@ -66,6 +98,69 @@ type CandidatePairStat = RTCStats & {
   localCandidateId?: string
   remoteCandidateId?: string
   currentRoundTripTime?: number
+}
+
+type CaptureLinkVideoRtpStat =
+  RTCStats & {
+    kind?: string
+    mediaType?: string
+
+    codecId?: string
+
+    bytesSent?: number
+    bytesReceived?: number
+
+    framesEncoded?: number
+    framesDecoded?: number
+    framesDropped?: number
+    framesPerSecond?: number
+
+    totalEncodeTime?: number
+    totalDecodeTime?: number
+
+    jitter?: number
+
+    jitterBufferDelay?: number
+    jitterBufferTargetDelay?: number
+    jitterBufferMinimumDelay?: number
+    jitterBufferEmittedCount?: number
+
+    packetsLost?: number
+    freezeCount?: number
+
+    qualityLimitationReason?: string
+
+    encoderImplementation?: string
+    decoderImplementation?: string
+
+    frameWidth?: number
+    frameHeight?: number
+  }
+
+type CaptureLinkCodecStat =
+  RTCStats & {
+    mimeType?: string
+  }
+
+function roundDiagnostic(
+  value: number | null,
+  digits = 2
+): number | null {
+  if (
+    value === null ||
+    !Number.isFinite(value)
+  ) {
+    return null
+  }
+
+  const scale =
+    10 ** digits
+
+  return (
+    Math.round(
+      value * scale
+    ) / scale
+  )
 }
 
 function encodeDescription(
@@ -266,6 +361,12 @@ export class FriendControllerPeer {
   private lastRemoteSequence = -1
 
   private remoteMediaStream: MediaStream | null = null
+
+  private mediaDiagnosticsTimer:
+    number | null = null
+
+  private previousVideoBytes = 0
+  private previousStatsTimestamp = 0
 
   constructor(
     private readonly options:
@@ -488,6 +589,8 @@ export class FriendControllerPeer {
       answer
     )
 
+    this.startMediaDiagnostics()
+
     await waitForIceGatheringComplete(
       this.peer
     )
@@ -533,6 +636,8 @@ export class FriendControllerPeer {
       answer
     )
 
+    this.startMediaDiagnostics()
+
     this.status(
       'guest answer accepted; establishing direct P2P path'
     )
@@ -540,6 +645,7 @@ export class FriendControllerPeer {
 
   close(): void {
     this.stopGuestControllerPump()
+    this.stopMediaDiagnostics()
 
     const channel = this.channel
     this.channel = null
@@ -570,6 +676,418 @@ export class FriendControllerPeer {
     this.lastRemoteSequence = -1
     this.guestSequence = 0
     this.guestHadController = false
+  }
+
+  private startMediaDiagnostics(): void {
+    this.stopMediaDiagnostics()
+
+    this.previousVideoBytes = 0
+    this.previousStatsTimestamp = 0
+
+    const peer = this.peer
+
+    if (!peer) {
+      return
+    }
+
+    const sample = (): void => {
+      void this.collectMediaDiagnostics(
+        peer
+      )
+    }
+
+    sample()
+
+    this.mediaDiagnosticsTimer =
+      window.setInterval(
+        sample,
+        1000
+      )
+  }
+
+  private stopMediaDiagnostics(): void {
+    if (
+      this.mediaDiagnosticsTimer !==
+      null
+    ) {
+      window.clearInterval(
+        this.mediaDiagnosticsTimer
+      )
+
+      this.mediaDiagnosticsTimer =
+        null
+    }
+
+    this.previousVideoBytes = 0
+    this.previousStatsTimestamp = 0
+  }
+
+  private getSelectedPeerRttMs(
+    report: RTCStatsReport
+  ): number | null {
+    let result: number | null =
+      null
+
+    report.forEach((rawStat) => {
+      const pair =
+        rawStat as CandidatePairStat
+
+      if (
+        pair.type ===
+          'candidate-pair' &&
+        pair.state ===
+          'succeeded' &&
+        pair.nominated === true &&
+        typeof
+          pair.currentRoundTripTime ===
+          'number'
+      ) {
+        result =
+          pair.currentRoundTripTime *
+          1000
+      }
+    })
+
+    return roundDiagnostic(
+      result,
+      2
+    )
+  }
+
+  private async collectMediaDiagnostics(
+    peer: RTCPeerConnection
+  ): Promise<void> {
+    try {
+      const report =
+        await peer.getStats()
+
+      let videoStat:
+        CaptureLinkVideoRtpStat |
+        null = null
+
+      report.forEach((rawStat) => {
+        const stat =
+          rawStat as
+            CaptureLinkVideoRtpStat
+
+        const kind =
+          stat.kind ??
+          stat.mediaType
+
+        if (kind !== 'video') {
+          return
+        }
+
+        if (
+          this.role === 'host' &&
+          stat.type ===
+            'outbound-rtp'
+        ) {
+          videoStat = stat
+        }
+
+        if (
+          this.role === 'guest' &&
+          stat.type ===
+            'inbound-rtp'
+        ) {
+          videoStat = stat
+        }
+      })
+
+      if (!videoStat) {
+        return
+      }
+
+      const stat =
+        videoStat as
+          CaptureLinkVideoRtpStat
+
+      const now =
+        performance.now()
+
+      const bytes =
+        this.role === 'host'
+          ? stat.bytesSent ?? 0
+          : stat.bytesReceived ?? 0
+
+      let bitrateMbps:
+        number | null = null
+
+      if (
+        this.previousStatsTimestamp > 0 &&
+        now >
+          this.previousStatsTimestamp &&
+        bytes >=
+          this.previousVideoBytes
+      ) {
+        const elapsedSeconds =
+          (
+            now -
+            this.previousStatsTimestamp
+          ) / 1000
+
+        const byteDelta =
+          bytes -
+          this.previousVideoBytes
+
+        bitrateMbps =
+          (
+            byteDelta *
+            8
+          ) /
+          elapsedSeconds /
+          1_000_000
+      }
+
+      this.previousStatsTimestamp =
+        now
+
+      this.previousVideoBytes =
+        bytes
+
+      const codec =
+        stat.codecId
+          ? report.get(
+              stat.codecId
+            ) as
+              CaptureLinkCodecStat |
+              undefined
+          : undefined
+
+      const peerRttMs =
+        this.getSelectedPeerRttMs(
+          report
+        )
+
+      const resolution =
+        stat.frameWidth &&
+        stat.frameHeight
+          ? `${stat.frameWidth}x${stat.frameHeight}`
+          : null
+
+      if (this.role === 'host') {
+        const framesEncoded =
+          stat.framesEncoded ?? 0
+
+        const averageEncodeMs =
+          framesEncoded > 0 &&
+          typeof
+            stat.totalEncodeTime ===
+            'number'
+            ? (
+                stat.totalEncodeTime /
+                framesEncoded
+              ) * 1000
+            : null
+
+        this.options
+          .onDiagnostics?.({
+            role: 'host',
+
+            peerRttMs,
+
+            codec:
+              codec?.mimeType ??
+              null,
+
+            resolution,
+
+            fps:
+              stat.framesPerSecond ??
+              null,
+
+            bitrateMbps:
+              roundDiagnostic(
+                bitrateMbps
+              ),
+
+            averageEncodeMs:
+              roundDiagnostic(
+                averageEncodeMs
+              ),
+
+            averageDecodeMs: null,
+
+            networkJitterMs: null,
+
+            averageJitterBufferMs:
+              null,
+
+            averageTargetBufferMs:
+              null,
+
+            averageMinimumBufferMs:
+              null,
+
+            framesDropped:
+              stat.framesDropped ??
+              null,
+
+            packetsLost:
+              stat.packetsLost ??
+              null,
+
+            freezeCount:
+              stat.freezeCount ??
+              null,
+
+            qualityLimitationReason:
+              stat
+                .qualityLimitationReason ??
+              null,
+
+            encoderImplementation:
+              stat
+                .encoderImplementation ??
+              null,
+
+            decoderImplementation:
+              null
+          })
+
+        return
+      }
+
+      const framesDecoded =
+        stat.framesDecoded ?? 0
+
+      const emitted =
+        stat
+          .jitterBufferEmittedCount ??
+        0
+
+      const averageDecodeMs =
+        framesDecoded > 0 &&
+        typeof
+          stat.totalDecodeTime ===
+          'number'
+          ? (
+              stat.totalDecodeTime /
+              framesDecoded
+            ) * 1000
+          : null
+
+      const averageJitterBufferMs =
+        emitted > 0 &&
+        typeof
+          stat.jitterBufferDelay ===
+          'number'
+          ? (
+              stat.jitterBufferDelay /
+              emitted
+            ) * 1000
+          : null
+
+      const averageTargetBufferMs =
+        emitted > 0 &&
+        typeof
+          stat
+            .jitterBufferTargetDelay ===
+          'number'
+          ? (
+              stat
+                .jitterBufferTargetDelay /
+              emitted
+            ) * 1000
+          : null
+
+      const averageMinimumBufferMs =
+        emitted > 0 &&
+        typeof
+          stat
+            .jitterBufferMinimumDelay ===
+          'number'
+          ? (
+              stat
+                .jitterBufferMinimumDelay /
+              emitted
+            ) * 1000
+          : null
+
+      const networkJitterMs =
+        typeof stat.jitter ===
+        'number'
+          ? stat.jitter * 1000
+          : null
+
+      this.options
+        .onDiagnostics?.({
+          role: 'guest',
+
+          peerRttMs,
+
+          codec:
+            codec?.mimeType ??
+            null,
+
+          resolution,
+
+          fps:
+            stat.framesPerSecond ??
+            null,
+
+          bitrateMbps:
+            roundDiagnostic(
+              bitrateMbps
+            ),
+
+          averageEncodeMs: null,
+
+          averageDecodeMs:
+            roundDiagnostic(
+              averageDecodeMs
+            ),
+
+          networkJitterMs:
+            roundDiagnostic(
+              networkJitterMs
+            ),
+
+          averageJitterBufferMs:
+            roundDiagnostic(
+              averageJitterBufferMs
+            ),
+
+          averageTargetBufferMs:
+            roundDiagnostic(
+              averageTargetBufferMs
+            ),
+
+          averageMinimumBufferMs:
+            roundDiagnostic(
+              averageMinimumBufferMs
+            ),
+
+          framesDropped:
+            stat.framesDropped ??
+            null,
+
+          packetsLost:
+            stat.packetsLost ??
+            null,
+
+          freezeCount:
+            stat.freezeCount ??
+            null,
+
+          qualityLimitationReason:
+            null,
+
+          encoderImplementation:
+            null,
+
+          decoderImplementation:
+            stat
+              .decoderImplementation ??
+            null
+        })
+    } catch (error) {
+      console.warn(
+        '[CaptureLink] Friend media diagnostics failed:',
+        error
+      )
+    }
   }
 
   private createPeerConnection():
