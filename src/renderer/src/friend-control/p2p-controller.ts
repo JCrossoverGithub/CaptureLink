@@ -18,6 +18,15 @@ const ICE_GATHER_TIMEOUT_MS = 10_000
 // based on network conditions.
 const COMPETITIVE_JITTER_BUFFER_TARGET_MS = 10
 
+// F3.2 experiment:
+//
+// Exclude friend-session audio from the WebRTC peer so video
+// is not subject to audio/video synchronization constraints.
+//
+// Xbox audio remains available normally on the HOST.
+// This affects only the friend P2P stream.
+const COMPETITIVE_VIDEO_ONLY = true
+
 /*
  * F2.5 direct internet P2P experiment.
  *
@@ -468,25 +477,56 @@ export class FriendControllerPeer {
             track.readyState === 'live'
         )
 
+    const outgoingTracks =
+      COMPETITIVE_VIDEO_ONLY
+        ? liveTracks.filter(
+            (track) =>
+              track.kind === 'video'
+          )
+        : liveTracks
+
     const hasVideo =
-      liveTracks.some(
+      outgoingTracks.some(
         (track) =>
           track.kind === 'video'
       )
 
     const hasAudio =
-      liveTracks.some(
+      outgoingTracks.some(
         (track) =>
           track.kind === 'audio'
       )
 
-    if (!hasVideo || !hasAudio) {
+    if (!hasVideo) {
       throw new Error(
-        'Host Xbox media must contain a live video and audio track.'
+        'Host Xbox media must contain a live video track.'
       )
     }
 
-    for (const track of liveTracks) {
+    if (
+      !COMPETITIVE_VIDEO_ONLY &&
+      !hasAudio
+    ) {
+      throw new Error(
+        'Host Xbox media must contain a live audio track.'
+      )
+    }
+
+    console.log(
+      '[CaptureLink:F3.2] Friend media mode:',
+      {
+        competitiveVideoOnly:
+          COMPETITIVE_VIDEO_ONLY,
+
+        tracks:
+          outgoingTracks.map(
+            (track) =>
+              track.kind
+          )
+      }
+    )
+
+    for (const track of outgoingTracks) {
       this.peer.addTrack(
         track,
         hostMedia
