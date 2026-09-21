@@ -941,69 +941,10 @@ input:focus-visible {
   }
 }
 
-/* Put onboarding and console selection before the live session for first-run clarity. */
-.shell {
-  display: flex;
-  flex-direction: column;
-}
-
-.topbar { order: 0; }
-.grid { order: 1; margin-top: 0; }
-.stream-card { order: 2; margin-top: 18px; }
-.audio-devices-panel { order: 3; }
-.diagnostics-panel { order: 4; }
-.recording-library-panel { order: 5; }
-
-.auth-output:empty {
-  display: none;
-}
-
-/* Connected sessions prioritize the live stream over first-run onboarding. */
-.session-connected .grid {
-  display: none;
-}
-
-.session-connected .stream-card {
-  order: 1;
-  margin-top: 0;
-}
-
-.session-connected .audio-devices-panel {
-  order: 2;
-}
-
-.session-connected .diagnostics-panel {
-  order: 3;
-}
-
-.session-connected .recording-library-panel {
-  order: 4;
-}
-
-.session-connected .topbar {
-  padding-top: 18px;
-  padding-bottom: 14px;
-}
-
-.session-connected .topbar h1,
-.session-connected .topbar .subtitle {
-  display: none;
-}
-
-.session-connected .topbar .eyebrow {
-  margin: 0;
-}
-
+/* Legacy pre-shell onboarding order removed during final UI cleanup. */
 .recording-size[hidden],
 .recording-space[hidden] {
   display: none;
-}
-
-@media (max-width: 700px) {
-  .session-connected .topbar {
-    padding-top: 14px;
-    padding-bottom: 10px;
-  }
 }
 
 /* Native fullscreen Xbox presentation */
@@ -3040,5 +2981,989 @@ body {
   .settings-card__action {
     grid-column: 2;
     justify-self: start;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* CaptureLink final UI polish                                                 */
+/* -------------------------------------------------------------------------- */
+
+:root {
+  --cl-warning: #f1c75b;
+  --cl-warning-soft: rgba(241, 199, 91, .10);
+  --cl-info: #7cb7ff;
+  --cl-info-soft: rgba(124, 183, 255, .10);
+}
+
+/* Keep the desktop shell feeling like an application rather than a document. */
+.workspace {
+  scrollbar-color: #27313a transparent;
+  scrollbar-width: thin;
+}
+
+.workspace::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.workspace::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #27313a;
+  background-clip: padding-box;
+}
+
+.workspace::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.view-panel.is-active {
+  animation: capturelink-view-enter 150ms ease-out;
+}
+
+@keyframes capturelink-view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Consistent state language across account, device, rail, recording, and
+   diagnostics surfaces. Text-only status messages inherit the same tones. */
+.status-tone--success {
+  color: #9ff0b5 !important;
+}
+
+.status-tone--busy {
+  color: var(--cl-info) !important;
+}
+
+.status-tone--warning {
+  color: var(--cl-warning) !important;
+}
+
+.status-tone--danger {
+  color: #ff8f97 !important;
+}
+
+.status-tone--muted {
+  color: var(--cl-muted) !important;
+}
+
+:is(
+  .status,
+  .device-state,
+  .rail-status,
+  .connect-card__status
+).status-tone--success {
+  border-color: rgba(67, 224, 111, .22);
+  background: var(--cl-accent-soft);
+}
+
+:is(
+  .status,
+  .device-state,
+  .rail-status,
+  .connect-card__status
+).status-tone--busy {
+  border-color: rgba(124, 183, 255, .2);
+  background: var(--cl-info-soft);
+}
+
+:is(
+  .status,
+  .device-state,
+  .rail-status,
+  .connect-card__status
+).status-tone--warning {
+  border-color: rgba(241, 199, 91, .22);
+  background: var(--cl-warning-soft);
+}
+
+:is(
+  .status,
+  .device-state,
+  .rail-status,
+  .connect-card__status
+).status-tone--danger {
+  border-color: rgba(255, 95, 104, .24);
+  background: var(--cl-danger-soft);
+}
+
+.rail-status {
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+/* Console discovery has intentional loading, empty, signed-out, and error
+   states instead of a blank panel. */
+.console-list-state {
+  min-height: 118px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  place-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border: 1px dashed var(--cl-border);
+  border-radius: 11px;
+  background: #0b1014;
+}
+
+.console-list-state__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cl-border);
+  border-radius: 11px;
+  background: #0d1318;
+  color: #78858f;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.console-list-state strong,
+.console-list-state span {
+  display: block;
+}
+
+.console-list-state strong {
+  color: #dce2e7;
+  font-size: 12px;
+}
+
+.console-list-state > div:last-child > span {
+  max-width: 620px;
+  margin-top: 4px;
+  color: #73808b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.console-list-state--error {
+  border-color: rgba(255, 95, 104, .18);
+}
+
+.console-list-state--error .console-list-state__icon {
+  color: #ff8f97;
+  border-color: rgba(255, 95, 104, .2);
+  background: var(--cl-danger-soft);
+}
+
+.console-list-state__spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid #40505d;
+  border-top-color: var(--cl-accent);
+  border-radius: 999px;
+  animation: capturelink-spin .75s linear infinite;
+}
+
+@keyframes capturelink-spin {
+  to { transform: rotate(360deg); }
+}
+
+.is-busy {
+  cursor: progress !important;
+}
+
+.is-busy svg {
+  animation: capturelink-spin .85s linear infinite;
+}
+
+#recording-library-list[aria-busy="true"] {
+  opacity: .72;
+  transition: opacity 120ms ease;
+}
+
+/* Session-state feedback stays restrained: enough to read at a glance without
+   competing with the video itself. */
+.session-connecting .live-dot {
+  background: var(--cl-warning);
+  box-shadow: 0 0 12px rgba(241, 199, 91, .38);
+  animation: capturelink-status-pulse 1s ease-in-out infinite;
+}
+
+.session-recording .stream-card {
+  border-color: rgba(255, 95, 104, .38);
+  box-shadow: 0 0 0 1px rgba(255, 95, 104, .06);
+}
+
+.session-recording .recording-status,
+.session-recording .recording-timer {
+  color: #ff9ca3;
+}
+
+.session-saving .recording-status {
+  color: var(--cl-info);
+}
+
+@keyframes capturelink-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
+/* Pressed/toggled controls should read immediately even without their labels. */
+.control-dock .dock-button[aria-pressed="true"]:not(:disabled) {
+  border-color: rgba(67, 224, 111, .28);
+  background: rgba(67, 224, 111, .10);
+  color: #dffff0;
+}
+
+#diagnostics-toggle[aria-pressed="true"]:not(:disabled) {
+  border-color: rgba(124, 183, 255, .25);
+  background: var(--cl-info-soft);
+  color: #b9d7ff;
+}
+
+.control-dock .dock-button:not(:disabled),
+.rail-card__icon-button:not(:disabled),
+.nav-item:not(:disabled) {
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.control-dock .dock-button:not(:disabled):hover,
+.rail-card__icon-button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.nav-item.is-active {
+  box-shadow:
+    inset 2px 0 0 var(--cl-accent),
+    inset 0 0 22px rgba(67, 224, 111, .025);
+}
+
+/* More-actions menus behave like compact desktop menus. */
+.recording-more > summary:focus-visible {
+  outline: 2px solid rgba(67, 224, 111, .58);
+  outline-offset: 2px;
+}
+
+.recording-more__menu {
+  transform-origin: top right;
+  animation: capturelink-menu-enter 100ms ease-out;
+}
+
+@keyframes capturelink-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Final responsive guardrails for desktop windows that are resized unusually
+   small during development or capture. */
+@media (max-width: 840px) {
+  .view-heading--compact,
+  .recordings-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .view-heading__action {
+    align-self: flex-start;
+  }
+
+  .recording-toolbar__status {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  #recording-export-status {
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .stream-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    padding-block: 10px;
+  }
+
+  .stream-meta__recording {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-topbar {
+    min-height: 58px;
+  }
+
+  .brand-name {
+    display: none;
+  }
+
+  .topbar-account {
+    min-width: 0;
+  }
+
+  .topbar-auth,
+  .xbox-sign-out {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .view-heading h1 {
+    font-size: 21px;
+  }
+
+  .console-list-state {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-panel.is-active,
+  .recording-more__menu,
+  .console-list-state__spinner,
+  .is-busy svg,
+  .session-connecting .live-dot {
+    animation: none !important;
+  }
+
+  .control-dock .dock-button:not(:disabled):hover,
+  .rail-card__icon-button:not(:disabled):hover {
+    transform: none;
+  }
+}
+/* -------------------------------------------------------------------------- */
+/* CaptureLink mockup-alignment refinement                                    */
+/* -------------------------------------------------------------------------- */
+
+/* Top bar: make signed-in state and the account affordance feel like a native
+   product header without duplicating the operating-system window controls. */
+.topbar-account {
+  gap: 12px;
+}
+
+.topbar-account .topbar-account-status {
+  position: relative;
+  min-height: 34px;
+  gap: 8px;
+  padding: 0 2px 0 16px;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.topbar-account-status::before {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin-left: -14px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 9px color-mix(in srgb, currentColor 48%, transparent);
+}
+
+.topbar-account-divider {
+  width: 1px;
+  height: 26px;
+  flex: 0 0 1px;
+  background: var(--cl-border);
+}
+
+.topbar-account-menu {
+  position: relative;
+}
+
+.topbar-account-menu[hidden] {
+  display: none;
+}
+
+.topbar-account-trigger {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, auto) 16px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 4px 0 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #edf1f4;
+  list-style: none;
+}
+
+.topbar-account-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.topbar-account-trigger:hover {
+  border-color: transparent !important;
+  background: rgba(255, 255, 255, .035) !important;
+}
+
+.topbar-account-avatar {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(67, 224, 111, .24);
+  border-radius: 999px;
+  background: rgba(67, 224, 111, .08);
+  color: #dffff0;
+}
+
+.topbar-account-avatar svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.topbar-account-avatar--large {
+  width: 38px;
+  height: 38px;
+}
+
+.topbar-account-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.topbar-account-copy strong,
+.topbar-account-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-account-copy strong {
+  color: #edf2f5;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.topbar-account-copy small {
+  color: #6f7b85;
+  font-size: 9px;
+}
+
+.topbar-account-chevron {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: #7f8993;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 120ms ease;
+}
+
+.topbar-account-menu[open] .topbar-account-chevron {
+  transform: rotate(180deg);
+}
+
+.topbar-account-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 246px;
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 12px;
+  background: #10161b;
+  box-shadow: 0 20px 46px rgba(0, 0, 0, .42);
+}
+
+.topbar-account-popover__identity {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+}
+
+.topbar-account-popover__identity strong,
+.topbar-account-popover__identity span {
+  display: block;
+}
+
+.topbar-account-popover__identity strong {
+  color: #edf2f5;
+  font-size: 11px;
+}
+
+.topbar-account-popover__identity span {
+  margin-top: 3px;
+  color: var(--cl-muted);
+  font-size: 9px;
+}
+
+.topbar-account-popover .xbox-sign-out {
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  border-color: rgba(255, 95, 104, .18);
+  background: rgba(255, 95, 104, .05);
+  color: #ffadb3;
+}
+
+/* Right rail: closer to the mockup's device selector and icon-led session
+   summary, while retaining the live values already produced by CaptureLink. */
+.stream-workspace {
+  grid-template-columns: minmax(0, 1fr) 292px;
+}
+
+.context-rail {
+  gap: 14px;
+}
+
+.rail-card {
+  padding: 15px;
+  border-radius: 15px;
+}
+
+.rail-card__heading {
+  margin-bottom: 13px;
+  font-size: 13.5px;
+}
+
+.rail-card--console .rail-status,
+.rail-card--session .rail-status {
+  padding-inline: 7px;
+}
+
+.rail-console--select {
+  min-height: 76px;
+  grid-template-columns: 48px minmax(0, 1fr) 16px;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 11px;
+  background: #0b1014;
+}
+
+.rail-console__icon--device {
+  width: 48px;
+  height: 56px;
+  border-radius: 9px;
+  color: #aeb8c0;
+  background:
+    linear-gradient(155deg, rgba(255,255,255,.025), transparent),
+    #0d1318;
+}
+
+.rail-console__icon--device svg {
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rail-console__copy {
+  min-width: 0;
+}
+
+.rail-console--select strong {
+  font-size: 12px;
+}
+
+.rail-console--select span {
+  font-size: 10px;
+}
+
+.rail-console__chevron {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: #78838d;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rail-link--with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.rail-link--with-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.session-facts--visual {
+  gap: 4px;
+}
+
+.session-facts--visual > div {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.session-facts--visual dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #909ca6;
+}
+
+.session-fact__icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: #75818c;
+}
+
+.session-fact__icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.session-facts--visual dd {
+  color: #dfe5e9;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.session-connected .session-fact__icon,
+.session-connected #rail-session-connection {
+  color: var(--cl-accent);
+}
+
+/* Bottom dock: follow the mockup's Audio / Stream Controls / Actions hierarchy.
+   Existing actions are rearranged, not replaced, so all IDs and handlers stay
+   intact. */
+.control-dock--mockup {
+  min-height: 82px;
+  grid-template-columns:
+    minmax(245px, .9fr)
+    minmax(330px, 1.15fr)
+    minmax(280px, 1fr);
+  align-items: center;
+  gap: 0;
+  padding: 11px 14px;
+}
+
+.control-dock--mockup .control-group {
+  min-height: 60px;
+  align-items: center;
+  padding-top: 18px;
+}
+
+.control-dock--mockup .control-group + .control-group {
+  min-height: 60px;
+  padding-left: 18px;
+  margin-left: 18px;
+}
+
+.control-dock--mockup .control-group + .control-group .control-group__label {
+  left: 18px;
+}
+
+.control-dock--mockup .control-group__label {
+  color: #69747f;
+  font-size: 8px;
+  letter-spacing: .12em;
+}
+
+.control-group--audio {
+  gap: 10px;
+}
+
+.control-group--stream-controls {
+  justify-content: center;
+  gap: 10px;
+}
+
+.control-group--actions {
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.control-dock--mockup .dock-button--square {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 11px;
+}
+
+.control-dock--mockup .audio-controls {
+  min-height: 42px;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.control-dock--mockup .audio-controls button {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid var(--cl-border);
+  border-radius: 11px;
+  background: #131920;
+}
+
+.control-dock--mockup .audio-controls label {
+  display: none;
+}
+
+.control-dock--mockup .audio-controls input[type="range"] {
+  width: 96px;
+  flex: 0 0 96px;
+}
+
+.control-dock--mockup #audio-volume-value {
+  min-width: 32px;
+  font-size: 9px;
+}
+
+.control-dock--mockup .dock-button--primary-record {
+  width: 54px;
+  min-width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  padding: 0;
+  border: 1px solid #3a434b;
+  border-radius: 999px;
+  background: #151b20;
+  box-shadow: inset 0 0 0 4px rgba(255,255,255,.015);
+}
+
+.primary-record-dot {
+  width: 22px;
+  height: 22px;
+  display: block;
+  border-radius: 999px;
+  background: #ff5059;
+  box-shadow: 0 0 16px rgba(255, 80, 89, .22);
+  transition:
+    width 120ms ease,
+    height 120ms ease,
+    border-radius 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.control-dock--mockup .dock-button--primary-record:not(:disabled):hover {
+  border-color: rgba(255, 95, 104, .56);
+  background: #1b1e23;
+}
+
+.control-dock--mockup .dock-button--primary-record.record--active {
+  border-color: rgba(255, 95, 104, .7);
+  background: rgba(255, 95, 104, .08);
+}
+
+.control-dock--mockup .dock-button--primary-record.record--active .primary-record-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: 0 0 18px rgba(255, 80, 89, .32);
+}
+
+.control-dock--mockup .dock-button--action-label {
+  width: auto;
+  min-width: 38px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+}
+
+.control-dock--mockup .control-group--actions .dock-button__label {
+  display: inline;
+  font-size: 9px;
+}
+
+.control-dock--mockup .control-group--actions .dock-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.control-dock--mockup .control-group--actions .dock-button--danger {
+  color: #ff9ca3;
+}
+
+@media (max-width: 1500px) {
+  .stream-workspace {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+
+  .control-dock--mockup {
+    grid-template-columns: minmax(210px, .85fr) minmax(280px, 1fr) auto;
+  }
+
+  .control-dock--mockup .control-group + .control-group {
+    padding-left: 12px;
+    margin-left: 12px;
+  }
+
+  .control-dock--mockup .control-group + .control-group .control-group__label {
+    left: 12px;
+  }
+
+  .control-dock--mockup .control-group--actions .dock-button__label {
+    display: none;
+  }
+
+  .control-dock--mockup .dock-button--action-label {
+    width: 38px;
+    min-width: 38px;
+    flex-basis: 38px;
+    padding: 0;
+  }
+}
+
+@media (max-width: 1180px) {
+  .topbar-account-copy {
+    display: none;
+  }
+
+  .topbar-account-trigger {
+    grid-template-columns: 32px 14px;
+    gap: 6px;
+  }
+
+  .control-dock--mockup {
+    grid-template-columns: auto minmax(260px, 1fr) auto;
+  }
+
+  .control-dock--mockup .audio-controls input[type="range"] {
+    width: 72px;
+    flex-basis: 72px;
+  }
+
+  .control-dock--mockup #audio-volume-value {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .stream-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .control-dock--mockup {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .control-dock--mockup .control-group,
+  .control-dock--mockup .control-group + .control-group {
+    min-height: 58px;
+    justify-content: flex-start;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .control-dock--mockup .control-group + .control-group .control-group__label {
+    left: 0;
+  }
+
+  .control-dock--mockup .control-group--actions .dock-button__label {
+    display: inline;
+  }
+
+  .control-dock--mockup .dock-button--action-label {
+    width: auto;
+    flex-basis: auto;
+    padding-inline: 10px;
+  }
+
+  .context-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar-account {
+    gap: 8px;
+  }
+
+  .topbar-account-divider {
+    display: none;
+  }
+
+  .topbar-account-status {
+    display: inline-flex !important;
+  }
+
+  .topbar-account-trigger {
+    padding-right: 0;
+  }
+
+  .context-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .control-dock--mockup .control-group--actions .dock-button__label {
+    display: none;
+  }
+
+  .control-dock--mockup .dock-button--action-label {
+    width: 38px;
+    flex-basis: 38px;
+    padding: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar-account-status {
+    display: none !important;
+  }
+
+  .control-dock--mockup .audio-controls input[type="range"] {
+    width: 58px;
+    flex-basis: 58px;
   }
 }
