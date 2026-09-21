@@ -1,6 +1,6 @@
 {
   "name": "capturelink",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Windows-first Xbox Remote Play desktop client focused on local viewing, listening, controls, diagnostics, and recording.",
   "main": "out/main/index.js",
