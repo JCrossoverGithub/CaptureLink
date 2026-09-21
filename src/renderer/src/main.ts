@@ -13,13 +13,43 @@ type XboxReceiveMode =
   | 'full'
   | 'audio-only'
 
-// XHOME_AUDIO_ONLY_SPIKE
-//
-// Temporary research switch.
-// After proving the Xbox accepts this negotiation,
-// this becomes a real CaptureLink UI setting.
-const XBOX_RECEIVE_MODE: XboxReceiveMode =
-  'audio-only'
+const XBOX_RECEIVE_MODE_STORAGE_KEY =
+  'capturelink.xboxReceiveMode'
+
+function parseXboxReceiveMode(
+  value: string | null
+): XboxReceiveMode {
+  return value === 'audio-only'
+    ? 'audio-only'
+    : 'full'
+}
+
+function loadXboxReceiveMode():
+  XboxReceiveMode {
+  return parseXboxReceiveMode(
+    window.localStorage.getItem(
+      XBOX_RECEIVE_MODE_STORAGE_KEY
+    )
+  )
+}
+
+function saveXboxReceiveMode(
+  mode: XboxReceiveMode
+): void {
+  window.localStorage.setItem(
+    XBOX_RECEIVE_MODE_STORAGE_KEY,
+    mode
+  )
+}
+
+let xboxReceiveMode:
+  XboxReceiveMode =
+    loadXboxReceiveMode()
+
+// The active session keeps the mode it negotiated with.
+// Changing the setting applies to the next connection.
+let activeXboxReceiveMode:
+  XboxReceiveMode | null = null
 
 function configureXboxReceiveMode(
   player: CaptureLinkPlayer,
@@ -55,18 +85,19 @@ function configureXboxReceiveMode(
     )
   }
 
-  if (mode === 'audio-only') {
-    /*
-     * Leave the audio transceiver alone.
-     *
-     * xbox-xcloud-player creates it as sendrecv,
-     * which preserves microphone/game-chat
-     * renegotiation later.
-     *
-     * Disable only Xbox video reception.
-     */
-    video.direction = 'inactive'
-  }
+  /*
+   * Leave Xbox audio alone.
+   *
+   * xbox-xcloud-player creates audio as sendrecv,
+   * preserving microphone/game-chat negotiation.
+   *
+   * Audio Only makes the Xbox video transceiver
+   * inactive before the initial SDP offer.
+   */
+  video.direction =
+    mode === 'audio-only'
+      ? 'inactive'
+      : 'recvonly'
 
   console.log(
     '[CaptureLink:XboxMediaMode]',
@@ -178,7 +209,7 @@ async function inspectXboxInboundMedia(
   )
 
   if (
-    XBOX_RECEIVE_MODE ===
+    activeXboxReceiveMode ===
     'audio-only'
   ) {
     setStreamStatus(
@@ -715,6 +746,90 @@ root.innerHTML = `
             </button>
           </div>
 
+          <article
+            class="surface xbox-stream-mode-card"
+            aria-labelledby="xbox-stream-mode-title"
+          >
+            <div class="xbox-stream-mode-card__heading">
+              <div>
+                <div class="eyebrow">XBOX STREAM</div>
+                <h2 id="xbox-stream-mode-title">
+                  Remote Play media
+                </h2>
+                <p>
+                  Choose whether CaptureLink requests Xbox video and audio,
+                  or audio only. The setting applies the next time you connect.
+                </p>
+              </div>
+
+              <span
+                id="xbox-stream-mode-badge"
+                class="device-state"
+              >
+                Video + Audio
+              </span>
+            </div>
+
+            <div
+              class="xbox-stream-mode-options"
+              role="radiogroup"
+              aria-label="Xbox Remote Play media mode"
+            >
+              <label class="xbox-stream-mode-option">
+                <input
+                  type="radio"
+                  name="xbox-stream-mode"
+                  value="full"
+                />
+
+                <span class="xbox-stream-mode-option__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <rect x="3" y="5" width="18" height="13" rx="2"/>
+                    <path d="M8 21h8M12 18v3"/>
+                  </svg>
+                </span>
+
+                <span class="xbox-stream-mode-option__copy">
+                  <strong>Video + Audio</strong>
+                  <small>
+                    Standard Xbox Remote Play with the full video stream.
+                  </small>
+                </span>
+              </label>
+
+              <label class="xbox-stream-mode-option">
+                <input
+                  type="radio"
+                  name="xbox-stream-mode"
+                  value="audio-only"
+                />
+
+                <span class="xbox-stream-mode-option__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M11 5 6 9H3v6h3l5 4Z"/>
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/>
+                  </svg>
+                </span>
+
+                <span class="xbox-stream-mode-option__copy">
+                  <strong>Audio Only</strong>
+                  <small>
+                    Receive Xbox audio without requesting video.
+                    Uses substantially less bandwidth.
+                  </small>
+                </span>
+              </label>
+            </div>
+
+            <p
+              id="xbox-stream-mode-message"
+              class="device-message"
+              aria-live="polite"
+            >
+              Video + Audio will be used for the next connection.
+            </p>
+          </article>
+
           <section class="audio-devices-panel audio-devices-panel--minimal" aria-label="Audio devices">
             <div class="audio-summary-strip">
               <div class="audio-summary-item">
@@ -1167,6 +1282,23 @@ const refreshRecordingLibraryButton =
 const refreshAudioDevicesButton =
   requireElement<HTMLButtonElement>('#refresh-audio-devices')
 
+const xboxStreamModeInputs =
+  Array.from(
+    document.querySelectorAll<HTMLInputElement>(
+      'input[name="xbox-stream-mode"]'
+    )
+  )
+
+const xboxStreamModeBadge =
+  requireElement<HTMLElement>(
+    '#xbox-stream-mode-badge'
+  )
+
+const xboxStreamModeMessage =
+  requireElement<HTMLElement>(
+    '#xbox-stream-mode-message'
+  )
+
 const microphoneDeviceSelect =
   requireElement<HTMLSelectElement>('#microphone-device')
 
@@ -1300,6 +1432,66 @@ const railLastRecordingName =
   requireElement<HTMLElement>('#rail-last-recording-name')
 const railLastRecordingMeta =
   requireElement<HTMLElement>('#rail-last-recording-meta')
+
+function updateXboxReceiveModeUi(): void {
+  xboxStreamModeInputs.forEach(
+    (input) => {
+      input.checked =
+        input.value ===
+        xboxReceiveMode
+    }
+  )
+
+  const audioOnly =
+    xboxReceiveMode ===
+    'audio-only'
+
+  xboxStreamModeBadge.textContent =
+    audioOnly
+      ? 'Audio Only'
+      : 'Video + Audio'
+
+  xboxStreamModeMessage.textContent =
+    audioOnly
+      ? 'Audio Only will be used for the next Xbox connection. Video will not be requested.'
+      : 'Video + Audio will be used for the next Xbox connection.'
+}
+
+xboxStreamModeInputs.forEach(
+  (input) => {
+    input.addEventListener(
+      'change',
+      () => {
+        if (!input.checked) {
+          return
+        }
+
+        const nextMode:
+          XboxReceiveMode =
+            input.value ===
+            'audio-only'
+              ? 'audio-only'
+              : 'full'
+
+        xboxReceiveMode =
+          nextMode
+
+        saveXboxReceiveMode(
+          nextMode
+        )
+
+        updateXboxReceiveModeUi()
+
+        if (activeServerId) {
+          xboxStreamModeMessage.textContent +=
+            ' Disconnect and reconnect to apply the change.'
+        }
+      }
+    )
+  }
+)
+
+updateXboxReceiveModeUi()
 
 type CaptureLinkView = 'connect' | 'stream' | 'audio' | 'recordings' | 'settings'
 
@@ -3316,7 +3508,16 @@ async function toggleRecording(kind: RecordingKind): Promise<void> {
 function updateInteractiveState(): void {
   const sessionActive = activeServerId !== null
   const locked = streamBusy || sessionActive
-  const mediaReady = sessionActive && webRtcConnected && !streamBusy
+  const mediaReady =
+    sessionActive &&
+    webRtcConnected &&
+    !streamBusy
+
+  const videoMediaReady =
+    mediaReady &&
+    activeXboxReceiveMode !==
+      'audio-only'
+
   const recordingActive = mediaRecorder?.state === 'recording' ||
     mediaRecorder?.state === 'paused'
 
@@ -3330,10 +3531,11 @@ function updateInteractiveState(): void {
 
   refreshConsolesButton.disabled = !signedIn || locked
   disconnectButton.disabled = !sessionActive || streamBusy
-  fullscreenVideoButton.disabled = !sessionActive || streamBusy
+  fullscreenVideoButton.disabled =
+    !videoMediaReady
+
   pictureInPictureButton.disabled =
-    !sessionActive ||
-    streamBusy ||
+    !videoMediaReady ||
     !document.pictureInPictureEnabled
   controllerButton.disabled = !mediaReady
   microphoneButton.disabled = !mediaReady || microphonePending
@@ -3352,10 +3554,13 @@ function updateInteractiveState(): void {
     (recordingActive
       ? recordingKind !== 'audio'
       : !mediaReady)
-  recordVideoButton.disabled = recordingSaving ||
-    (recordingActive
-      ? recordingKind !== 'video'
-      : !mediaReady)
+  recordVideoButton.disabled =
+    recordingSaving ||
+    (
+      recordingActive
+        ? recordingKind !== 'video'
+        : !videoMediaReady
+    )
 
   consoleList
     .querySelectorAll<HTMLButtonElement>('.console-connect')
@@ -3622,6 +3827,7 @@ async function refreshAuthStatus(): Promise<void> {
 }
 
 function destroyPlayer(): void {
+  activeXboxReceiveMode = null
   if (mediaRecorder && !recordingSaving) {
     void stopRecording()
   }
@@ -3727,14 +3933,12 @@ async function connectToConsole(
     const player = new playerConstructor('stream-holder')
     activePlayer = player
 
-    configureXboxReceiveMode(
-      player,
-      XBOX_RECEIVE_MODE
-    )
+    activeXboxReceiveMode =
+      xboxReceiveMode
 
     configureXboxReceiveMode(
       player,
-      XBOX_RECEIVE_MODE
+      activeXboxReceiveMode
     )
 
     player.setChatSdpHandler((offer) => {
@@ -3785,7 +3989,7 @@ async function connectToConsole(
         webRtcConnected = true
 
         if (
-          XBOX_RECEIVE_MODE ===
+          activeXboxReceiveMode ===
           'audio-only'
         ) {
           window.setTimeout(
@@ -3799,7 +4003,7 @@ async function connectToConsole(
         }
 
         if (
-          XBOX_RECEIVE_MODE ===
+          activeXboxReceiveMode ===
           'audio-only'
         ) {
           showStreamPlaceholder(
@@ -3857,7 +4061,7 @@ async function connectToConsole(
     )
 
     if (
-      XBOX_RECEIVE_MODE ===
+      activeXboxReceiveMode ===
         'audio-only' &&
       offerMedia.videoDirection !==
         'inactive'
