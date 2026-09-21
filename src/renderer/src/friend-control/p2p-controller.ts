@@ -43,6 +43,10 @@ interface FriendControllerPeerOptions {
   ) => void
 
   onRemoteControlEnded?: () => void
+
+  onRemoteMediaStream?: (
+    stream: MediaStream
+  ) => void
 }
 
 type FriendPeerRole =
@@ -261,16 +265,62 @@ export class FriendControllerPeer {
 
   private lastRemoteSequence = -1
 
+  private remoteMediaStream: MediaStream | null = null
+
   constructor(
     private readonly options:
       FriendControllerPeerOptions = {}
   ) {}
 
-  async createHostOffer(): Promise<string> {
+  async createHostOffer(
+    hostMedia: MediaStream
+  ): Promise<string> {
     this.close()
 
     this.role = 'host'
     this.peer = this.createPeerConnection()
+
+    const liveTracks =
+      hostMedia
+        .getTracks()
+        .filter(
+          (track) =>
+            track.readyState === 'live'
+        )
+
+    const hasVideo =
+      liveTracks.some(
+        (track) =>
+          track.kind === 'video'
+      )
+
+    const hasAudio =
+      liveTracks.some(
+        (track) =>
+          track.kind === 'audio'
+      )
+
+    if (!hasVideo || !hasAudio) {
+      throw new Error(
+        'Host Xbox media must contain a live video and audio track.'
+      )
+    }
+
+    for (const track of liveTracks) {
+      this.peer.addTrack(
+        track,
+        hostMedia
+      )
+
+      console.log(
+        '[CaptureLink:F3] Added host media track:',
+        {
+          kind: track.kind,
+          label: track.label,
+          id: track.id
+        }
+      )
+    }
 
     const channel =
       this.peer.createDataChannel(
@@ -349,6 +399,53 @@ export class FriendControllerPeer {
 
     this.role = 'guest'
     this.peer = this.createPeerConnection()
+
+    this.remoteMediaStream =
+      new MediaStream()
+
+    this.peer.ontrack = (event) => {
+      const stream =
+        this.remoteMediaStream
+
+      if (!stream) {
+        return
+      }
+
+      const alreadyPresent =
+        stream
+          .getTracks()
+          .some(
+            (track) =>
+              track.id === event.track.id
+          )
+
+      if (!alreadyPresent) {
+        stream.addTrack(
+          event.track
+        )
+      }
+
+      console.log(
+        '[CaptureLink:F3] Remote media track received:',
+        {
+          kind: event.track.kind,
+          label: event.track.label,
+          id: event.track.id,
+          streamTracks:
+            stream
+              .getTracks()
+              .map(
+                (track) =>
+                  track.kind
+              )
+        }
+      )
+
+      this.options
+        .onRemoteMediaStream?.(
+          stream
+        )
+    }
 
     this.peer.ondatachannel = (event) => {
       if (
@@ -466,6 +563,8 @@ export class FriendControllerPeer {
       this.options
         .onRemoteControlEnded?.()
     }
+
+    this.remoteMediaStream = null
 
     this.role = null
     this.lastRemoteSequence = -1

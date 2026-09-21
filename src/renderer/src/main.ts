@@ -1168,6 +1168,9 @@ let remoteSyntheticReleaseTimer: number | null = null
 // F2 research spike: direct CaptureLink-to-CaptureLink WebRTC.
 let friendControllerPeer: FriendControllerPeer | null = null
 let friendPeerRole: 'host' | 'guest' | null = null
+
+let friendGuestMediaPanel: HTMLDivElement | null = null
+let friendGuestMediaVideo: HTMLVideoElement | null = null
 let microphoneActive = false
 let microphonePending = false
 let microphoneTimeout: ReturnType<typeof setTimeout> | null = null
@@ -3935,10 +3938,193 @@ document.addEventListener(
 // The offer and answer are manually copied between PCs.
 // This intentionally isolates and proves the actual P2P data path.
 
+function getFriendHostMediaStream(): MediaStream | null {
+  const video =
+    streamHolder
+      .querySelector<HTMLVideoElement>(
+        'video'
+      )
+
+  const videoSource =
+    video?.srcObject
+
+  const audio =
+    getAudioElement()
+
+  const audioSource =
+    audio?.srcObject
+
+  if (
+    !(videoSource instanceof MediaStream) ||
+    !(audioSource instanceof MediaStream)
+  ) {
+    return null
+  }
+
+  const videoTrack =
+    videoSource
+      .getVideoTracks()
+      .find(
+        (track) =>
+          track.readyState === 'live'
+      )
+
+  const audioTrack =
+    audioSource
+      .getAudioTracks()
+      .find(
+        (track) =>
+          track.readyState === 'live'
+      )
+
+  if (!videoTrack || !audioTrack) {
+    return null
+  }
+
+  console.log(
+    '[CaptureLink:F3] Xbox media ready for friend session:',
+    {
+      video: {
+        label: videoTrack.label,
+        id: videoTrack.id,
+        settings:
+          videoTrack.getSettings()
+      },
+      audio: {
+        label: audioTrack.label,
+        id: audioTrack.id,
+        settings:
+          audioTrack.getSettings()
+      }
+    }
+  )
+
+  return new MediaStream([
+    videoTrack,
+    audioTrack
+  ])
+}
+
+function clearFriendGuestMedia(): void {
+  if (friendGuestMediaVideo) {
+    try {
+      friendGuestMediaVideo.pause()
+      friendGuestMediaVideo.srcObject = null
+    } catch {
+      // Media element may already be detached.
+    }
+  }
+
+  friendGuestMediaPanel?.remove()
+
+  friendGuestMediaPanel = null
+  friendGuestMediaVideo = null
+}
+
+function showFriendGuestMedia(
+  stream: MediaStream
+): void {
+  if (!friendGuestMediaPanel) {
+    const panel =
+      document.createElement('div')
+
+    panel.id =
+      'capturelink-friend-media-spike'
+
+    panel.style.position = 'fixed'
+    panel.style.inset = '24px'
+    panel.style.zIndex = '2147483646'
+    panel.style.background = '#050505'
+    panel.style.border =
+      '1px solid rgba(255,255,255,0.16)'
+    panel.style.borderRadius = '14px'
+    panel.style.boxShadow =
+      '0 24px 80px rgba(0,0,0,0.7)'
+    panel.style.display = 'flex'
+    panel.style.flexDirection = 'column'
+    panel.style.overflow = 'hidden'
+
+    const header =
+      document.createElement('div')
+
+    header.textContent =
+      'CaptureLink Friend Stream · Direct P2P'
+
+    header.style.padding =
+      '10px 14px'
+    header.style.fontSize =
+      '12px'
+    header.style.fontWeight =
+      '700'
+    header.style.letterSpacing =
+      '0.05em'
+    header.style.background =
+      'rgba(255,255,255,0.06)'
+
+    const video =
+      document.createElement('video')
+
+    video.autoplay = true
+    video.controls = true
+    video.playsInline = true
+    video.muted = false
+
+    video.style.width = '100%'
+    video.style.height = '100%'
+    video.style.flex = '1'
+    video.style.minHeight = '0'
+    video.style.objectFit = 'contain'
+    video.style.background = '#000'
+
+    panel.append(
+      header,
+      video
+    )
+
+    document.body.appendChild(
+      panel
+    )
+
+    friendGuestMediaPanel = panel
+    friendGuestMediaVideo = video
+  }
+
+  const video =
+    friendGuestMediaVideo
+
+  if (!video) {
+    return
+  }
+
+  if (video.srcObject !== stream) {
+    video.srcObject = stream
+  }
+
+  void video
+    .play()
+    .then(() => {
+      console.log(
+        '[CaptureLink:F3] Friend media playback started.'
+      )
+    })
+    .catch((error) => {
+      console.warn(
+        '[CaptureLink:F3] Automatic friend media playback was blocked:',
+        error
+      )
+
+      setStreamStatus(
+        'F3 media received · press Play in the friend video window'
+      )
+    })
+}
+
 function closeFriendControllerPeer(): void {
   friendControllerPeer?.close()
   friendControllerPeer = null
   friendPeerRole = null
+
+  clearFriendGuestMedia()
 }
 
 function makeFriendControllerPeer(): FriendControllerPeer {
@@ -3968,6 +4154,20 @@ function makeFriendControllerPeer(): FriendControllerPeer {
       if (friendPeerRole === 'host') {
         detachRemoteSyntheticController()
       }
+    },
+
+    onRemoteMediaStream: (stream) => {
+      if (friendPeerRole !== 'guest') {
+        return
+      }
+
+      showFriendGuestMedia(
+        stream
+      )
+
+      setStreamStatus(
+        'F3 direct P2P Xbox media received'
+      )
     }
   })
 }
@@ -4043,6 +4243,16 @@ async function createFriendHostOffer(): Promise<void> {
     return
   }
 
+  const hostMedia =
+    getFriendHostMediaStream()
+
+  if (!hostMedia) {
+    setStreamStatus(
+      'F3 host requires live Xbox video and audio'
+    )
+    return
+  }
+
   closeFriendControllerPeer()
 
   friendPeerRole = 'host'
@@ -4052,7 +4262,9 @@ async function createFriendHostOffer(): Promise<void> {
   try {
     const offer =
       await friendControllerPeer
-        .createHostOffer()
+        .createHostOffer(
+          hostMedia
+        )
 
     await writeFriendClipboard(
       offer,
