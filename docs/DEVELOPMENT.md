@@ -149,7 +149,7 @@ release/
 The primary installer is:
 
 ```text
-CaptureLink-Setup-0.1.0.exe
+CaptureLink-Setup-0.2.0.exe
 ```
 
 A corresponding unpacked application is produced beneath:

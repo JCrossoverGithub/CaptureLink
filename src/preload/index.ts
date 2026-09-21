@@ -9,7 +9,7 @@ interface IceCandidatePayload {
 
 contextBridge.exposeInMainWorld('captureLink', {
   platform: process.platform,
-  version: '0.1.0',
+  version: '0.2.0',
 
   getXboxAuthStatus: () =>
     ipcRenderer.invoke('capturelink:xbox-auth-status'),

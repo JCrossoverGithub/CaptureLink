@@ -28,7 +28,7 @@ The longer project story is documented in [`docs/PROJECT_HISTORY.md`](docs/PROJE
 
 ## Current status
 
-CaptureLink is currently a pre-release Windows application at version `0.1.0`.
+CaptureLink is currently a pre-release Windows application at version `0.2.0`.
 
 The current implementation supports:
 
@@ -279,6 +279,6 @@ See [`docs/LEGAL_REVIEW.md`](docs/LEGAL_REVIEW.md).
 
 ## Version
 
-Current application version: **0.1.0**
+Current application version: **0.2.0**
 
 Current phase: **pre-release / Windows release-readiness**
