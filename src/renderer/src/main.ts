@@ -9,6 +9,229 @@ import {
   type FriendMediaDiagnostics
 } from './friend-control/p2p-controller'
 
+type XboxReceiveMode =
+  | 'full'
+  | 'audio-only'
+
+// XHOME_AUDIO_ONLY_SPIKE
+//
+// Temporary research switch.
+// After proving the Xbox accepts this negotiation,
+// this becomes a real CaptureLink UI setting.
+const XBOX_RECEIVE_MODE: XboxReceiveMode =
+  'audio-only'
+
+function configureXboxReceiveMode(
+  player: CaptureLinkPlayer,
+  mode: XboxReceiveMode
+): void {
+  const transceivers =
+    player._peerConnection
+      .getTransceivers()
+
+  const video =
+    transceivers.find(
+      (transceiver) =>
+        transceiver.receiver.track.kind ===
+        'video'
+    )
+
+  const audio =
+    transceivers.find(
+      (transceiver) =>
+        transceiver.receiver.track.kind ===
+        'audio'
+    )
+
+  if (!audio) {
+    throw new Error(
+      'Xbox player did not create an audio transceiver.'
+    )
+  }
+
+  if (!video) {
+    throw new Error(
+      'Xbox player did not create a video transceiver.'
+    )
+  }
+
+  if (mode === 'audio-only') {
+    /*
+     * Leave the audio transceiver alone.
+     *
+     * xbox-xcloud-player creates it as sendrecv,
+     * which preserves microphone/game-chat
+     * renegotiation later.
+     *
+     * Disable only Xbox video reception.
+     */
+    video.direction = 'inactive'
+  }
+
+  console.log(
+    '[CaptureLink:XboxMediaMode]',
+    {
+      mode,
+
+      audioDirection:
+        audio.direction,
+
+      videoDirection:
+        video.direction,
+
+      transceivers:
+        transceivers.map(
+          (transceiver) => ({
+            kind:
+              transceiver
+                .receiver
+                .track
+                .kind,
+
+            direction:
+              transceiver.direction,
+
+            currentDirection:
+              transceiver
+                .currentDirection
+          })
+        )
+    }
+  )
+}
+
+async function inspectXboxInboundMedia(
+  player: CaptureLinkPlayer
+): Promise<void> {
+  const report =
+    await player._peerConnection.getStats()
+
+  let audioBytes = 0
+  let videoBytes = 0
+
+  report.forEach((rawStat) => {
+    const stat =
+      rawStat as RTCInboundRtpStreamStats
+
+    if (
+      stat.type !== 'inbound-rtp'
+    ) {
+      return
+    }
+
+    const kind =
+      (
+        stat as RTCInboundRtpStreamStats & {
+          kind?: string
+          mediaType?: string
+        }
+      ).kind ??
+      (
+        stat as RTCInboundRtpStreamStats & {
+          mediaType?: string
+        }
+      ).mediaType
+
+    if (
+      kind === 'audio' &&
+      typeof stat.bytesReceived === 'number'
+    ) {
+      audioBytes +=
+        stat.bytesReceived
+    }
+
+    if (
+      kind === 'video' &&
+      typeof stat.bytesReceived === 'number'
+    ) {
+      videoBytes +=
+        stat.bytesReceived
+    }
+  })
+
+  const formatBytes = (
+    bytes: number
+  ): string => {
+    if (bytes < 1024) {
+      return `${bytes} B`
+    }
+
+    if (bytes < 1024 * 1024) {
+      return `${(
+        bytes / 1024
+      ).toFixed(1)} KB`
+    }
+
+    return `${(
+      bytes /
+      1024 /
+      1024
+    ).toFixed(2)} MB`
+  }
+
+  console.log(
+    '[CaptureLink:XboxMediaMode] Inbound media',
+    {
+      audioBytes,
+      videoBytes
+    }
+  )
+
+  if (
+    XBOX_RECEIVE_MODE ===
+    'audio-only'
+  ) {
+    setStreamStatus(
+      `Audio Only · audio ${formatBytes(
+        audioBytes
+      )} · video ${formatBytes(
+        videoBytes
+      )}`
+    )
+  }
+}
+
+function inspectXboxOfferMedia(
+  sdp: string
+): {
+  audioDirection: string | null
+  videoDirection: string | null
+} {
+  const sections =
+    sdp.split(/(?=m=)/)
+
+  const findDirection = (
+    media: 'audio' | 'video'
+  ): string | null => {
+    const section =
+      sections.find(
+        (candidate) =>
+          candidate.startsWith(
+            `m=${media} `
+          )
+      )
+
+    if (!section) {
+      return null
+    }
+
+    const match =
+      section.match(
+        /^a=(sendrecv|sendonly|recvonly|inactive)$/m
+      )
+
+    return match?.[1] ?? null
+  }
+
+  return {
+    audioDirection:
+      findDirection('audio'),
+
+    videoDirection:
+      findDirection('video')
+  }
+}
+
 const root = document.querySelector<HTMLDivElement>('#app')
 
 if (!root) {
@@ -3504,6 +3727,16 @@ async function connectToConsole(
     const player = new playerConstructor('stream-holder')
     activePlayer = player
 
+    configureXboxReceiveMode(
+      player,
+      XBOX_RECEIVE_MODE
+    )
+
+    configureXboxReceiveMode(
+      player,
+      XBOX_RECEIVE_MODE
+    )
+
     player.setChatSdpHandler((offer) => {
       if (!offer.sdp) {
         microphonePending = false
@@ -3550,7 +3783,35 @@ async function connectToConsole(
 
       if (state === 'connected') {
         webRtcConnected = true
-        hideStreamPlaceholder()
+
+        if (
+          XBOX_RECEIVE_MODE ===
+          'audio-only'
+        ) {
+          window.setTimeout(
+            () => {
+              void inspectXboxInboundMedia(
+                player
+              )
+            },
+            5000
+          )
+        }
+
+        if (
+          XBOX_RECEIVE_MODE ===
+          'audio-only'
+        ) {
+          showStreamPlaceholder(
+            'Audio-only Remote Play connected. Xbox video is not being received.'
+          )
+
+          setStreamStatus(
+            'Audio-only Remote Play connected'
+          )
+        } else {
+          hideStreamPlaceholder()
+        }
         railConsoleStatus.textContent = 'Online'
         setRailSession('Connected', 'Connected')
         scheduleAudioControlSync()
@@ -3583,6 +3844,27 @@ async function connectToConsole(
 
     if (!offer.sdp) {
       throw new Error('Chromium did not generate a WebRTC SDP offer.')
+    }
+
+    const offerMedia =
+      inspectXboxOfferMedia(
+        offer.sdp
+      )
+
+    console.log(
+      '[CaptureLink:XboxMediaMode] Initial offer',
+      offerMedia
+    )
+
+    if (
+      XBOX_RECEIVE_MODE ===
+        'audio-only' &&
+      offerMedia.videoDirection !==
+        'inactive'
+    ) {
+      throw new Error(
+        `Audio-only Xbox offer expected inactive video but got ${offerMedia.videoDirection ?? 'no direction'}.`
+      )
     }
 
     const remoteSdp =
