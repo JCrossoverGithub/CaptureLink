@@ -34,10 +34,10 @@ const COMPETITIVE_VIDEO_ONLY = true
 //
 // 720p60 is the first quality target. If this remains stable at
 // competitive latency, the next experiment will target 1080p60.
-const COMPETITIVE_VIDEO_TARGET_HEIGHT = 720
+const COMPETITIVE_VIDEO_TARGET_HEIGHT = 1080
 const COMPETITIVE_VIDEO_MAX_FRAMERATE = 60
 const COMPETITIVE_VIDEO_MAX_BITRATE_BPS =
-  6_000_000
+  10_000_000
 
 /*
  * F2.5 direct internet P2P experiment.
