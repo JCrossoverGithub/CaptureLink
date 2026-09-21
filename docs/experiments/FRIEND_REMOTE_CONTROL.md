@@ -124,6 +124,31 @@ Exit criterion:
 A synthetic CaptureLink controller payload can operate the Xbox through
 the existing Remote Play session.
 
+### F1 Result - PASS
+
+Validated September 21, 2026 against a live Xbox Remote Play session.
+
+CaptureLink successfully:
+
+- created a synthetic `FriendGamepadState`
+- translated it into the Xbox gamepad frame used by `xbox-xcloud-player`
+- announced synthetic gamepad index 0 through the existing control channel
+- injected frames through the existing Xbox input channel
+- controlled the physical Xbox without a locally attached PC controller
+
+Observed runtime proof:
+
+- `Ctrl+Alt+6` produced D-pad Right and moved the Xbox UI selection right
+- `Ctrl+Alt+1` produced the Xbox A button and activated the selected item
+
+The synthetic path uses the existing `xbox-xcloud-player` input serializer.
+The vendored player bundle was not modified.
+
+This validates the Xbox-facing half of friend remote control.
+
+F2 can now transport `FriendGamepadState` messages from another
+CaptureLink installation and feed them into the same adapter.
+
 ### F2 - Peer controller transport
 
 Create a CaptureLink-to-CaptureLink WebRTC DataChannel.

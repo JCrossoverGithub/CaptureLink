@@ -13,9 +13,49 @@ declare global {
     detach(): void
   }
 
+  interface CaptureLinkXboxGamepadFrame {
+    GamepadIndex: number
+    Nexus: number
+    Menu: number
+    View: number
+    A: number
+    B: number
+    X: number
+    Y: number
+    DPadUp: number
+    DPadDown: number
+    DPadLeft: number
+    DPadRight: number
+    LeftShoulder: number
+    RightShoulder: number
+    LeftThumb: number
+    RightThumb: number
+    LeftThumbXAxis: number
+    LeftThumbYAxis: number
+    RightThumbXAxis: number
+    RightThumbYAxis: number
+    LeftTrigger: number
+    RightTrigger: number
+  }
+
   interface CaptureLinkPlayer {
     _peerConnection: RTCPeerConnection
     _channels: {
+      control: {
+        sendGamepadState(
+          index: number,
+          wasAdded?: boolean,
+          handler?: unknown
+        ): void
+      }
+
+      input: {
+        queueGamepadFrames(
+          frames: CaptureLinkXboxGamepadFrame[],
+          reliable?: boolean
+        ): void
+      }
+
       chat: {
         startMicrophone(): void
         stopMicrophone(): void

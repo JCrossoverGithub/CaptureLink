@@ -1,3 +1,9 @@
+import {
+  RemoteGamepadAdapter,
+  createNeutralFriendGamepadState,
+  createSyntheticButtonGamepadState
+} from './friend-control/remote-gamepad'
+
 const root = document.querySelector<HTMLDivElement>('#app')
 
 if (!root) {
@@ -1150,6 +1156,10 @@ let activePlayer: CaptureLinkPlayer | null = null
 let webRtcConnected = false
 let activeGamepad: CaptureLinkGamepad | null = null
 let controllerAttached = false
+
+// F1 research spike: synthetic remote controller.
+let remoteGamepadAdapter: RemoteGamepadAdapter | null = null
+let remoteSyntheticReleaseTimer: number | null = null
 let microphoneActive = false
 let microphonePending = false
 let microphoneTimeout: ReturnType<typeof setTimeout> | null = null
@@ -3379,6 +3389,7 @@ function destroyPlayer(): void {
   }
 
   detachController()
+  detachRemoteSyntheticController()
   stopMicrophoneMonitor()
   stopMicrophone()
   webRtcConnected = false
@@ -3734,6 +3745,167 @@ async function toggleMicrophone(): Promise<void> {
     updateInteractiveState()
   }
 }
+
+// CAPTURELINK_FRIEND_CONTROL_F1_SPIKE
+//
+// Temporary developer-only synthetic remote-controller harness.
+//
+// The purpose of this code is to prove that a FriendGamepadState can
+// enter xbox-xcloud-player's existing Xbox input serializer without
+// depending on navigator.getGamepads().
+//
+// Shortcuts while the CaptureLink window is focused:
+//
+//   Ctrl+Alt+1  A
+//   Ctrl+Alt+2  B
+//   Ctrl+Alt+3  X
+//   Ctrl+Alt+4  Y
+//   Ctrl+Alt+5  D-pad Up
+//   Ctrl+Alt+6  D-pad Right
+//   Ctrl+Alt+7  D-pad Down
+//   Ctrl+Alt+8  D-pad Left
+//   Ctrl+Alt+9  Xbox / Nexus
+//   Ctrl+Alt+0  Detach synthetic controller
+//
+// Do not enable the normal local controller while running this F1 test.
+// Both paths currently target Xbox controller index 0.
+
+function detachRemoteSyntheticController(): void {
+  if (remoteSyntheticReleaseTimer !== null) {
+    window.clearTimeout(remoteSyntheticReleaseTimer)
+    remoteSyntheticReleaseTimer = null
+  }
+
+  remoteGamepadAdapter?.detach()
+  remoteGamepadAdapter = null
+}
+
+function getRemoteSyntheticController(): RemoteGamepadAdapter | null {
+  if (!activePlayer || !webRtcConnected) {
+    setStreamStatus(
+      'F1 remote input test requires an active Xbox Remote Play session'
+    )
+    return null
+  }
+
+  if (controllerAttached) {
+    setStreamStatus(
+      'Disable the normal local controller before using the F1 remote input test'
+    )
+    return null
+  }
+
+  if (!remoteGamepadAdapter) {
+    remoteGamepadAdapter = new RemoteGamepadAdapter(0)
+    remoteGamepadAdapter.attach(activePlayer)
+
+    console.log(
+      '[CaptureLink:F1] Synthetic remote controller attached as Xbox gamepad 0'
+    )
+  }
+
+  return remoteGamepadAdapter
+}
+
+function pulseRemoteSyntheticButton(
+  buttonIndex: number,
+  label: string
+): void {
+  const adapter = getRemoteSyntheticController()
+
+  if (!adapter) {
+    return
+  }
+
+  if (remoteSyntheticReleaseTimer !== null) {
+    window.clearTimeout(remoteSyntheticReleaseTimer)
+  }
+
+  adapter.updateState(
+    createSyntheticButtonGamepadState(
+      buttonIndex,
+      1
+    )
+  )
+
+  console.log(
+    `[CaptureLink:F1] Synthetic remote button pressed: ${label}`
+  )
+
+  setStreamStatus(
+    `F1 synthetic remote controller: ${label}`
+  )
+
+  remoteSyntheticReleaseTimer = window.setTimeout(
+    () => {
+      adapter.updateState(
+        createNeutralFriendGamepadState()
+      )
+
+      remoteSyntheticReleaseTimer = null
+    },
+    160
+  )
+}
+
+document.addEventListener(
+  'keydown',
+  (event) => {
+    if (!event.ctrlKey || !event.altKey || event.repeat) {
+      return
+    }
+
+    const buttonMap: Record<
+      string,
+      {
+        index: number
+        label: string
+      }
+    > = {
+      Digit1: { index: 0, label: 'A' },
+      Digit2: { index: 1, label: 'B' },
+      Digit3: { index: 2, label: 'X' },
+      Digit4: { index: 3, label: 'Y' },
+      Digit5: { index: 12, label: 'D-pad Up' },
+      Digit6: { index: 15, label: 'D-pad Right' },
+      Digit7: { index: 13, label: 'D-pad Down' },
+      Digit8: { index: 14, label: 'D-pad Left' },
+      Digit9: { index: 16, label: 'Xbox / Nexus' }
+    }
+
+    if (event.code === 'Digit0') {
+      event.preventDefault()
+      event.stopPropagation()
+
+      detachRemoteSyntheticController()
+
+      console.log(
+        '[CaptureLink:F1] Synthetic remote controller detached'
+      )
+
+      setStreamStatus(
+        'F1 synthetic remote controller detached'
+      )
+
+      return
+    }
+
+    const button = buttonMap[event.code]
+
+    if (!button) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    pulseRemoteSyntheticButton(
+      button.index,
+      button.label
+    )
+  },
+  true
+)
 
 controllerButton.addEventListener('click', () => {
   toggleController()
