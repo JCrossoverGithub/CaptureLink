@@ -16,7 +16,7 @@ const ICE_GATHER_TIMEOUT_MS = 10_000
 // Request a very small WebRTC playout buffer.
 // The browser may choose a somewhat larger actual target
 // based on network conditions.
-const COMPETITIVE_JITTER_BUFFER_TARGET_MS = 0
+const COMPETITIVE_JITTER_BUFFER_TARGET_MS = 10
 
 /*
  * F2.5 direct internet P2P experiment.
@@ -362,7 +362,6 @@ function capturePhysicalGamepad(
 type CaptureLinkLowLatencyReceiver =
   RTCRtpReceiver & {
     jitterBufferTarget?: number
-    playoutDelayHint?: number | null
   }
 
 function configureLowLatencyReceiver(
@@ -389,15 +388,8 @@ function configureLowLatencyReceiver(
     lowLatencyReceiver.jitterBufferTarget =
       COMPETITIVE_JITTER_BUFFER_TARGET_MS
 
-    if (
-      'playoutDelayHint' in
-      lowLatencyReceiver
-    ) {
-      lowLatencyReceiver.playoutDelayHint = 0
-    }
-
     console.log(
-      '[CaptureLink:F3.1] Ultra-low-latency receiver configured:',
+      '[CaptureLink:F3.1] Low-latency receiver configured:',
       {
         kind:
           receiver.track.kind,
@@ -407,12 +399,7 @@ function configureLowLatencyReceiver(
 
         receiverTargetMs:
           lowLatencyReceiver
-            .jitterBufferTarget,
-
-        playoutDelayHintSeconds:
-          lowLatencyReceiver
-            .playoutDelayHint ??
-          null
+            .jitterBufferTarget
       }
     )
   } catch (error) {
