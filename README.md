@@ -1,10 +1,59 @@
-# CaptureLink
+<p align="center">
+  <img src="build/CaptureLink-icon-1024.png" alt="CaptureLink logo" width="96">
+</p>
+
+<h1 align="center">CaptureLink</h1>
+
+<p align="center">
+  <strong>Xbox Remote Play, local recording, audio routing, and media export for Windows.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/JCrossoverGithub/CaptureLink/releases/latest"><strong>Download the latest Windows release</strong></a>
+  &nbsp;·&nbsp;
+  <a href="docs/ARCHITECTURE.md">Architecture</a>
+  &nbsp;·&nbsp;
+  <a href="docs/ROADMAP.md">Roadmap</a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/capturelink-stream.png" alt="CaptureLink Stream view showing an active Xbox Remote Play session, console and session status, audio controls, stream controls, and recording actions." width="100%">
+</p>
 
 CaptureLink is a Windows desktop application for Xbox Remote Play, local recording, and media export.
 
 It connects to an Xbox console through the user's Microsoft/Xbox account, displays the Remote Play stream locally, exposes session controls and diagnostics, and records the audio and video already being received by the computer.
 
 The original problem CaptureLink set out to solve was simple: recording Xbox gameplay with game chat should not require a capture card, controller audio routing, a wired headset, and a fragile collection of hardware workarounds.
+
+## Interface
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/screenshots/capturelink-connect.png" alt="CaptureLink Connect view showing Xbox authentication status, Remote Play setup guidance, and discovered consoles." width="100%">
+      <br><strong>Connect</strong><br>
+      Sign in, confirm Remote Play setup, discover consoles, and connect to the Xbox.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/screenshots/capturelink-audio.png" alt="CaptureLink Audio view showing Xbox game-chat microphone routing, playback output, audio resync, and recording microphone gain." width="100%">
+      <br><strong>Audio</strong><br>
+      Route the microphone sent to Xbox, choose playback output, resync audio, and set local recording mic gain.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/screenshots/capturelink-recordings.png" alt="CaptureLink Recordings view showing the local capture library, search, playback, and MP4 export controls." width="100%">
+      <br><strong>Recordings</strong><br>
+      Search local captures, open recordings, export common formats, and manage saved files.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/screenshots/capturelink-settings.png" alt="CaptureLink Settings view showing Xbox account controls, Remote Play help, and live WebRTC session diagnostics." width="100%">
+      <br><strong>Settings & diagnostics</strong><br>
+      Manage the Xbox account, reopen setup help, and inspect live WebRTC connection, audio, microphone, and video health.
+    </td>
+  </tr>
+</table>
 
 ## Why CaptureLink exists
 
