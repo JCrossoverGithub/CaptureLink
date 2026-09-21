@@ -437,6 +437,16 @@ export class FriendControllerPeer {
   private previousVideoBytes = 0
   private previousStatsTimestamp = 0
 
+  private previousVideoJitterDelay = 0
+  private previousVideoTargetDelay = 0
+  private previousVideoMinimumDelay = 0
+  private previousVideoEmittedCount = 0
+
+  private previousAudioJitterDelay = 0
+  private previousAudioTargetDelay = 0
+  private previousAudioMinimumDelay = 0
+  private previousAudioEmittedCount = 0
+
   constructor(
     private readonly options:
       FriendControllerPeerOptions = {}
@@ -757,6 +767,16 @@ export class FriendControllerPeer {
     this.previousVideoBytes = 0
     this.previousStatsTimestamp = 0
 
+    this.previousVideoJitterDelay = 0
+    this.previousVideoTargetDelay = 0
+    this.previousVideoMinimumDelay = 0
+    this.previousVideoEmittedCount = 0
+
+    this.previousAudioJitterDelay = 0
+    this.previousAudioTargetDelay = 0
+    this.previousAudioMinimumDelay = 0
+    this.previousAudioEmittedCount = 0
+
     const peer = this.peer
 
     if (!peer) {
@@ -793,6 +813,16 @@ export class FriendControllerPeer {
 
     this.previousVideoBytes = 0
     this.previousStatsTimestamp = 0
+
+    this.previousVideoJitterDelay = 0
+    this.previousVideoTargetDelay = 0
+    this.previousVideoMinimumDelay = 0
+    this.previousVideoEmittedCount = 0
+
+    this.previousAudioJitterDelay = 0
+    this.previousAudioTargetDelay = 0
+    this.previousAudioMinimumDelay = 0
+    this.previousAudioEmittedCount = 0
   }
 
   private getSelectedPeerRttMs(
@@ -1070,42 +1100,63 @@ export class FriendControllerPeer {
             ) * 1000
           : null
 
+      const currentVideoJitterDelay =
+        stat.jitterBufferDelay ?? 0
+
+      const currentVideoTargetDelay =
+        stat.jitterBufferTargetDelay ?? 0
+
+      const currentVideoMinimumDelay =
+        stat.jitterBufferMinimumDelay ?? 0
+
+      const videoEmittedDelta =
+        emitted -
+        this.previousVideoEmittedCount
+
       const averageJitterBufferMs =
-        emitted > 0 &&
-        typeof
-          stat.jitterBufferDelay ===
-          'number'
+        videoEmittedDelta > 0
           ? (
-              stat.jitterBufferDelay /
-              emitted
+              (
+                currentVideoJitterDelay -
+                this.previousVideoJitterDelay
+              ) /
+              videoEmittedDelta
             ) * 1000
           : null
 
       const averageTargetBufferMs =
-        emitted > 0 &&
-        typeof
-          stat
-            .jitterBufferTargetDelay ===
-          'number'
+        videoEmittedDelta > 0
           ? (
-              stat
-                .jitterBufferTargetDelay /
-              emitted
+              (
+                currentVideoTargetDelay -
+                this.previousVideoTargetDelay
+              ) /
+              videoEmittedDelta
             ) * 1000
           : null
 
       const averageMinimumBufferMs =
-        emitted > 0 &&
-        typeof
-          stat
-            .jitterBufferMinimumDelay ===
-          'number'
+        videoEmittedDelta > 0
           ? (
-              stat
-                .jitterBufferMinimumDelay /
-              emitted
+              (
+                currentVideoMinimumDelay -
+                this.previousVideoMinimumDelay
+              ) /
+              videoEmittedDelta
             ) * 1000
           : null
+
+      this.previousVideoJitterDelay =
+        currentVideoJitterDelay
+
+      this.previousVideoTargetDelay =
+        currentVideoTargetDelay
+
+      this.previousVideoMinimumDelay =
+        currentVideoMinimumDelay
+
+      this.previousVideoEmittedCount =
+        emitted
 
       const networkJitterMs =
         typeof stat.jitter ===
@@ -1129,42 +1180,63 @@ export class FriendControllerPeer {
           ? audio.jitter * 1000
           : null
 
+      const currentAudioJitterDelay =
+        audio?.jitterBufferDelay ?? 0
+
+      const currentAudioTargetDelay =
+        audio?.jitterBufferTargetDelay ?? 0
+
+      const currentAudioMinimumDelay =
+        audio?.jitterBufferMinimumDelay ?? 0
+
+      const audioEmittedDelta =
+        audioEmitted -
+        this.previousAudioEmittedCount
+
       const audioAverageJitterBufferMs =
-        audioEmitted > 0 &&
-        typeof
-          audio?.jitterBufferDelay ===
-          'number'
+        audioEmittedDelta > 0
           ? (
-              audio.jitterBufferDelay /
-              audioEmitted
+              (
+                currentAudioJitterDelay -
+                this.previousAudioJitterDelay
+              ) /
+              audioEmittedDelta
             ) * 1000
           : null
 
       const audioAverageTargetBufferMs =
-        audioEmitted > 0 &&
-        typeof
-          audio
-            ?.jitterBufferTargetDelay ===
-          'number'
+        audioEmittedDelta > 0
           ? (
-              audio
-                .jitterBufferTargetDelay /
-              audioEmitted
+              (
+                currentAudioTargetDelay -
+                this.previousAudioTargetDelay
+              ) /
+              audioEmittedDelta
             ) * 1000
           : null
 
       const audioAverageMinimumBufferMs =
-        audioEmitted > 0 &&
-        typeof
-          audio
-            ?.jitterBufferMinimumDelay ===
-          'number'
+        audioEmittedDelta > 0
           ? (
-              audio
-                .jitterBufferMinimumDelay /
-              audioEmitted
+              (
+                currentAudioMinimumDelay -
+                this.previousAudioMinimumDelay
+              ) /
+              audioEmittedDelta
             ) * 1000
           : null
+
+      this.previousAudioJitterDelay =
+        currentAudioJitterDelay
+
+      this.previousAudioTargetDelay =
+        currentAudioTargetDelay
+
+      this.previousAudioMinimumDelay =
+        currentAudioMinimumDelay
+
+      this.previousAudioEmittedCount =
+        audioEmitted
 
       const getRequestedTarget = (
         kind: 'video' | 'audio'

@@ -4280,17 +4280,17 @@ function updateFriendDiagnosticsPanel(
         ' ms',
         2
       )}`,
-      `Video buffer        ${formatFriendDiagnostic(
+      `Video buffer (1s)   ${formatFriendDiagnostic(
         diagnostics.averageJitterBufferMs,
         ' ms',
         2
       )}`,
-      `Video target        ${formatFriendDiagnostic(
+      `Video target (1s)   ${formatFriendDiagnostic(
         diagnostics.averageTargetBufferMs,
         ' ms',
         2
       )}`,
-      `Video minimum       ${formatFriendDiagnostic(
+      `Video minimum (1s)  ${formatFriendDiagnostic(
         diagnostics.averageMinimumBufferMs,
         ' ms',
         2
@@ -4305,17 +4305,17 @@ function updateFriendDiagnosticsPanel(
         ' ms',
         2
       )}`,
-      `Audio buffer        ${formatFriendDiagnostic(
+      `Audio buffer (1s)   ${formatFriendDiagnostic(
         diagnostics.audioAverageJitterBufferMs,
         ' ms',
         2
       )}`,
-      `Audio target        ${formatFriendDiagnostic(
+      `Audio target (1s)   ${formatFriendDiagnostic(
         diagnostics.audioAverageTargetBufferMs,
         ' ms',
         2
       )}`,
-      `Audio minimum       ${formatFriendDiagnostic(
+      `Audio minimum (1s)  ${formatFriendDiagnostic(
         diagnostics.audioAverageMinimumBufferMs,
         ' ms',
         2
