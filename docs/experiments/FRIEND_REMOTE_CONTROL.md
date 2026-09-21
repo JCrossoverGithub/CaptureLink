@@ -252,6 +252,29 @@ This validates the preferred CaptureLink networking model: attempt direct P2P
 connectivity first, with STUN assisting NAT traversal but not carrying session
 traffic.
 
+### F3 Result - PASS: Direct P2P Xbox Media
+
+Validated September 21, 2026 across separate Internet connections.
+
+The working friend session used one WebRTC peer connection for:
+
+- Xbox video from host to guest
+- Xbox audio from host to guest
+- controller state from guest to host
+
+The host Xbox Remote Play session remained on JPCMAIN while XLAPTOPX,
+connected through a phone hotspot, received the Xbox video/audio and
+controlled the Xbox with its locally connected controller.
+
+Observed peer RTT was approximately 9 ms during media streaming.
+
+Controller input remained highly responsive. The remaining perceptible
+latency was isolated primarily to the relayed video path: controller timing
+felt correct when viewing the original JPCMAIN CaptureLink stream, while the
+guest video showed a small additional delay.
+
+This establishes the baseline for F3.1 competitive media latency tuning.
+
 ### F2 - Peer controller transport
 
 Create a CaptureLink-to-CaptureLink WebRTC DataChannel.
