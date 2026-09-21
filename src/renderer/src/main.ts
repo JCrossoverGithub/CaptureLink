@@ -4,419 +4,590 @@ if (!root) {
   throw new Error('CaptureLink app root not found')
 }
 
+// CAPTURELINK_MINIMALIST_UI_SHELL
 root.innerHTML = `
-  <main class="shell">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">CAPTURELINK</div>
-        <h1>Xbox Remote Play, focused on capture.</h1>
-        <p class="subtitle">
-          Connect to your console, watch the live stream, hear game and
-          game-chat audio, control the session, and record locally.
-        </p>
+  <main class="shell app-shell">
+    <header class="app-topbar">
+      <div class="brand-lockup" aria-label="CaptureLink">
+        <div class="brand-mark">CL</div>
+        <div class="brand-name">CaptureLink</div>
       </div>
 
-      <span
-        id="account-status"
-        class="status status--idle"
-      >
-        Checking account...
-      </span>
-    </header>
-
-    <section class="stream-card" aria-label="Remote Play preview">
-      <div id="stream-holder" class="stream-holder">
-        <div id="stream-placeholder" class="stream-placeholder">
-          <div class="stream-mark">CL</div>
-          <p>Choose an Xbox below to start Remote Play.</p>
-        </div>
-      </div>
-
-      <div class="controls">
-        <span id="stream-status" class="stream-state" aria-live="polite">
-          Remote Play idle
+      <div class="topbar-account">
+        <span id="account-status" class="status status--idle">
+          Checking account...
         </span>
 
         <button
-          id="disconnect-session"
+          id="sign-in"
+          class="topbar-auth"
           type="button"
-          disabled
         >
-          Disconnect
+          Sign in
         </button>
+      </div>
+    </header>
 
-        <button
-          id="fullscreen-video"
-          type="button"
-          disabled
-          title="Show the Xbox stream fullscreen"
-        >
-          Fullscreen
-        </button>
-
-        <button
-          id="picture-in-picture"
-          type="button"
-          disabled
-          title="Show the Xbox stream in a floating Picture-in-Picture window"
-        >
-          Picture in Picture
-        </button>
-
-        <button
-          id="controller-toggle"
-          type="button"
-          disabled
-          aria-pressed="false"
-        >
-          Enable Controller
-        </button>
-
-        <button
-          id="microphone-toggle"
-          type="button"
-          disabled
-          aria-pressed="false"
-        >
-          Enable Microphone
-        </button>
-
-        <div class="audio-controls" aria-label="Stream audio controls">
-          <button
-            id="audio-mute"
-            type="button"
-            disabled
-          >
-            Mute
+    <div class="app-frame">
+      <aside class="sidebar-nav" aria-label="CaptureLink navigation">
+        <nav class="sidebar-nav__items">
+          <button class="nav-item" type="button" data-view="connect">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
+              <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
+            </svg>
+            <span>Connect</span>
           </button>
 
-          <label for="audio-volume">Volume</label>
-          <input
-            id="audio-volume"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value="100"
-            disabled
-          />
-          <span id="audio-volume-value">100%</span>
+          <button class="nav-item is-active" type="button" data-view="stream" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 11h12a3 3 0 0 1 2.7 4.3l-1.4 3a2 2 0 0 1-3.2.6L14 17h-4l-2.1 1.9a2 2 0 0 1-3.2-.6l-1.4-3A3 3 0 0 1 6 11Z"/>
+              <path d="M8 14v2M7 15h2M16 14h.01M18 16h.01"/>
+            </svg>
+            <span>Stream</span>
+          </button>
+
+          <button class="nav-item" type="button" data-view="audio">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4Z"/>
+              <path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/>
+            </svg>
+            <span>Audio</span>
+          </button>
+
+          <button class="nav-item" type="button" data-view="recordings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="2"/>
+              <path d="m10 9 5 3-5 3Z"/>
+            </svg>
+            <span>Recordings</span>
+          </button>
+
+          <button class="nav-item" type="button" data-view="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>
+            </svg>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-nav__footer">
+          <span>CaptureLink</span>
+          <small>v0.1.0</small>
         </div>
+      </aside>
 
-        <button
-          id="diagnostics-toggle"
-          type="button"
-          disabled
-        >
-          Diagnostics
-        </button>
+      <div class="workspace">
+        <section class="view-panel" data-panel="connect">
+          <div class="view-heading">
+            <div>
+              <div class="eyebrow">CONNECT</div>
+              <h1>Xbox connection</h1>
+            </div>
+            <p>Sign in, confirm Remote Play settings, and choose a console.</p>
+          </div>
 
-        <div class="recording-controls" aria-label="Recording controls">
-          <span
-            id="recording-indicator"
-            class="recording-indicator"
+          <div class="connect-grid">
+            <article class="surface account-surface">
+              <div class="surface-heading">
+                <div class="surface-icon surface-icon--xbox">X</div>
+                <div>
+                  <h2>Xbox account</h2>
+                  <p id="auth-message">Checking authentication status...</p>
+                </div>
+              </div>
+
+              <pre
+                id="auth-output"
+                class="auth-output"
+                aria-live="polite"
+              ></pre>
+            </article>
+
+            <article class="surface console-section">
+              <div class="section-heading">
+                <div>
+                  <div class="eyebrow">CONSOLES</div>
+                  <h2>Your Xboxes</h2>
+                  <p id="console-message">Sign in to discover your Xbox consoles.</p>
+                </div>
+
+                <button id="refresh-consoles" type="button" disabled>
+                  Refresh
+                </button>
+              </div>
+
+              <div id="console-list" class="console-list"></div>
+            </article>
+
+            <article class="surface connect-help">
+              <div class="eyebrow">QUICK START</div>
+              <h2>Three steps</h2>
+              <ol class="quick-start-list">
+                <li>Sign in with the Microsoft account used by your Xbox.</li>
+                <li>Confirm Remote features are enabled on the console.</li>
+                <li>Choose the console and connect.</li>
+              </ol>
+            </article>
+          </div>
+        </section>
+
+        <section class="view-panel is-active" data-panel="stream">
+          <div class="stream-workspace">
+            <div class="stream-primary">
+              <section class="stream-card" aria-label="Remote Play preview">
+                <div id="stream-holder" class="stream-holder">
+                  <div id="stream-placeholder" class="stream-placeholder">
+                    <div class="stream-mark">CL</div>
+                    <p>Choose an Xbox in Connect to start Remote Play.</p>
+                  </div>
+                </div>
+
+                <div class="stream-meta">
+                  <div class="stream-meta__left">
+                    <span class="live-dot" aria-hidden="true"></span>
+                    <span id="stream-status" class="stream-state" aria-live="polite">
+                      Remote Play idle
+                    </span>
+                  </div>
+
+                  <div class="stream-meta__recording">
+                    <span id="recording-indicator" class="recording-indicator" hidden>
+                      ● REC
+                    </span>
+                    <span id="recording-timer" class="recording-timer">00:00</span>
+                    <span id="recording-status" class="recording-status">Ready</span>
+                    <span id="recording-size" class="recording-size" hidden>0 B</span>
+                    <span id="recording-space" class="recording-space" hidden>— free</span>
+                  </div>
+                </div>
+              </section>
+
+              <div class="controls control-dock">
+                <div class="control-group">
+                  <div class="control-group__label">SESSION</div>
+
+                  <button
+                    id="disconnect-session"
+                    class="dock-button dock-button--danger icon-disconnect"
+                    type="button"
+                    disabled
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1"/><path d="M15 12a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7.1 7.1"/><path d="m4 4 16 16"/></svg><span class="dock-button__label">Disconnect</span>
+                  </button>
+
+                  <button
+                    id="fullscreen-video"
+                    class="dock-button icon-fullscreen"
+                    type="button"
+                    disabled
+                    title="Show the Xbox stream fullscreen"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg><span class="dock-button__label">Fullscreen</span>
+                  </button>
+
+                  <button
+                    id="picture-in-picture"
+                    class="dock-button icon-pip"
+                    type="button"
+                    disabled
+                    title="Show the Xbox stream in a floating Picture-in-Picture window"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1"/></svg><span class="dock-button__label">Picture in Picture</span>
+                  </button>
+                </div>
+
+                <div class="control-group">
+                  <div class="control-group__label">INPUT &amp; AUDIO</div>
+
+                  <button
+                    id="controller-toggle"
+                    class="dock-button icon-controller"
+                    type="button"
+                    disabled
+                    aria-pressed="false"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12a3 3 0 0 1 2.7 4.3l-1.4 3a2 2 0 0 1-3.2.6L14 17h-4l-2.1 1.9a2 2 0 0 1-3.2-.6l-1.4-3A3 3 0 0 1 6 11Z"/><path d="M8 14v2M7 15h2M16 14h.01M18 16h.01"/></svg><span class="dock-button__label">Enable Controller</span>
+                  </button>
+
+                  <button
+                    id="microphone-toggle"
+                    class="dock-button icon-mic"
+                    type="button"
+                    disabled
+                    aria-pressed="false"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg><span class="dock-button__label">Enable Microphone</span>
+                  </button>
+
+                  <div class="audio-controls" aria-label="Stream audio controls">
+                    <button id="audio-mute" class="icon-volume" type="button" disabled>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="m16 9 5 6M21 9l-5 6"/></svg><span class="dock-button__label">Mute</span>
+                    </button>
+                    <label for="audio-volume">Volume</label>
+                    <input
+                      id="audio-volume"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value="100"
+                      disabled
+                    />
+                    <span id="audio-volume-value">100%</span>
+                  </div>
+                </div>
+
+                <div class="control-group control-group--capture">
+                  <div class="control-group__label">CAPTURE</div>
+
+                  <div class="recording-controls" aria-label="Recording controls">
+                    <button
+                      id="record-audio"
+                      type="button"
+                      class="record dock-button icon-record-audio"
+                      disabled
+                      title="Record Xbox game audio, incoming game chat, and your microphone when enabled"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M4 12h2M18 12h2"/></svg><span class="dock-button__label">Record Audio</span>
+                    </button>
+
+                    <button
+                      id="record-video"
+                      type="button"
+                      class="record dock-button dock-button--record icon-record-video"
+                      disabled
+                      title="Record Xbox video with game audio, incoming game chat, and your microphone when enabled"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3Z"/></svg><span class="dock-button__label">Record Video</span>
+                    </button>
+                  </div>
+
+                  <button
+                    id="diagnostics-toggle"
+                    class="dock-button dock-button--quiet icon-diagnostics"
+                    type="button"
+                    disabled
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg><span class="dock-button__label">Diagnostics</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <aside class="context-rail" aria-label="Stream context">
+              <article class="rail-card">
+                <div class="rail-card__heading">
+                  <span>Console</span>
+                  <span id="rail-console-status" class="rail-status">Idle</span>
+                </div>
+
+                <div class="rail-console">
+                  <div class="rail-console__icon">X</div>
+                  <div>
+                    <strong id="rail-console-name">No console selected</strong>
+                    <span id="rail-console-detail">Choose one in Connect</span>
+                  </div>
+                </div>
+
+                <button class="rail-link view-jump" type="button" data-view-target="connect">
+                  Manage consoles
+                </button>
+              </article>
+
+              <article class="rail-card">
+                <div class="rail-card__heading">
+                  <span>Session</span>
+                  <span id="rail-session-state" class="rail-status">Idle</span>
+                </div>
+
+                <dl class="session-facts">
+                  <div>
+                    <dt>Connection</dt>
+                    <dd id="rail-session-connection">Waiting</dd>
+                  </div>
+                  <div>
+                    <dt>Video</dt>
+                    <dd id="rail-session-video">—</dd>
+                  </div>
+                  <div>
+                    <dt>Latency</dt>
+                    <dd id="rail-session-latency">—</dd>
+                  </div>
+                </dl>
+              </article>
+
+              <article class="rail-card rail-card--recording">
+                <div class="rail-card__heading">
+                  <span>Last recording</span>
+                  <button class="rail-card__icon-button view-jump" type="button" data-view-target="recordings" title="Open recordings">
+                    →
+                  </button>
+                </div>
+
+                <div class="last-recording">
+                  <div class="last-recording__icon">▶</div>
+                  <div>
+                    <strong id="rail-last-recording-name">No recordings yet</strong>
+                    <span id="rail-last-recording-meta">Capture something to get started</span>
+                  </div>
+                </div>
+
+                <button class="rail-link view-jump" type="button" data-view-target="recordings">
+                  Open recordings
+                </button>
+              </article>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view-panel" data-panel="audio">
+          <div class="view-heading">
+            <div>
+              <div class="eyebrow">AUDIO</div>
+              <h1>Audio routing</h1>
+            </div>
+            <p>Choose microphone and speaker devices without crowding the stream view.</p>
+          </div>
+
+          <section class="audio-devices-panel" aria-label="Audio devices">
+            <div class="audio-devices-heading">
+              <div>
+                <div class="eyebrow">AUDIO DEVICES</div>
+                <h2>Microphone and speaker routing</h2>
+              </div>
+
+              <button id="refresh-audio-devices" type="button">
+                Refresh Devices
+              </button>
+            </div>
+
+            <div class="audio-device-grid">
+              <div class="audio-device-card">
+                <div class="audio-device-title">
+                  <div>
+                    <h3>Microphone</h3>
+                    <p>Select the input CaptureLink sends to Xbox game chat.</p>
+                  </div>
+                  <span id="mic-device-state" class="device-state">Idle</span>
+                </div>
+
+                <label class="device-field" for="microphone-device">
+                  <span>Input device</span>
+                  <select id="microphone-device">
+                    <option value="default">System default</option>
+                  </select>
+                </label>
+
+                <div class="mic-meter-row">
+                  <div
+                    id="mic-level-meter"
+                    class="mic-meter"
+                    role="meter"
+                    aria-label="Microphone input level"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                  >
+                    <div id="mic-level-fill" class="mic-meter-fill"></div>
+                  </div>
+                  <span id="mic-level-value">−∞ dB</span>
+                </div>
+
+                <label class="device-field" for="recording-mic-gain">
+                  <span>Recording mic level</span>
+                  <div class="range-field">
+                    <input
+                      id="recording-mic-gain"
+                      type="range"
+                      min="0"
+                      max="200"
+                      step="5"
+                      value="100"
+                    />
+                    <output id="recording-mic-gain-value" for="recording-mic-gain">100%</output>
+                  </div>
+                </label>
+
+                <p class="device-hint">
+                  Changes your microphone level in saved recordings only. Xbox game-chat volume is unchanged.
+                </p>
+
+                <div class="device-actions">
+                  <button id="test-microphone" type="button">
+                    Test Microphone
+                  </button>
+                </div>
+
+                <p id="microphone-device-message" class="device-message">
+                  Choose a microphone, then test it before enabling Xbox chat.
+                </p>
+              </div>
+
+              <div class="audio-device-card">
+                <div class="audio-device-title">
+                  <div>
+                    <h3>Speakers</h3>
+                    <p>Route incoming Xbox audio to a specific output device.</p>
+                  </div>
+                  <span id="speaker-device-state" class="device-state">Default</span>
+                </div>
+
+                <label class="device-field" for="speaker-device">
+                  <span>Output device</span>
+                  <select id="speaker-device">
+                    <option value="">System default</option>
+                  </select>
+                </label>
+
+                <div class="device-actions">
+                  <button id="choose-speaker" type="button">
+                    Choose Output
+                  </button>
+                  <button
+                    id="resync-audio"
+                    type="button"
+                    disabled
+                    title="Rebuild local audio playback without reconnecting to Xbox"
+                  >
+                    Resync Audio
+                  </button>
+                </div>
+
+                <label class="toggle-field" for="auto-audio-resync">
+                  <input id="auto-audio-resync" type="checkbox" checked />
+                  <span>Auto-resync when WebRTC reports sustained audio delay</span>
+                </label>
+
+                <p id="speaker-device-message" class="device-message">
+                  CaptureLink uses the system default output until another device is selected.
+                  Resync Audio can flush a delayed local playback path without reconnecting the Xbox session.
+                </p>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="recordings">
+          <div class="view-heading">
+            <div>
+              <div class="eyebrow">RECORDINGS</div>
+              <h1>Your CaptureLink recordings</h1>
+            </div>
+            <p>Open, rename, export, or delete captures from one focused library.</p>
+          </div>
+
+          <section class="recording-library-panel" aria-label="Recording library">
+            <div class="recording-library-heading">
+              <div>
+                <p id="recording-library-message">
+                  Finished recordings will appear here automatically.
+                </p>
+                <p id="recording-export-status">
+                  Checking MP4 / MP3 / WAV export support…
+                </p>
+              </div>
+
+              <button id="refresh-recording-library" type="button">
+                Refresh Library
+              </button>
+            </div>
+
+            <div
+              id="recording-library-list"
+              class="recording-library-list"
+              aria-live="polite"
+            ></div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="settings">
+          <div class="view-heading">
+            <div>
+              <div class="eyebrow">SETTINGS</div>
+              <h1>Session tools</h1>
+            </div>
+            <p>Keep diagnostics and advanced session information out of the primary workflow.</p>
+          </div>
+
+          <section
+            id="diagnostics-panel"
+            class="diagnostics-panel"
+            aria-label="WebRTC diagnostics"
             hidden
           >
-            ● REC
-          </span>
-          <span id="recording-timer" class="recording-timer">00:00</span>
-          <span id="recording-status" class="recording-status">Ready</span>
-          <span id="recording-size" class="recording-size" hidden>0 B</span>
-          <span id="recording-space" class="recording-space" hidden>— free</span>
-          <button
-            id="record-audio"
-            type="button"
-            class="record"
-            disabled
-            title="Record Xbox game audio, incoming game chat, and your microphone when enabled"
-          >
-            Record Audio
-          </button>
-
-          <button
-            id="record-video"
-            type="button"
-            class="record"
-            disabled
-            title="Record Xbox video with game audio, incoming game chat, and your microphone when enabled"
-          >
-            Record Video
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <section class="audio-devices-panel" aria-label="Audio devices">
-      <div class="audio-devices-heading">
-        <div>
-          <div class="eyebrow">AUDIO DEVICES</div>
-          <h2>Microphone and speaker routing</h2>
-        </div>
-
-        <button id="refresh-audio-devices" type="button">
-          Refresh Devices
-        </button>
-      </div>
-
-      <div class="audio-device-grid">
-        <div class="audio-device-card">
-          <div class="audio-device-title">
-            <div>
-              <h3>Microphone</h3>
-              <p>Select the input CaptureLink sends to Xbox game chat.</p>
+            <div class="diagnostics-heading">
+              <div>
+                <div class="eyebrow">LIVE DIAGNOSTICS</div>
+                <h2>WebRTC session health</h2>
+              </div>
+              <span id="diagnostics-health" class="status">Waiting</span>
             </div>
-            <span id="mic-device-state" class="device-state">Idle</span>
-          </div>
 
-          <label class="device-field" for="microphone-device">
-            <span>Input device</span>
-            <select id="microphone-device">
-              <option value="default">System default</option>
-            </select>
-          </label>
+            <div class="diagnostics-grid">
+              <div class="diagnostic-group">
+                <h3>Connection</h3>
+                <dl>
+                  <div><dt>State</dt><dd id="diag-connection">—</dd></div>
+                  <div><dt>Round trip</dt><dd id="diag-rtt">—</dd></div>
+                </dl>
+              </div>
 
-          <div class="mic-meter-row">
-            <div
-              id="mic-level-meter"
-              class="mic-meter"
-              role="meter"
-              aria-label="Microphone input level"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow="0"
-            >
-              <div id="mic-level-fill" class="mic-meter-fill"></div>
+              <div class="diagnostic-group">
+                <h3>Audio</h3>
+                <dl>
+                  <div><dt>Codec</dt><dd id="diag-audio-codec">—</dd></div>
+                  <div><dt>Bitrate</dt><dd id="diag-audio-bitrate">—</dd></div>
+                  <div><dt>Packets</dt><dd id="diag-audio-packets">—</dd></div>
+                  <div><dt>Lost</dt><dd id="diag-audio-lost">—</dd></div>
+                  <div><dt>Jitter</dt><dd id="diag-audio-jitter">—</dd></div>
+                  <div><dt>A/V offset</dt><dd id="diag-av-offset">—</dd></div>
+                  <div><dt>Buffer avg</dt><dd id="diag-audio-buffer">—</dd></div>
+                </dl>
+              </div>
+
+              <div class="diagnostic-group">
+                <h3>Microphone</h3>
+                <dl>
+                  <div><dt>Device</dt><dd id="diag-mic-device">—</dd></div>
+                  <div><dt>State</dt><dd id="diag-mic-state">Off</dd></div>
+                  <div><dt>Bitrate</dt><dd id="diag-mic-bitrate">—</dd></div>
+                  <div><dt>Packets sent</dt><dd id="diag-mic-packets">0</dd></div>
+                </dl>
+              </div>
+
+              <div class="diagnostic-group">
+                <h3>Video</h3>
+                <dl>
+                  <div><dt>Codec</dt><dd id="diag-video-codec">—</dd></div>
+                  <div><dt>Bitrate</dt><dd id="diag-video-bitrate">—</dd></div>
+                  <div><dt>Resolution</dt><dd id="diag-video-resolution">—</dd></div>
+                  <div><dt>Frame rate</dt><dd id="diag-video-fps">—</dd></div>
+                  <div><dt>Lost</dt><dd id="diag-video-lost">—</dd></div>
+                </dl>
+              </div>
             </div>
-            <span id="mic-level-value">−∞ dB</span>
-          </div>
+          </section>
 
-          <label class="device-field" for="recording-mic-gain">
-            <span>Recording mic level</span>
-            <div class="range-field">
-              <input
-                id="recording-mic-gain"
-                type="range"
-                min="0"
-                max="200"
-                step="5"
-                value="100"
-              />
-              <output id="recording-mic-gain-value" for="recording-mic-gain">100%</output>
+          <article class="surface settings-placeholder">
+            <div class="surface-heading">
+              <div class="surface-icon">?</div>
+              <div>
+                <h2>Remote Play help</h2>
+                <p>Console setup instructions live in Connect so they are available when you need them.</p>
+              </div>
             </div>
-          </label>
-          <p class="device-hint">
-            Changes your microphone level in saved recordings only. Xbox game-chat volume is unchanged.
-          </p>
 
-          <div class="device-actions">
-            <button id="test-microphone" type="button">
-              Test Microphone
+            <button class="view-jump" type="button" data-view-target="connect">
+              Open connection setup
             </button>
-          </div>
-
-          <p id="microphone-device-message" class="device-message">
-            Choose a microphone, then test it before enabling Xbox chat.
-          </p>
-        </div>
-
-        <div class="audio-device-card">
-          <div class="audio-device-title">
-            <div>
-              <h3>Speakers</h3>
-              <p>Route incoming Xbox audio to a specific output device.</p>
-            </div>
-            <span id="speaker-device-state" class="device-state">Default</span>
-          </div>
-
-          <label class="device-field" for="speaker-device">
-            <span>Output device</span>
-            <select id="speaker-device">
-              <option value="">System default</option>
-            </select>
-          </label>
-
-          <div class="device-actions">
-            <button id="choose-speaker" type="button">
-              Choose Output
-            </button>
-            <button
-              id="resync-audio"
-              type="button"
-              disabled
-              title="Rebuild local audio playback without reconnecting to Xbox"
-            >
-              Resync Audio
-            </button>
-          </div>
-
-          <label class="toggle-field" for="auto-audio-resync">
-            <input id="auto-audio-resync" type="checkbox" checked />
-            <span>Auto-resync when WebRTC reports sustained audio delay</span>
-          </label>
-
-          <p id="speaker-device-message" class="device-message">
-            CaptureLink uses the system default output until another device is selected.
-            Resync Audio can flush a delayed local playback path without reconnecting the Xbox session.
-          </p>
-        </div>
+          </article>
+        </section>
       </div>
-    </section>
-
-    <section
-      id="diagnostics-panel"
-      class="diagnostics-panel"
-      aria-label="WebRTC diagnostics"
-      hidden
-    >
-      <div class="diagnostics-heading">
-        <div>
-          <div class="eyebrow">LIVE DIAGNOSTICS</div>
-          <h2>WebRTC session health</h2>
-        </div>
-        <span id="diagnostics-health" class="status">Waiting</span>
-      </div>
-
-      <div class="diagnostics-grid">
-        <div class="diagnostic-group">
-          <h3>Connection</h3>
-          <dl>
-            <div><dt>State</dt><dd id="diag-connection">—</dd></div>
-            <div><dt>Round trip</dt><dd id="diag-rtt">—</dd></div>
-          </dl>
-        </div>
-
-        <div class="diagnostic-group">
-          <h3>Audio</h3>
-          <dl>
-            <div><dt>Codec</dt><dd id="diag-audio-codec">—</dd></div>
-            <div><dt>Bitrate</dt><dd id="diag-audio-bitrate">—</dd></div>
-            <div><dt>Packets</dt><dd id="diag-audio-packets">—</dd></div>
-            <div><dt>Lost</dt><dd id="diag-audio-lost">—</dd></div>
-            <div><dt>Jitter</dt><dd id="diag-audio-jitter">—</dd></div>
-            <div><dt>A/V offset</dt><dd id="diag-av-offset">—</dd></div>
-            <div><dt>Buffer avg</dt><dd id="diag-audio-buffer">—</dd></div>
-          </dl>
-        </div>
-
-        <div class="diagnostic-group">
-          <h3>Microphone</h3>
-          <dl>
-            <div><dt>Device</dt><dd id="diag-mic-device">—</dd></div>
-            <div><dt>State</dt><dd id="diag-mic-state">Off</dd></div>
-            <div><dt>Bitrate</dt><dd id="diag-mic-bitrate">—</dd></div>
-            <div><dt>Packets sent</dt><dd id="diag-mic-packets">0</dd></div>
-          </dl>
-        </div>
-
-        <div class="diagnostic-group">
-          <h3>Video</h3>
-          <dl>
-            <div><dt>Codec</dt><dd id="diag-video-codec">—</dd></div>
-            <div><dt>Bitrate</dt><dd id="diag-video-bitrate">—</dd></div>
-            <div><dt>Resolution</dt><dd id="diag-video-resolution">—</dd></div>
-            <div><dt>Frame rate</dt><dd id="diag-video-fps">—</dd></div>
-            <div><dt>Lost</dt><dd id="diag-video-lost">—</dd></div>
-          </dl>
-        </div>
-      </div>
-    </section>
-
-
-
-    <section class="recording-library-panel" aria-label="Recording library">
-      <div class="recording-library-heading">
-        <div>
-          <div class="eyebrow">RECORDING LIBRARY</div>
-          <h2>Your CaptureLink recordings</h2>
-          <p id="recording-library-message">
-            Finished recordings will appear here automatically.
-          </p>
-          <p id="recording-export-status">
-            Checking MP4 / MP3 / WAV export support…
-          </p>
-        </div>
-
-        <button id="refresh-recording-library" type="button">
-          Refresh Library
-        </button>
-      </div>
-
-      <div
-        id="recording-library-list"
-        class="recording-library-list"
-        aria-live="polite"
-      ></div>
-    </section>
-
-    <section class="grid">
-      <article>
-        <h2>Xbox account</h2>
-
-        <p id="auth-message">
-          Checking authentication status...
-        </p>
-
-        <button
-          id="sign-in"
-          type="button"
-        >
-          Sign in with Microsoft
-        </button>
-
-        <pre
-          id="auth-output"
-          class="auth-output"
-          aria-live="polite"
-        ></pre>
-      </article>
-
-      <article>
-        <h2>Quick start</h2>
-        <ol class="quick-start-list">
-          <li>Sign in and connect to your Xbox.</li>
-          <li>Choose and test your microphone if you use game chat.</li>
-          <li>Adjust playback and recording levels, then start a capture.</li>
-          <li>Open or export finished recordings from the library.</li>
-        </ol>
-      </article>
-    </section>
+    </div>
   </main>
 `
-
-const grid = document.querySelector<HTMLElement>('.grid')
-
-if (!grid) {
-  throw new Error('CaptureLink content grid not found')
-}
-
-grid.insertAdjacentHTML(
-  'beforeend',
-  `
-    <article class="console-section">
-      <div class="section-heading">
-        <div>
-          <h2>Your consoles</h2>
-          <p id="console-message">
-            Sign in to discover your Xbox consoles.
-          </p>
-        </div>
-
-        <button
-          id="refresh-consoles"
-          type="button"
-          disabled
-        >
-          Refresh
-        </button>
-      </div>
-
-      <div
-        id="console-list"
-        class="console-list"
-      ></div>
-    </article>
-  `
-)
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector)
@@ -607,6 +778,73 @@ const diagVideoFps =
 const diagVideoLost =
   requireElement<HTMLElement>('#diag-video-lost')
 
+const railConsoleName =
+  requireElement<HTMLElement>('#rail-console-name')
+const railConsoleDetail =
+  requireElement<HTMLElement>('#rail-console-detail')
+const railConsoleStatus =
+  requireElement<HTMLElement>('#rail-console-status')
+const railSessionState =
+  requireElement<HTMLElement>('#rail-session-state')
+const railSessionConnection =
+  requireElement<HTMLElement>('#rail-session-connection')
+const railSessionVideo =
+  requireElement<HTMLElement>('#rail-session-video')
+const railSessionLatency =
+  requireElement<HTMLElement>('#rail-session-latency')
+const railLastRecordingName =
+  requireElement<HTMLElement>('#rail-last-recording-name')
+const railLastRecordingMeta =
+  requireElement<HTMLElement>('#rail-last-recording-meta')
+
+type CaptureLinkView = 'connect' | 'stream' | 'audio' | 'recordings' | 'settings'
+
+const navItems = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('.nav-item[data-view]')
+)
+
+const viewPanels = Array.from(
+  document.querySelectorAll<HTMLElement>('.view-panel[data-panel]')
+)
+
+function setActiveView(view: CaptureLinkView): void {
+  navItems.forEach((item) => {
+    const active = item.dataset.view === view
+    item.classList.toggle('is-active', active)
+
+    if (active) {
+      item.setAttribute('aria-current', 'page')
+    } else {
+      item.removeAttribute('aria-current')
+    }
+  })
+
+  viewPanels.forEach((panel) => {
+    panel.classList.toggle('is-active', panel.dataset.panel === view)
+  })
+}
+
+navItems.forEach((item) => {
+  item.addEventListener('click', () => {
+    const view = item.dataset.view as CaptureLinkView | undefined
+    if (view) {
+      setActiveView(view)
+    }
+  })
+})
+
+document.querySelectorAll<HTMLButtonElement>('.view-jump[data-view-target]')
+  .forEach((button) => {
+    button.addEventListener('click', () => {
+      const view = button.dataset.viewTarget as CaptureLinkView | undefined
+      if (view) {
+        setActiveView(view)
+      }
+    })
+  })
+
+setActiveView('stream')
+
 let signedIn = false
 let streamBusy = false
 let activeServerId: string | null = null
@@ -690,6 +928,59 @@ function escapeHtml(value: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;')
+}
+
+
+function setButtonLabel(button: HTMLButtonElement, label: string): void {
+  const labelElement = button.querySelector<HTMLElement>('.dock-button__label')
+
+  if (labelElement) {
+    labelElement.textContent = label
+  } else {
+    button.textContent = label
+  }
+
+  button.setAttribute('aria-label', label)
+
+  if (!button.hasAttribute('title')) {
+    button.title = label
+  }
+}
+
+function setRailConsole(
+  name: string,
+  detail: string,
+  status: string
+): void {
+  railConsoleName.textContent = name
+  railConsoleDetail.textContent = detail
+  railConsoleStatus.textContent = status
+}
+
+function setRailSession(
+  state: string,
+  connection: string,
+  video = '—',
+  latency = '—'
+): void {
+  railSessionState.textContent = state
+  railSessionConnection.textContent = connection
+  railSessionVideo.textContent = video
+  railSessionLatency.textContent = latency
+}
+
+function updateRailLastRecording(): void {
+  const latest = recordingLibrary[0]
+
+  if (!latest) {
+    railLastRecordingName.textContent = 'No recordings yet'
+    railLastRecordingMeta.textContent = 'Capture something to get started'
+    return
+  }
+
+  railLastRecordingName.textContent = latest.fileName
+  railLastRecordingMeta.textContent =
+    `${formatRecordingDuration(latest.durationMs)} · ${formatRecordingBytes(latest.bytes)}`
 }
 
 function setStreamStatus(message: string): void {
@@ -1019,7 +1310,7 @@ function applyAudioControls(): boolean {
   const audio = getAudioElement()
 
   audioVolumeValue.textContent = `${Math.round(audioVolumeLevel * 100)}%`
-  audioMuteButton.textContent = audioMuted ? 'Unmute' : 'Mute'
+  setButtonLabel(audioMuteButton, audioMuted ? 'Unmute' : 'Mute')
 
   if (!audio) {
     return false
@@ -1136,11 +1427,12 @@ function clearMicrophoneTimeout(): void {
 
 function updateMicrophoneButton(): void {
   if (microphonePending) {
-    microphoneButton.textContent = 'Starting Microphone…'
+    setButtonLabel(microphoneButton, 'Starting Microphone…')
   } else {
-    microphoneButton.textContent = microphoneActive
-      ? 'Disable Microphone'
-      : 'Enable Microphone'
+    setButtonLabel(
+      microphoneButton,
+      microphoneActive ? 'Disable Microphone' : 'Enable Microphone'
+    )
   }
   microphoneButton.setAttribute('aria-pressed', String(microphoneActive))
 }
@@ -1156,7 +1448,7 @@ function detachController(): void {
 
   activeGamepad = null
   controllerAttached = false
-  controllerButton.textContent = 'Enable Controller'
+  setButtonLabel(controllerButton, 'Enable Controller')
   controllerButton.setAttribute('aria-pressed', 'false')
 }
 
@@ -1374,6 +1666,15 @@ async function refreshDiagnostics(): Promise<void> {
     : '—'
   diagVideoLost.textContent = String(video?.packetsLost ?? 0)
 
+  railSessionConnection.textContent = peerConnection.connectionState
+  railSessionLatency.textContent = diagRtt.textContent
+  railSessionVideo.textContent = [
+    diagVideoResolution.textContent,
+    diagVideoFps.textContent
+  ]
+    .filter((value) => value && value !== '—')
+    .join(' · ') || '—'
+
   if (previous) {
     const elapsed = now - previous.at
     diagAudioBitrate.textContent = formatBitrate(
@@ -1432,7 +1733,7 @@ function startDiagnosticsPolling(): void {
 function setDiagnosticsVisible(visible: boolean): void {
   diagnosticsVisible = visible
   diagnosticsPanel.hidden = !visible
-  diagnosticsButton.textContent = visible ? 'Hide Diagnostics' : 'Diagnostics'
+  setButtonLabel(diagnosticsButton, visible ? 'Hide Diagnostics' : 'Diagnostics')
 
   // Sync monitoring stays active during a connected session even when the
   // diagnostics panel is hidden. This lets conservative auto-resync work
@@ -1454,6 +1755,8 @@ function formatLibraryDate(value: string): string {
 }
 
 function renderRecordingLibrary(): void {
+  updateRailLastRecording()
+
   if (recordingLibrary.length === 0) {
     recordingLibraryMessage.textContent = 'No CaptureLink recordings yet.'
     recordingLibraryList.innerHTML = `
@@ -1921,8 +2224,8 @@ function updateRecordingTimer(): void {
 }
 
 function resetRecordingButtonLabels(): void {
-  recordAudioButton.textContent = 'Record Audio'
-  recordVideoButton.textContent = 'Record Video'
+  setButtonLabel(recordAudioButton, 'Record Audio')
+  setButtonLabel(recordVideoButton, 'Record Video')
 }
 
 function setRecordingUi(
@@ -1954,12 +2257,12 @@ function setRecordingUi(
 
   switch (state) {
     case 'recording':
-      activeButton.textContent = 'Stop Recording'
+      setButtonLabel(activeButton, 'Stop Recording')
       recordingStatus.textContent =
         kind === 'video' ? 'Recording video' : 'Recording audio'
       break
     case 'saving':
-      activeButton.textContent = 'Finalizing…'
+      setButtonLabel(activeButton, 'Finalizing…')
       recordingStatus.textContent = 'Finalizing'
       break
     case 'saved':
@@ -2327,7 +2630,18 @@ async function loadConsoles(): Promise<void> {
     if (consoles.length === 0) {
       consoleMessage.textContent =
         'No Xbox consoles were found for this account.'
+      setRailConsole('No console found', 'Check your Xbox account and Remote Play settings', 'Unavailable')
       return
+    }
+
+    const firstConsole = consoles[0]
+
+    if (firstConsole) {
+      setRailConsole(
+        firstConsole.deviceName,
+        `${formatConsoleType(firstConsole.consoleType)} · ${firstConsole.powerState}`,
+        'Ready'
+      )
     }
 
     consoleMessage.textContent =
@@ -2370,6 +2684,7 @@ async function loadConsoles(): Promise<void> {
       error instanceof Error
         ? error.message
         : 'Xbox console discovery failed.'
+    setRailConsole('Console unavailable', 'Discovery failed', 'Error')
   } finally {
     updateInteractiveState()
   }
@@ -2388,28 +2703,33 @@ const xboxSetupBanner = document.createElement('aside')
 xboxSetupBanner.className = 'xbox-setup-banner'
 xboxSetupBanner.setAttribute('aria-label', 'Xbox Remote Play setup')
 xboxSetupBanner.innerHTML = `
-  <div class="xbox-setup-banner__heading">
-    <strong>Xbox setup required for Remote Play</strong>
-  </div>
-  <p>
-    Before connecting, enable Remote Play on the Xbox you want CaptureLink to use.
-  </p>
-  <ol>
-    <li>Press the <strong>Xbox button</strong> on your controller.</li>
-    <li>
-      Go to
-      <strong>Profile &amp; system → Settings → Devices &amp; connections → Remote features</strong>.
-    </li>
-    <li>Turn on <strong>Enable remote features</strong>.</li>
-    <li>Run <strong>Test remote play</strong> if it is available.</li>
-    <li>
-      Under <strong>Power options</strong>, choose <strong>Sleep</strong> so the console
-      can be reached and woken for Remote Play.
-    </li>
-  </ol>
-  <p class="xbox-setup-banner__note">
-    CaptureLink uses Xbox Remote Play / Remote features. This is separate from Xbox Cloud Gaming.
-  </p>
+  <details class="xbox-setup-details">
+    <summary>
+      <span>Xbox Remote Play setup</span>
+      <small>View steps</small>
+    </summary>
+    <div class="xbox-setup-details__body">
+      <p>
+        Before connecting, enable Remote Play on the Xbox you want CaptureLink to use.
+      </p>
+      <ol>
+        <li>Press the <strong>Xbox button</strong> on your controller.</li>
+        <li>
+          Go to
+          <strong>Profile &amp; system → Settings → Devices &amp; connections → Remote features</strong>.
+        </li>
+        <li>Turn on <strong>Enable remote features</strong>.</li>
+        <li>Run <strong>Test remote play</strong> if it is available.</li>
+        <li>
+          Under <strong>Power options</strong>, choose <strong>Sleep</strong> so the console
+          can be reached and woken for Remote Play.
+        </li>
+      </ol>
+      <p class="xbox-setup-banner__note">
+        CaptureLink uses Xbox Remote Play / Remote features, not Xbox Cloud Gaming.
+      </p>
+    </div>
+  </details>
 `
 
 const consoleListParent = consoleList.parentElement
@@ -2420,6 +2740,7 @@ if (consoleListParent) {
 
 function setAuthenticated(): void {
   signOutButton.hidden = false
+  signInButton.hidden = true
   signedIn = true
   accountStatus.textContent = 'Signed in'
   authMessage.textContent =
@@ -2434,6 +2755,7 @@ function setAuthenticated(): void {
 
 function setSignedOut(): void {
   signOutButton.hidden = true
+  signInButton.hidden = false
   signedIn = false
   accountStatus.textContent = 'Signed out'
   authMessage.textContent =
@@ -2446,6 +2768,9 @@ function setSignedOut(): void {
   consoleMessage.textContent =
     'Sign in to discover your Xbox consoles.'
 
+  setRailConsole('No console selected', 'Sign in to discover your Xboxes', 'Idle')
+  setRailSession('Idle', 'Waiting')
+  setActiveView('connect')
   updateInteractiveState()
 }
 
@@ -2512,6 +2837,8 @@ async function disconnectFromConsole(): Promise<void> {
     streamBusy = false
     resetConsoleButtonLabels()
     resetStreamHolder()
+    railConsoleStatus.textContent = signedIn ? 'Ready' : 'Idle'
+    setRailSession('Idle', 'Waiting')
     setStreamStatus('Remote Play idle')
     updateInteractiveState()
   }
@@ -2536,6 +2863,20 @@ async function connectToConsole(
   streamBusy = true
   activeServerId = serverId
   button.textContent = 'Connecting...'
+
+  const consoleCard = button.closest<HTMLElement>('.console-card')
+  const consoleName = consoleCard
+    ?.querySelector<HTMLElement>('.console-name')
+    ?.textContent
+    ?.trim() || 'Xbox console'
+  const consoleModel = consoleCard
+    ?.querySelector<HTMLElement>('.console-model')
+    ?.textContent
+    ?.trim() || 'Remote Play'
+
+  setRailConsole(consoleName, consoleModel, 'Connecting')
+  setRailSession('Connecting', 'Provisioning')
+  setActiveView('stream')
   showStreamPlaceholder('Starting Xbox Remote Play...')
   setStreamStatus('Starting Remote Play...')
   updateInteractiveState()
@@ -2595,6 +2936,8 @@ async function connectToConsole(
       if (state === 'connected') {
         webRtcConnected = true
         hideStreamPlaceholder()
+        railConsoleStatus.textContent = 'Online'
+        setRailSession('Connected', 'WebRTC connected')
         scheduleAudioControlSync()
         startDiagnosticsPolling()
         updateInteractiveState()
@@ -2602,6 +2945,10 @@ async function connectToConsole(
 
       if (state === 'failed' || state === 'disconnected') {
         webRtcConnected = false
+        setRailSession(
+          state === 'failed' ? 'Failed' : 'Disconnected',
+          `WebRTC ${state}`
+        )
         stopDiagnosticsPolling()
 
         if (mediaRecorder || recordingSaving) {
@@ -2668,6 +3015,8 @@ async function connectToConsole(
     activeServerId = null
     streamBusy = false
     button.textContent = 'Connect'
+    railConsoleStatus.textContent = 'Ready'
+    setRailSession('Failed', 'Could not connect')
     updateInteractiveState()
   }
 }
@@ -2702,7 +3051,7 @@ function toggleController(): void {
     gamepad.attach(activePlayer)
     activeGamepad = gamepad
     controllerAttached = true
-    controllerButton.textContent = 'Disable Controller'
+    setButtonLabel(controllerButton, 'Disable Controller')
     controllerButton.setAttribute('aria-pressed', 'true')
     setStreamStatus('Controller and keyboard input enabled')
   } catch (error) {
@@ -2851,7 +3200,12 @@ autoAudioResync.addEventListener('change', () => {
 })
 
 diagnosticsButton.addEventListener('click', () => {
-  setDiagnosticsVisible(!diagnosticsVisible)
+  const visible = !diagnosticsVisible
+  setDiagnosticsVisible(visible)
+
+  if (visible) {
+    setActiveView('settings')
+  }
 })
 
 
@@ -3034,15 +3388,15 @@ function applyVideoFullscreenState(fullscreen: boolean): void {
 }
 
 function syncVideoPresentationButtons(): void {
-  fullscreenVideoButton.textContent =
-    nativeVideoFullscreen
-      ? 'Exit Fullscreen'
-      : 'Fullscreen'
+  setButtonLabel(
+    fullscreenVideoButton,
+    nativeVideoFullscreen ? 'Exit Fullscreen' : 'Fullscreen'
+  )
 
-  pictureInPictureButton.textContent =
-    document.pictureInPictureElement
-      ? 'Exit PiP'
-      : 'Picture in Picture'
+  setButtonLabel(
+    pictureInPictureButton,
+    document.pictureInPictureElement ? 'Exit PiP' : 'Picture in Picture'
+  )
 }
 
 fullscreenVideoButton.addEventListener('click', () => {
