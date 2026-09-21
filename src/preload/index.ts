@@ -11,6 +11,17 @@ contextBridge.exposeInMainWorld('captureLink', {
   platform: process.platform,
   version: '0.2.0',
 
+  writeFriendClipboard: (value: string) =>
+    ipcRenderer.invoke(
+      'capturelink:friend-clipboard-write',
+      value
+    ),
+
+  readFriendClipboard: () =>
+    ipcRenderer.invoke(
+      'capturelink:friend-clipboard-read'
+    ),
+
   getXboxAuthStatus: () =>
     ipcRenderer.invoke('capturelink:xbox-auth-status'),
 

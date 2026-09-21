@@ -3972,6 +3972,62 @@ function makeFriendControllerPeer(): FriendControllerPeer {
   })
 }
 
+async function writeFriendClipboard(
+  value: string,
+  description: string
+): Promise<void> {
+  try {
+    await window.captureLink
+      .writeFriendClipboard(value)
+
+    console.log(
+      `[CaptureLink:F2] ${description} copied to native Windows clipboard`
+    )
+  } catch (error) {
+    console.error(
+      `[CaptureLink:F2] Could not copy ${description}:`,
+      error
+    )
+
+    throw new Error(
+      `Could not copy ${description} to the clipboard.`
+    )
+  }
+}
+
+async function readFriendClipboard(
+  description: string
+): Promise<string> {
+  try {
+    const value =
+      (
+        await window.captureLink
+          .readFriendClipboard()
+      ).trim()
+
+    if (!value) {
+      throw new Error(
+        `Clipboard does not contain a ${description}.`
+      )
+    }
+
+    return value
+  } catch (error) {
+    console.error(
+      `[CaptureLink:F2] Could not read ${description}:`,
+      error
+    )
+
+    if (error instanceof Error) {
+      throw error
+    }
+
+    throw new Error(
+      `Could not read ${description} from the clipboard.`
+    )
+  }
+}
+
 async function createFriendHostOffer(): Promise<void> {
   if (!activePlayer || !webRtcConnected) {
     setStreamStatus(
@@ -3998,18 +4054,13 @@ async function createFriendHostOffer(): Promise<void> {
       await friendControllerPeer
         .createHostOffer()
 
-    window.prompt(
-      [
-        'CaptureLink F2 HOST OFFER',
-        '',
-        'Copy this entire value to the guest PC.',
-        'Do not modify it.'
-      ].join('\n'),
-      offer
+    await writeFriendClipboard(
+      offer,
+      'host offer'
     )
 
     setStreamStatus(
-      'F2 host offer ready; send it to the guest'
+      'F2 host offer copied to clipboard'
     )
   } catch (error) {
     console.error(
@@ -4017,53 +4068,50 @@ async function createFriendHostOffer(): Promise<void> {
       error
     )
 
-    setStreamStatus(
-      error instanceof Error
-        ? `F2 host failed: ${error.message}`
-        : 'F2 host failed'
-    )
-
     closeFriendControllerPeer()
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'unknown error'
+
+    window.setTimeout(
+      () => {
+        setStreamStatus(
+          `F2 host failed: ${message}`
+        )
+      },
+      0
+    )
   }
 }
 
 async function joinFriendHost(): Promise<void> {
-  const offer = window.prompt(
-    [
-      'CaptureLink F2 GUEST',
-      '',
-      'Paste the host offer here.'
-    ].join('\n')
-  )
-
-  if (!offer?.trim()) {
-    return
-  }
-
-  closeFriendControllerPeer()
-
-  friendPeerRole = 'guest'
-  friendControllerPeer =
-    makeFriendControllerPeer()
-
   try {
+    const offer =
+      await readFriendClipboard(
+        'CaptureLink host offer'
+      )
+
+    closeFriendControllerPeer()
+
+    friendPeerRole = 'guest'
+    friendControllerPeer =
+      makeFriendControllerPeer()
+
     const answer =
       await friendControllerPeer
         .acceptHostOfferAndCreateAnswer(
           offer
         )
 
-    window.prompt(
-      [
-        'CaptureLink F2 GUEST ANSWER',
-        '',
-        'Copy this entire value back to the host PC.'
-      ].join('\n'),
-      answer
+    await writeFriendClipboard(
+      answer,
+      'guest answer'
     )
 
     setStreamStatus(
-      'F2 guest answer ready; send it back to the host'
+      'F2 guest answer copied to clipboard'
     )
   } catch (error) {
     console.error(
@@ -4071,13 +4119,21 @@ async function joinFriendHost(): Promise<void> {
       error
     )
 
-    setStreamStatus(
-      error instanceof Error
-        ? `F2 guest failed: ${error.message}`
-        : 'F2 guest failed'
-    )
-
     closeFriendControllerPeer()
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'unknown error'
+
+    window.setTimeout(
+      () => {
+        setStreamStatus(
+          `F2 guest failed: ${message}`
+        )
+      },
+      0
+    )
   }
 }
 
@@ -4092,24 +4148,17 @@ async function acceptFriendGuestAnswer(): Promise<void> {
     return
   }
 
-  const answer = window.prompt(
-    [
-      'CaptureLink F2 HOST',
-      '',
-      'Paste the guest answer here.'
-    ].join('\n')
-  )
-
-  if (!answer?.trim()) {
-    return
-  }
-
   try {
+    const answer =
+      await readFriendClipboard(
+        'CaptureLink guest answer'
+      )
+
     await friendControllerPeer
       .acceptGuestAnswer(answer)
 
     setStreamStatus(
-      'F2 guest answer accepted; waiting for direct P2P connection'
+      'F2 guest answer accepted; establishing direct P2P connection'
     )
   } catch (error) {
     console.error(
@@ -4117,10 +4166,13 @@ async function acceptFriendGuestAnswer(): Promise<void> {
       error
     )
 
-    setStreamStatus(
+    const message =
       error instanceof Error
-        ? `F2 answer failed: ${error.message}`
-        : 'F2 answer failed'
+        ? error.message
+        : 'unknown error'
+
+    setStreamStatus(
+      `F2 answer failed: ${message}`
     )
   }
 }

@@ -125,26 +125,40 @@ async function waitForIceGatheringComplete(
     return
   }
 
-  await new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve) => {
+    let settled = false
+
+    const finish = (): void => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      cleanup()
+      resolve()
+    }
+
     const timeout = window.setTimeout(
       () => {
-        cleanup()
-
-        reject(
-          new Error(
-            'Timed out while gathering direct P2P ICE candidates.'
-          )
+        console.warn(
+          '[CaptureLink:F2] ICE gathering did not reach complete before timeout; continuing with gathered candidates.'
         )
+
+        finish()
       },
       ICE_GATHER_TIMEOUT_MS
     )
 
     const onStateChange = (): void => {
+      console.log(
+        '[CaptureLink:F2] ICE gathering state:',
+        peer.iceGatheringState
+      )
+
       if (
         peer.iceGatheringState === 'complete'
       ) {
-        cleanup()
-        resolve()
+        finish()
       }
     }
 
@@ -292,8 +306,30 @@ export class FriendControllerPeer {
       )
     }
 
+    const candidateCount =
+      description.sdp
+        ?.split('\\n')
+        .filter((line) =>
+          line.startsWith('a=candidate:')
+        ).length ?? 0
+
+    console.log(
+      '[CaptureLink:F2] Host SDP ready',
+      {
+        iceGatheringState:
+          this.peer.iceGatheringState,
+        candidateCount
+      }
+    )
+
+    if (candidateCount === 0) {
+      console.warn(
+        '[CaptureLink:F2] Host SDP currently contains no ICE candidates.'
+      )
+    }
+
     this.status(
-      'host offer ready'
+      `host offer ready · ${candidateCount} ICE candidate${candidateCount === 1 ? '' : 's'}`
     )
 
     return encodeDescription(description)

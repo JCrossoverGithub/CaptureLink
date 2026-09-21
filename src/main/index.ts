@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
 import { Msal, TokenStore } from 'xal-node'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -425,6 +425,26 @@ ipcMain.handle(
     }
   }
 )
+ipcMain.handle(
+  'capturelink:friend-clipboard-write',
+  (_event, value: string) => {
+    if (typeof value !== 'string') {
+      throw new Error('Clipboard value must be a string.')
+    }
+
+    clipboard.writeText(value)
+
+    return { written: true }
+  }
+)
+
+ipcMain.handle(
+  'capturelink:friend-clipboard-read',
+  () => {
+    return clipboard.readText()
+  }
+)
+
 ipcMain.handle('capturelink:xbox-auth-status', () => {
   return {
     authenticated: existsSync(getTokenPath())

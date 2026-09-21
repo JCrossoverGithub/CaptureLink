@@ -124,6 +124,12 @@ declare global {
       platform: string
       version: string
 
+      writeFriendClipboard(
+        value: string
+      ): Promise<{ written: boolean }>
+
+      readFriendClipboard(): Promise<string>
+
       getXboxAuthStatus(): Promise<{
         authenticated: boolean
       }>
