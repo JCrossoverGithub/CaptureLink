@@ -4,6 +4,10 @@ import {
   createSyntheticButtonGamepadState
 } from './friend-control/remote-gamepad'
 
+import {
+  FriendControllerPeer
+} from './friend-control/p2p-controller'
+
 const root = document.querySelector<HTMLDivElement>('#app')
 
 if (!root) {
@@ -1160,6 +1164,10 @@ let controllerAttached = false
 // F1 research spike: synthetic remote controller.
 let remoteGamepadAdapter: RemoteGamepadAdapter | null = null
 let remoteSyntheticReleaseTimer: number | null = null
+
+// F2 research spike: direct CaptureLink-to-CaptureLink WebRTC.
+let friendControllerPeer: FriendControllerPeer | null = null
+let friendPeerRole: 'host' | 'guest' | null = null
 let microphoneActive = false
 let microphonePending = false
 let microphoneTimeout: ReturnType<typeof setTimeout> | null = null
@@ -3389,6 +3397,7 @@ function destroyPlayer(): void {
   }
 
   detachController()
+  closeFriendControllerPeer()
   detachRemoteSyntheticController()
   stopMicrophoneMonitor()
   stopMicrophone()
@@ -3903,6 +3912,261 @@ document.addEventListener(
       button.index,
       button.label
     )
+  },
+  true
+)
+
+// CAPTURELINK_FRIEND_CONTROL_F2_P2P_SPIKE
+//
+// Direct peer-to-peer controller transport.
+//
+// No signaling server.
+// No STUN.
+// No TURN.
+// No port forwarding.
+//
+// F2 keyboard controls:
+//
+//   Ctrl+Shift+H  Create HOST offer
+//   Ctrl+Shift+J  Join as GUEST and create answer
+//   Ctrl+Shift+K  HOST accepts guest answer
+//   Ctrl+Shift+X  Disconnect friend P2P session
+//
+// The offer and answer are manually copied between PCs.
+// This intentionally isolates and proves the actual P2P data path.
+
+function closeFriendControllerPeer(): void {
+  friendControllerPeer?.close()
+  friendControllerPeer = null
+  friendPeerRole = null
+}
+
+function makeFriendControllerPeer(): FriendControllerPeer {
+  return new FriendControllerPeer({
+    onStatus: (message) => {
+      setStreamStatus(
+        `F2 P2P: ${message}`
+      )
+    },
+
+    onRemoteGamepadState: (state) => {
+      if (friendPeerRole !== 'host') {
+        return
+      }
+
+      const adapter =
+        getRemoteSyntheticController()
+
+      if (!adapter) {
+        return
+      }
+
+      adapter.updateState(state)
+    },
+
+    onRemoteControlEnded: () => {
+      if (friendPeerRole === 'host') {
+        detachRemoteSyntheticController()
+      }
+    }
+  })
+}
+
+async function createFriendHostOffer(): Promise<void> {
+  if (!activePlayer || !webRtcConnected) {
+    setStreamStatus(
+      'F2 host requires an active Xbox Remote Play session'
+    )
+    return
+  }
+
+  if (controllerAttached) {
+    setStreamStatus(
+      'Disable the normal local CaptureLink controller before hosting F2'
+    )
+    return
+  }
+
+  closeFriendControllerPeer()
+
+  friendPeerRole = 'host'
+  friendControllerPeer =
+    makeFriendControllerPeer()
+
+  try {
+    const offer =
+      await friendControllerPeer
+        .createHostOffer()
+
+    window.prompt(
+      [
+        'CaptureLink F2 HOST OFFER',
+        '',
+        'Copy this entire value to the guest PC.',
+        'Do not modify it.'
+      ].join('\n'),
+      offer
+    )
+
+    setStreamStatus(
+      'F2 host offer ready; send it to the guest'
+    )
+  } catch (error) {
+    console.error(
+      '[CaptureLink:F2] Host offer failed:',
+      error
+    )
+
+    setStreamStatus(
+      error instanceof Error
+        ? `F2 host failed: ${error.message}`
+        : 'F2 host failed'
+    )
+
+    closeFriendControllerPeer()
+  }
+}
+
+async function joinFriendHost(): Promise<void> {
+  const offer = window.prompt(
+    [
+      'CaptureLink F2 GUEST',
+      '',
+      'Paste the host offer here.'
+    ].join('\n')
+  )
+
+  if (!offer?.trim()) {
+    return
+  }
+
+  closeFriendControllerPeer()
+
+  friendPeerRole = 'guest'
+  friendControllerPeer =
+    makeFriendControllerPeer()
+
+  try {
+    const answer =
+      await friendControllerPeer
+        .acceptHostOfferAndCreateAnswer(
+          offer
+        )
+
+    window.prompt(
+      [
+        'CaptureLink F2 GUEST ANSWER',
+        '',
+        'Copy this entire value back to the host PC.'
+      ].join('\n'),
+      answer
+    )
+
+    setStreamStatus(
+      'F2 guest answer ready; send it back to the host'
+    )
+  } catch (error) {
+    console.error(
+      '[CaptureLink:F2] Guest join failed:',
+      error
+    )
+
+    setStreamStatus(
+      error instanceof Error
+        ? `F2 guest failed: ${error.message}`
+        : 'F2 guest failed'
+    )
+
+    closeFriendControllerPeer()
+  }
+}
+
+async function acceptFriendGuestAnswer(): Promise<void> {
+  if (
+    friendPeerRole !== 'host' ||
+    !friendControllerPeer
+  ) {
+    setStreamStatus(
+      'Create an F2 host offer first'
+    )
+    return
+  }
+
+  const answer = window.prompt(
+    [
+      'CaptureLink F2 HOST',
+      '',
+      'Paste the guest answer here.'
+    ].join('\n')
+  )
+
+  if (!answer?.trim()) {
+    return
+  }
+
+  try {
+    await friendControllerPeer
+      .acceptGuestAnswer(answer)
+
+    setStreamStatus(
+      'F2 guest answer accepted; waiting for direct P2P connection'
+    )
+  } catch (error) {
+    console.error(
+      '[CaptureLink:F2] Guest answer failed:',
+      error
+    )
+
+    setStreamStatus(
+      error instanceof Error
+        ? `F2 answer failed: ${error.message}`
+        : 'F2 answer failed'
+    )
+  }
+}
+
+document.addEventListener(
+  'keydown',
+  (event) => {
+    if (
+      !event.ctrlKey ||
+      !event.shiftKey ||
+      event.repeat
+    ) {
+      return
+    }
+
+    switch (event.code) {
+      case 'KeyH':
+        event.preventDefault()
+        event.stopPropagation()
+        void createFriendHostOffer()
+        break
+
+      case 'KeyJ':
+        event.preventDefault()
+        event.stopPropagation()
+        void joinFriendHost()
+        break
+
+      case 'KeyK':
+        event.preventDefault()
+        event.stopPropagation()
+        void acceptFriendGuestAnswer()
+        break
+
+      case 'KeyX':
+        event.preventDefault()
+        event.stopPropagation()
+
+        closeFriendControllerPeer()
+        detachRemoteSyntheticController()
+
+        setStreamStatus(
+          'F2 direct P2P session disconnected'
+        )
+        break
+    }
   },
   true
 )

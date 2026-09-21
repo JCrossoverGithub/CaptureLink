@@ -1,0 +1,804 @@
+import {
+  FRIEND_PROTOCOL_VERSION,
+  parseFriendMessage,
+  serializeFriendMessage,
+  type FriendGamepadState,
+  type FriendWireMessage
+} from './protocol'
+
+const CONTROLLER_CHANNEL =
+  'capturelink-friend-controller-v1'
+
+const GAMEPAD_SAMPLE_INTERVAL_MS = 16
+const ICE_GATHER_TIMEOUT_MS = 10_000
+
+/*
+ * F2 deliberately contains NO TURN servers and NO STUN servers.
+ *
+ * This is the purest possible direct-P2P proof:
+ *
+ * guest <---------- WebRTC ----------> host
+ *
+ * On the same LAN, WebRTC host candidates are sufficient.
+ *
+ * After this passes we will add STUN-only internet traversal while
+ * retaining the same direct P2P data path.
+ */
+const DIRECT_P2P_CONFIGURATION: RTCConfiguration = {
+  iceServers: []
+}
+
+interface FriendControllerPeerOptions {
+  onStatus?: (message: string) => void
+
+  onRemoteGamepadState?: (
+    state: FriendGamepadState
+  ) => void
+
+  onRemoteControlEnded?: () => void
+}
+
+type FriendPeerRole =
+  | 'host'
+  | 'guest'
+
+type CandidateStat = RTCStats & {
+  candidateType?: string
+  protocol?: string
+  address?: string
+  port?: number
+}
+
+type CandidatePairStat = RTCStats & {
+  state?: string
+  nominated?: boolean
+  localCandidateId?: string
+  remoteCandidateId?: string
+  currentRoundTripTime?: number
+}
+
+function encodeDescription(
+  description: RTCSessionDescriptionInit
+): string {
+  return btoa(
+    JSON.stringify({
+      type: description.type,
+      sdp: description.sdp
+    })
+  )
+}
+
+function decodeDescription(
+  encoded: string
+): RTCSessionDescriptionInit {
+  let parsed: unknown
+
+  try {
+    parsed = JSON.parse(
+      atob(encoded.trim())
+    )
+  } catch {
+    throw new Error(
+      'The CaptureLink peer description is invalid.'
+    )
+  }
+
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('type' in parsed) ||
+    !('sdp' in parsed)
+  ) {
+    throw new Error(
+      'The CaptureLink peer description is malformed.'
+    )
+  }
+
+  const type = parsed.type
+  const sdp = parsed.sdp
+
+  if (
+    type !== 'offer' &&
+    type !== 'answer'
+  ) {
+    throw new Error(
+      'Unsupported WebRTC description type.'
+    )
+  }
+
+  if (typeof sdp !== 'string') {
+    throw new Error(
+      'WebRTC SDP is missing.'
+    )
+  }
+
+  return {
+    type,
+    sdp
+  }
+}
+
+async function waitForIceGatheringComplete(
+  peer: RTCPeerConnection
+): Promise<void> {
+  if (peer.iceGatheringState === 'complete') {
+    return
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(
+      () => {
+        cleanup()
+
+        reject(
+          new Error(
+            'Timed out while gathering direct P2P ICE candidates.'
+          )
+        )
+      },
+      ICE_GATHER_TIMEOUT_MS
+    )
+
+    const onStateChange = (): void => {
+      if (
+        peer.iceGatheringState === 'complete'
+      ) {
+        cleanup()
+        resolve()
+      }
+    }
+
+    const cleanup = (): void => {
+      window.clearTimeout(timeout)
+
+      peer.removeEventListener(
+        'icegatheringstatechange',
+        onStateChange
+      )
+    }
+
+    peer.addEventListener(
+      'icegatheringstatechange',
+      onStateChange
+    )
+  })
+}
+
+function createNeutralRemoteState(): FriendGamepadState {
+  return {
+    id: 'CaptureLink Remote Controller',
+    index: 0,
+    timestamp: performance.now(),
+    connected: false,
+    mapping: 'standard',
+
+    axes: [
+      0,
+      0,
+      0,
+      0
+    ],
+
+    buttons: Array.from(
+      { length: 17 },
+      () => ({
+        pressed: false,
+        touched: false,
+        value: 0
+      })
+    )
+  }
+}
+
+function findPhysicalGamepad(): Gamepad | null {
+  const gamepads =
+    Array.from(navigator.getGamepads())
+
+  return gamepads.find(
+    (gamepad): gamepad is Gamepad =>
+      gamepad !== null &&
+      gamepad.connected
+  ) ?? null
+}
+
+function capturePhysicalGamepad(
+  gamepad: Gamepad
+): FriendGamepadState {
+  return {
+    id: gamepad.id,
+    index: gamepad.index,
+    timestamp:
+      gamepad.timestamp || performance.now(),
+    connected: gamepad.connected,
+    mapping: gamepad.mapping,
+
+    axes: Array.from(gamepad.axes),
+
+    buttons: Array.from(
+      gamepad.buttons,
+      (button) => ({
+        pressed: button.pressed,
+        touched: button.touched,
+        value: button.value
+      })
+    )
+  }
+}
+
+export class FriendControllerPeer {
+  private peer: RTCPeerConnection | null = null
+  private channel: RTCDataChannel | null = null
+
+  private role: FriendPeerRole | null = null
+
+  private guestAnimationFrame:
+    number | null = null
+
+  private guestLastSampleAt = 0
+  private guestSequence = 0
+  private guestHadController = false
+
+  private lastRemoteSequence = -1
+
+  constructor(
+    private readonly options:
+      FriendControllerPeerOptions = {}
+  ) {}
+
+  async createHostOffer(): Promise<string> {
+    this.close()
+
+    this.role = 'host'
+    this.peer = this.createPeerConnection()
+
+    const channel =
+      this.peer.createDataChannel(
+        CONTROLLER_CHANNEL,
+        {
+          /*
+           * Controller state is ephemeral.
+           *
+           * If packet N is lost but packet N+1 arrives,
+           * waiting to retransmit N only creates latency.
+           */
+          ordered: false,
+          maxRetransmits: 0
+        }
+      )
+
+    this.bindHostChannel(channel)
+
+    this.status(
+      'creating direct P2P host offer'
+    )
+
+    const offer =
+      await this.peer.createOffer()
+
+    await this.peer.setLocalDescription(
+      offer
+    )
+
+    await waitForIceGatheringComplete(
+      this.peer
+    )
+
+    const description =
+      this.peer.localDescription
+
+    if (!description) {
+      throw new Error(
+        'CaptureLink did not generate a host offer.'
+      )
+    }
+
+    this.status(
+      'host offer ready'
+    )
+
+    return encodeDescription(description)
+  }
+
+  async acceptHostOfferAndCreateAnswer(
+    encodedOffer: string
+  ): Promise<string> {
+    this.close()
+
+    this.role = 'guest'
+    this.peer = this.createPeerConnection()
+
+    this.peer.ondatachannel = (event) => {
+      if (
+        event.channel.label !==
+        CONTROLLER_CHANNEL
+      ) {
+        console.warn(
+          '[CaptureLink:F2] Ignoring unknown DataChannel:',
+          event.channel.label
+        )
+        return
+      }
+
+      this.bindGuestChannel(
+        event.channel
+      )
+    }
+
+    const offer =
+      decodeDescription(encodedOffer)
+
+    if (offer.type !== 'offer') {
+      throw new Error(
+        'Expected a CaptureLink host offer.'
+      )
+    }
+
+    this.status(
+      'accepting direct P2P host offer'
+    )
+
+    await this.peer.setRemoteDescription(
+      offer
+    )
+
+    const answer =
+      await this.peer.createAnswer()
+
+    await this.peer.setLocalDescription(
+      answer
+    )
+
+    await waitForIceGatheringComplete(
+      this.peer
+    )
+
+    const description =
+      this.peer.localDescription
+
+    if (!description) {
+      throw new Error(
+        'CaptureLink did not generate a guest answer.'
+      )
+    }
+
+    this.status(
+      'guest answer ready'
+    )
+
+    return encodeDescription(description)
+  }
+
+  async acceptGuestAnswer(
+    encodedAnswer: string
+  ): Promise<void> {
+    if (
+      this.role !== 'host' ||
+      !this.peer
+    ) {
+      throw new Error(
+        'CaptureLink is not currently acting as the P2P host.'
+      )
+    }
+
+    const answer =
+      decodeDescription(encodedAnswer)
+
+    if (answer.type !== 'answer') {
+      throw new Error(
+        'Expected a CaptureLink guest answer.'
+      )
+    }
+
+    await this.peer.setRemoteDescription(
+      answer
+    )
+
+    this.status(
+      'guest answer accepted; establishing direct P2P path'
+    )
+  }
+
+  close(): void {
+    this.stopGuestControllerPump()
+
+    const channel = this.channel
+    this.channel = null
+
+    try {
+      channel?.close()
+    } catch {
+      // Channel may already be closed.
+    }
+
+    const peer = this.peer
+    this.peer = null
+
+    try {
+      peer?.close()
+    } catch {
+      // Peer may already be closed.
+    }
+
+    if (this.role === 'host') {
+      this.options
+        .onRemoteControlEnded?.()
+    }
+
+    this.role = null
+    this.lastRemoteSequence = -1
+    this.guestSequence = 0
+    this.guestHadController = false
+  }
+
+  private createPeerConnection():
+    RTCPeerConnection {
+    const peer =
+      new RTCPeerConnection(
+        DIRECT_P2P_CONFIGURATION
+      )
+
+    peer.addEventListener(
+      'connectionstatechange',
+      () => {
+        this.status(
+          `peer connection: ${peer.connectionState}`
+        )
+
+        if (
+          peer.connectionState ===
+          'connected'
+        ) {
+          window.setTimeout(
+            () => {
+              void this.logSelectedIcePath(
+                peer
+              )
+            },
+            500
+          )
+        }
+      }
+    )
+
+    peer.addEventListener(
+      'iceconnectionstatechange',
+      () => {
+        console.log(
+          '[CaptureLink:F2] ICE:',
+          peer.iceConnectionState
+        )
+      }
+    )
+
+    return peer
+  }
+
+  private bindHostChannel(
+    channel: RTCDataChannel
+  ): void {
+    this.channel = channel
+
+    channel.onopen = () => {
+      this.status(
+        'controller DataChannel open'
+      )
+    }
+
+    channel.onclose = () => {
+      this.status(
+        'controller DataChannel closed'
+      )
+
+      this.options
+        .onRemoteControlEnded?.()
+    }
+
+    channel.onerror = (event) => {
+      console.error(
+        '[CaptureLink:F2] Host controller DataChannel error:',
+        event
+      )
+    }
+
+    channel.onmessage = (event) => {
+      if (typeof event.data !== 'string') {
+        return
+      }
+
+      let message: FriendWireMessage
+
+      try {
+        message =
+          parseFriendMessage(
+            event.data
+          )
+      } catch (error) {
+        console.warn(
+          '[CaptureLink:F2] Invalid peer message:',
+          error
+        )
+        return
+      }
+
+      if (message.type === 'hello') {
+        console.log(
+          '[CaptureLink:F2] Guest hello:',
+          message
+        )
+        return
+      }
+
+      if (message.type !== 'gamepad') {
+        return
+      }
+
+      if (
+        message.sequence <=
+        this.lastRemoteSequence
+      ) {
+        return
+      }
+
+      this.lastRemoteSequence =
+        message.sequence
+
+      this.options
+        .onRemoteGamepadState?.(
+          message.state
+        )
+    }
+  }
+
+  private bindGuestChannel(
+    channel: RTCDataChannel
+  ): void {
+    this.channel = channel
+
+    channel.onopen = () => {
+      this.status(
+        'controller DataChannel open; streaming guest controller'
+      )
+
+      channel.send(
+        serializeFriendMessage({
+          type: 'hello',
+          protocolVersion:
+            FRIEND_PROTOCOL_VERSION,
+          sessionId:
+            'f2-direct-p2p-spike',
+          role: 'guest'
+        })
+      )
+
+      this.startGuestControllerPump()
+    }
+
+    channel.onclose = () => {
+      this.status(
+        'controller DataChannel closed'
+      )
+
+      this.stopGuestControllerPump()
+    }
+
+    channel.onerror = (event) => {
+      console.error(
+        '[CaptureLink:F2] Guest controller DataChannel error:',
+        event
+      )
+    }
+  }
+
+  private startGuestControllerPump():
+    void {
+    this.stopGuestControllerPump()
+
+    const pump = (
+      now: number
+    ): void => {
+      this.guestAnimationFrame =
+        window.requestAnimationFrame(
+          pump
+        )
+
+      if (
+        now -
+        this.guestLastSampleAt <
+        GAMEPAD_SAMPLE_INTERVAL_MS
+      ) {
+        return
+      }
+
+      this.guestLastSampleAt = now
+
+      const channel = this.channel
+
+      if (
+        !channel ||
+        channel.readyState !== 'open'
+      ) {
+        return
+      }
+
+      const gamepad =
+        findPhysicalGamepad()
+
+      if (!gamepad) {
+        if (!this.guestHadController) {
+          return
+        }
+
+        this.guestHadController = false
+
+        this.sendGamepadState(
+          createNeutralRemoteState()
+        )
+
+        this.status(
+          'guest controller disconnected'
+        )
+
+        return
+      }
+
+      if (!this.guestHadController) {
+        this.guestHadController = true
+
+        this.status(
+          `guest controller detected: ${gamepad.id}`
+        )
+      }
+
+      this.sendGamepadState(
+        capturePhysicalGamepad(
+          gamepad
+        )
+      )
+    }
+
+    this.guestAnimationFrame =
+      window.requestAnimationFrame(
+        pump
+      )
+  }
+
+  private stopGuestControllerPump():
+    void {
+    if (
+      this.guestAnimationFrame !== null
+    ) {
+      window.cancelAnimationFrame(
+        this.guestAnimationFrame
+      )
+
+      this.guestAnimationFrame = null
+    }
+
+    this.guestLastSampleAt = 0
+  }
+
+  private sendGamepadState(
+    state: FriendGamepadState
+  ): void {
+    const channel = this.channel
+
+    if (
+      !channel ||
+      channel.readyState !== 'open'
+    ) {
+      return
+    }
+
+    this.guestSequence += 1
+
+    channel.send(
+      serializeFriendMessage({
+        type: 'gamepad',
+        sequence:
+          this.guestSequence,
+        state
+      })
+    )
+  }
+
+  private async logSelectedIcePath(
+    peer: RTCPeerConnection
+  ): Promise<void> {
+    try {
+      const report =
+        await peer.getStats()
+
+      let selectedPair:
+        CandidatePairStat | null = null
+
+      report.forEach((stat) => {
+        const candidate =
+          stat as CandidatePairStat
+
+        if (
+          candidate.type ===
+            'candidate-pair' &&
+          candidate.state ===
+            'succeeded' &&
+          candidate.nominated === true
+        ) {
+          selectedPair = candidate
+        }
+      })
+
+      if (!selectedPair) {
+        console.log(
+          '[CaptureLink:F2] No nominated ICE pair found yet.'
+        )
+        return
+      }
+
+      const pair =
+        selectedPair as CandidatePairStat
+
+      const local =
+        pair.localCandidateId
+          ? report.get(
+              pair.localCandidateId
+            ) as CandidateStat | undefined
+          : undefined
+
+      const remote =
+        pair.remoteCandidateId
+          ? report.get(
+              pair.remoteCandidateId
+            ) as CandidateStat | undefined
+          : undefined
+
+      const rttMs =
+        typeof pair.currentRoundTripTime ===
+        'number'
+          ? Math.round(
+              pair.currentRoundTripTime *
+              1000
+            )
+          : null
+
+      console.log(
+        '[CaptureLink:F2] DIRECT ICE PATH',
+        {
+          localCandidateType:
+            local?.candidateType,
+          remoteCandidateType:
+            remote?.candidateType,
+          protocol:
+            local?.protocol,
+          localAddress:
+            local?.address,
+          remoteAddress:
+            remote?.address,
+          roundTripMs:
+            rttMs
+        }
+      )
+
+      this.status(
+        rttMs === null
+          ? 'direct P2P controller path connected'
+          : `direct P2P controller path connected · ${rttMs} ms RTT`
+      )
+    } catch (error) {
+      console.warn(
+        '[CaptureLink:F2] Could not inspect ICE path:',
+        error
+      )
+    }
+  }
+
+  private status(
+    message: string
+  ): void {
+    console.log(
+      `[CaptureLink:F2] ${message}`
+    )
+
+    this.options.onStatus?.(
+      message
+    )
+  }
+}
