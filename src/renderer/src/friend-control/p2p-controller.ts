@@ -619,10 +619,8 @@ export class FriendControllerPeer {
 
   private role: FriendPeerRole | null = null
 
-  private guestAnimationFrame:
+  private guestControllerTimer:
     number | null = null
-
-  private guestLastSampleAt = 0
   private guestSequence = 0
   private guestHadController = false
 
@@ -1786,24 +1784,7 @@ export class FriendControllerPeer {
     void {
     this.stopGuestControllerPump()
 
-    const pump = (
-      now: number
-    ): void => {
-      this.guestAnimationFrame =
-        window.requestAnimationFrame(
-          pump
-        )
-
-      if (
-        now -
-        this.guestLastSampleAt <
-        GAMEPAD_SAMPLE_INTERVAL_MS
-      ) {
-        return
-      }
-
-      this.guestLastSampleAt = now
-
+    const sample = (): void => {
       const channel = this.channel
 
       if (
@@ -1849,25 +1830,34 @@ export class FriendControllerPeer {
       )
     }
 
-    this.guestAnimationFrame =
-      window.requestAnimationFrame(
-        pump
+    /*
+     * Controller capture is intentionally NOT driven by
+     * requestAnimationFrame. Input transport must not depend on
+     * Friend video presentation, frame rendering, or which player
+     * surface currently owns the video.
+     */
+    sample()
+
+    this.guestControllerTimer =
+      window.setInterval(
+        sample,
+        GAMEPAD_SAMPLE_INTERVAL_MS
       )
   }
 
   private stopGuestControllerPump():
     void {
     if (
-      this.guestAnimationFrame !== null
+      this.guestControllerTimer !==
+      null
     ) {
-      window.cancelAnimationFrame(
-        this.guestAnimationFrame
+      window.clearInterval(
+        this.guestControllerTimer
       )
 
-      this.guestAnimationFrame = null
+      this.guestControllerTimer =
+        null
     }
-
-    this.guestLastSampleAt = 0
   }
 
   private sendGamepadState(

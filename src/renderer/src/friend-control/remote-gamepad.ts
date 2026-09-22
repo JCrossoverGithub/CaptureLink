@@ -107,6 +107,64 @@ export function createSyntheticButtonGamepadState(
   return state
 }
 
+export function findPhysicalGamepad(): Gamepad | null {
+  const gamepads =
+    Array.from(navigator.getGamepads())
+
+  return gamepads.find(
+    (gamepad): gamepad is Gamepad =>
+      gamepad !== null &&
+      gamepad.connected
+  ) ?? null
+}
+
+export function capturePhysicalGamepad(
+  gamepad: Gamepad
+): FriendGamepadState {
+  return {
+    id: gamepad.id,
+    index: gamepad.index,
+    timestamp:
+      gamepad.timestamp ||
+      performance.now(),
+    connected: gamepad.connected,
+    mapping: gamepad.mapping,
+
+    axes: Array.from(
+      gamepad.axes
+    ),
+
+    buttons: Array.from(
+      gamepad.buttons,
+      (button) => ({
+        pressed: button.pressed,
+        touched: button.touched,
+        value: button.value
+      })
+    )
+  }
+}
+
+export function friendGamepadStateHasInput(
+  state: FriendGamepadState
+): boolean {
+  const axisActive =
+    state.axes.some(
+      (value) =>
+        Number.isFinite(value) &&
+        Math.abs(value) > 0.08
+    )
+
+  const buttonActive =
+    state.buttons.some(
+      (button) =>
+        button.pressed ||
+        button.value > 0.08
+    )
+
+  return axisActive || buttonActive
+}
+
 export function friendStateToXboxFrame(
   state: FriendGamepadState,
   gamepadIndex = 0

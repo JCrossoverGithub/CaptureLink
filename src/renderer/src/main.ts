@@ -1,8 +1,15 @@
 import {
   RemoteGamepadAdapter,
+  capturePhysicalGamepad,
   createNeutralFriendGamepadState,
-  createSyntheticButtonGamepadState
+  createSyntheticButtonGamepadState,
+  findPhysicalGamepad,
+  friendGamepadStateHasInput
 } from './friend-control/remote-gamepad'
+
+import type {
+  FriendGamepadState
+} from './friend-control/protocol'
 
 import {
   FriendControllerPeer,
@@ -1574,12 +1581,42 @@ let streamBusy = false
 let activeServerId: string | null = null
 let activePlayer: CaptureLinkPlayer | null = null
 let webRtcConnected = false
-let activeGamepad: CaptureLinkGamepad | null = null
 let controllerAttached = false
 
-// F1 research spike: synthetic remote controller.
-let remoteGamepadAdapter: RemoteGamepadAdapter | null = null
-let remoteSyntheticReleaseTimer: number | null = null
+// F4.2.1 unified controller bus.
+//
+// Xbox Remote Play sees one persistent virtual controller at
+// gamepad index 0. Local, Friend, and debug inputs become sources
+// feeding that single output.
+let remoteGamepadAdapter:
+  RemoteGamepadAdapter | null = null
+
+let localControllerTimer:
+  number | null = null
+
+let localControllerPresent = false
+
+let remoteSyntheticReleaseTimer:
+  number | null = null
+
+type MasterControllerSource =
+  | 'local'
+  | 'friend'
+  | 'debug'
+
+type MasterControllerSourceState = {
+  state: FriendGamepadState
+  lastActivityAt: number
+}
+
+const masterControllerSources =
+  new Map<
+    MasterControllerSource,
+    MasterControllerSourceState
+  >()
+
+let masterControllerLastSource:
+  MasterControllerSource | null = null
 
 // F2 research spike: direct CaptureLink-to-CaptureLink WebRTC.
 let friendControllerPeer: FriendControllerPeer | null = null
@@ -1602,6 +1639,294 @@ type CaptureLinkSessionSource =
   | 'friend-guest'
 
 let friendDiagnosticsVisible = true
+
+function friendGamepadStatesDiffer(
+  first: FriendGamepadState,
+  second: FriendGamepadState
+): boolean {
+  if (
+    first.axes.length !==
+      second.axes.length ||
+    first.buttons.length !==
+      second.buttons.length
+  ) {
+    return true
+  }
+
+  for (
+    let index = 0;
+    index < first.axes.length;
+    index += 1
+  ) {
+    if (
+      Math.abs(
+        (first.axes[index] ?? 0) -
+        (second.axes[index] ?? 0)
+      ) > 0.03
+    ) {
+      return true
+    }
+  }
+
+  for (
+    let index = 0;
+    index < first.buttons.length;
+    index += 1
+  ) {
+    const a =
+      first.buttons[index]
+
+    const b =
+      second.buttons[index]
+
+    if (!a || !b) {
+      return true
+    }
+
+    if (
+      a.pressed !== b.pressed ||
+      Math.abs(
+        a.value - b.value
+      ) > 0.08
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function ensureMasterController():
+  RemoteGamepadAdapter | null {
+  if (
+    !activePlayer ||
+    !webRtcConnected
+  ) {
+    return null
+  }
+
+  if (!remoteGamepadAdapter) {
+    remoteGamepadAdapter =
+      new RemoteGamepadAdapter(0)
+
+    remoteGamepadAdapter.attach(
+      activePlayer
+    )
+
+    console.log(
+      '[CaptureLink:F4.2.1] Master Xbox controller attached as gamepad 0'
+    )
+  }
+
+  return remoteGamepadAdapter
+}
+
+function getMasterControllerOutput(): {
+  source: MasterControllerSource | null
+  state: FriendGamepadState
+} {
+  const activeSources =
+    Array.from(
+      masterControllerSources.entries()
+    )
+      .filter(
+        ([, snapshot]) =>
+          friendGamepadStateHasInput(
+            snapshot.state
+          )
+      )
+      .sort(
+        (a, b) =>
+          b[1].lastActivityAt -
+          a[1].lastActivityAt
+      )
+
+  const winner =
+    activeSources[0]
+
+  if (!winner) {
+    return {
+      source: null,
+      state:
+        createNeutralFriendGamepadState()
+    }
+  }
+
+  return {
+    source: winner[0],
+    state: winner[1].state
+  }
+}
+
+function flushMasterController(): void {
+  const adapter =
+    ensureMasterController()
+
+  if (!adapter) {
+    return
+  }
+
+  const output =
+    getMasterControllerOutput()
+
+  if (
+    output.source !==
+    masterControllerLastSource
+  ) {
+    console.log(
+      '[CaptureLink:F4.2.1] Master controller source:',
+      output.source ?? 'neutral'
+    )
+
+    masterControllerLastSource =
+      output.source
+  }
+
+  adapter.updateState(
+    output.state
+  )
+}
+
+function updateMasterControllerSource(
+  source: MasterControllerSource,
+  state: FriendGamepadState
+): void {
+  const previous =
+    masterControllerSources.get(
+      source
+    )
+
+  const changed =
+    !previous ||
+    friendGamepadStatesDiffer(
+      previous.state,
+      state
+    )
+
+  const active =
+    friendGamepadStateHasInput(
+      state
+    )
+
+  masterControllerSources.set(
+    source,
+    {
+      state,
+      lastActivityAt:
+        changed && active
+          ? performance.now()
+          : previous
+              ?.lastActivityAt ??
+            0
+    }
+  )
+
+  flushMasterController()
+}
+
+function clearMasterControllerSource(
+  source: MasterControllerSource
+): void {
+  masterControllerSources.set(
+    source,
+    {
+      state:
+        createNeutralFriendGamepadState(),
+      lastActivityAt: 0
+    }
+  )
+
+  flushMasterController()
+}
+
+function detachMasterController(): void {
+  if (localControllerTimer !== null) {
+    window.clearInterval(
+      localControllerTimer
+    )
+
+    localControllerTimer = null
+  }
+
+  localControllerPresent = false
+
+  masterControllerSources.clear()
+  masterControllerLastSource = null
+
+  remoteGamepadAdapter?.detach()
+  remoteGamepadAdapter = null
+}
+
+function startLocalControllerPump(): void {
+  if (localControllerTimer !== null) {
+    return
+  }
+
+  const sample = (): void => {
+    if (!controllerAttached) {
+      return
+    }
+
+    const gamepad =
+      findPhysicalGamepad()
+
+    if (!gamepad) {
+      if (localControllerPresent) {
+        localControllerPresent = false
+
+        console.log(
+          '[CaptureLink:F4.2.1] Local controller disconnected'
+        )
+
+        clearMasterControllerSource(
+          'local'
+        )
+      }
+
+      return
+    }
+
+    if (!localControllerPresent) {
+      localControllerPresent = true
+
+      console.log(
+        '[CaptureLink:F4.2.1] Local controller detected:',
+        gamepad.id
+      )
+    }
+
+    updateMasterControllerSource(
+      'local',
+      capturePhysicalGamepad(
+        gamepad
+      )
+    )
+  }
+
+  sample()
+
+  localControllerTimer =
+    window.setInterval(
+      sample,
+      16
+    )
+}
+
+function stopLocalControllerPump(): void {
+  if (localControllerTimer !== null) {
+    window.clearInterval(
+      localControllerTimer
+    )
+
+    localControllerTimer = null
+  }
+
+  localControllerPresent = false
+
+  clearMasterControllerSource(
+    'local'
+  )
+}
 
 function getCaptureLinkSessionSource():
   CaptureLinkSessionSource {
@@ -2365,18 +2690,19 @@ function updateMicrophoneButton(): void {
 }
 
 function detachController(): void {
-  if (activeGamepad) {
-    try {
-      activeGamepad.detach()
-    } catch (error) {
-      console.warn('[CaptureLink] Controller detach failed:', error)
-    }
-  }
-
-  activeGamepad = null
   controllerAttached = false
-  setButtonLabel(controllerButton, 'Enable Controller')
-  controllerButton.setAttribute('aria-pressed', 'false')
+
+  stopLocalControllerPump()
+
+  setButtonLabel(
+    controllerButton,
+    'Enable Controller'
+  )
+
+  controllerButton.setAttribute(
+    'aria-pressed',
+    'false'
+  )
 }
 
 function stopMicrophone(): void {
@@ -3669,19 +3995,22 @@ function updateInteractiveState(): void {
       'true'
     )
   } else if (friendHostActive) {
-    controllerButton.disabled = true
+    controllerButton.disabled =
+      !xboxMediaReady
 
     setButtonLabel(
       controllerButton,
-      'Friend Controller Host'
+      controllerAttached
+        ? 'Disable Controller'
+        : 'Enable Controller'
     )
 
     controllerButton.title =
-      'The Friend controller is controlling this Xbox'
+      'Toggle this PC as a controller source. Friend input can take over automatically.'
 
     controllerButton.setAttribute(
       'aria-pressed',
-      'true'
+      String(controllerAttached)
     )
   } else {
     controllerButton.disabled =
@@ -4052,6 +4381,7 @@ function destroyPlayer(): void {
   detachController()
   closeFriendControllerPeer()
   detachRemoteSyntheticController()
+  detachMasterController()
   stopMicrophoneMonitor()
   stopMicrophone()
   webRtcConnected = false
@@ -4340,47 +4670,49 @@ async function connectToConsole(
 }
 
 function toggleController(): void {
-  if (!activePlayer || !webRtcConnected) {
+  if (
+    !activePlayer ||
+    !webRtcConnected
+  ) {
     return
   }
 
   if (controllerAttached) {
     detachController()
-    setStreamStatus('Controller input disabled')
+
+    setStreamStatus(
+      'Local controller source disabled'
+    )
+
     updateInteractiveState()
     return
   }
 
-  const gamepadConstructor = getPlayerExports()?.Gamepad
+  if (!ensureMasterController()) {
+    setStreamStatus(
+      'Master controller could not attach to Xbox Remote Play'
+    )
 
-  if (!gamepadConstructor) {
-    setStreamStatus('Controller API is unavailable in the Xbox player bundle')
     return
   }
 
-  try {
-    const gamepad = new gamepadConstructor(0, {
-      enable_keyboard: true,
-      enable_gamepad: true,
-      enable_vibration: true,
-      gamepad_force_capture: true
-    })
+  controllerAttached = true
 
-    gamepad.attach(activePlayer)
-    activeGamepad = gamepad
-    controllerAttached = true
-    setButtonLabel(controllerButton, 'Disable Controller')
-    controllerButton.setAttribute('aria-pressed', 'true')
-    setStreamStatus('Controller and keyboard input enabled')
-  } catch (error) {
-    console.error('[CaptureLink] Controller attach failed:', error)
-    detachController()
-    setStreamStatus(
-      error instanceof Error
-        ? `Controller failed: ${error.message}`
-        : 'Controller input failed'
-    )
-  }
+  startLocalControllerPump()
+
+  setButtonLabel(
+    controllerButton,
+    'Disable Controller'
+  )
+
+  controllerButton.setAttribute(
+    'aria-pressed',
+    'true'
+  )
+
+  setStreamStatus(
+    'Local controller source enabled'
+  )
 
   updateInteractiveState()
 }
@@ -4490,57 +4822,39 @@ async function toggleMicrophone(): Promise<void> {
 // Both paths currently target Xbox controller index 0.
 
 function detachRemoteSyntheticController(): void {
-  if (remoteSyntheticReleaseTimer !== null) {
-    window.clearTimeout(remoteSyntheticReleaseTimer)
+  if (
+    remoteSyntheticReleaseTimer !==
+    null
+  ) {
+    window.clearTimeout(
+      remoteSyntheticReleaseTimer
+    )
+
     remoteSyntheticReleaseTimer = null
   }
 
-  remoteGamepadAdapter?.detach()
-  remoteGamepadAdapter = null
-}
-
-function getRemoteSyntheticController(): RemoteGamepadAdapter | null {
-  if (!activePlayer || !webRtcConnected) {
-    setStreamStatus(
-      'F1 remote input test requires an active Xbox Remote Play session'
-    )
-    return null
-  }
-
-  if (controllerAttached) {
-    setStreamStatus(
-      'Disable the normal local controller before using the F1 remote input test'
-    )
-    return null
-  }
-
-  if (!remoteGamepadAdapter) {
-    remoteGamepadAdapter = new RemoteGamepadAdapter(0)
-    remoteGamepadAdapter.attach(activePlayer)
-
-    console.log(
-      '[CaptureLink:F1] Synthetic remote controller attached as Xbox gamepad 0'
-    )
-  }
-
-  return remoteGamepadAdapter
+  clearMasterControllerSource(
+    'debug'
+  )
 }
 
 function pulseRemoteSyntheticButton(
   buttonIndex: number,
   label: string
 ): void {
-  const adapter = getRemoteSyntheticController()
+  if (
+    !activePlayer ||
+    !webRtcConnected
+  ) {
+    setStreamStatus(
+      'Debug controller input requires an active Xbox Remote Play session'
+    )
 
-  if (!adapter) {
     return
   }
 
-  if (remoteSyntheticReleaseTimer !== null) {
-    window.clearTimeout(remoteSyntheticReleaseTimer)
-  }
-
-  adapter.updateState(
+  updateMasterControllerSource(
+    'debug',
     createSyntheticButtonGamepadState(
       buttonIndex,
       1
@@ -4548,23 +4862,34 @@ function pulseRemoteSyntheticButton(
   )
 
   console.log(
-    `[CaptureLink:F1] Synthetic remote button pressed: ${label}`
+    `[CaptureLink:F4.2.1] Debug controller button: ${label}`
   )
 
   setStreamStatus(
-    `F1 synthetic remote controller: ${label}`
+    `Master controller debug input: ${label}`
   )
 
-  remoteSyntheticReleaseTimer = window.setTimeout(
-    () => {
-      adapter.updateState(
-        createNeutralFriendGamepadState()
-      )
+  if (
+    remoteSyntheticReleaseTimer !==
+    null
+  ) {
+    window.clearTimeout(
+      remoteSyntheticReleaseTimer
+    )
+  }
 
-      remoteSyntheticReleaseTimer = null
-    },
-    160
-  )
+  remoteSyntheticReleaseTimer =
+    window.setTimeout(
+      () => {
+        clearMasterControllerSource(
+          'debug'
+        )
+
+        remoteSyntheticReleaseTimer =
+          null
+      },
+      160
+    )
 }
 
 document.addEventListener(
@@ -5097,20 +5422,16 @@ function makeFriendControllerPeer(): FriendControllerPeer {
         return
       }
 
-      const adapter =
-        getRemoteSyntheticController()
-
-      if (!adapter) {
-        return
-      }
-
-      adapter.updateState(state)
+      updateMasterControllerSource(
+        'friend',
+        state
+      )
     },
 
     onRemoteControlEnded: () => {
-      if (friendPeerRole === 'host') {
-        detachRemoteSyntheticController()
-      }
+      clearMasterControllerSource(
+        'friend'
+      )
     },
 
     onDiagnostics: (diagnostics) => {
@@ -5240,13 +5561,6 @@ async function createFriendHostOffer(): Promise<void> {
     return
   }
 
-  if (controllerAttached) {
-    setStreamStatus(
-      'Disable the normal local CaptureLink controller before hosting F2'
-    )
-    return
-  }
-
   const hostMedia =
     getFriendHostMediaStream()
 
@@ -5262,6 +5576,9 @@ async function createFriendHostOffer(): Promise<void> {
   friendPeerRole = 'host'
   friendControllerPeer =
     makeFriendControllerPeer()
+
+  ensureMasterController()
+  updateInteractiveState()
 
   try {
     const offer =
