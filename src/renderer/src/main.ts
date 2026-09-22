@@ -781,6 +781,47 @@ root.innerHTML = `
                 >
                   Choose how Friend input should reach the Xbox.
                 </p>
+
+                <div class="friend-direct-divider"></div>
+
+                <div class="friend-direct-header">
+                  <strong>Direct Invite</strong>
+                  <span>No server required</span>
+                </div>
+
+                <div class="friend-direct-actions">
+                  <button
+                    id="friend-direct-host"
+                    type="button"
+                    class="friend-direct-button friend-direct-button--primary"
+                  >
+                    Host Direct
+                  </button>
+
+                  <button
+                    id="friend-direct-join"
+                    type="button"
+                    class="friend-direct-button"
+                  >
+                    Join from Clipboard
+                  </button>
+
+                  <button
+                    id="friend-direct-cancel"
+                    type="button"
+                    class="friend-direct-button"
+                    hidden
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <p
+                  id="friend-direct-status"
+                  class="friend-direct-status"
+                >
+                  Exchange one invite and one response directly with your friend.
+                </p>
               </article>
 
               <article class="rail-card rail-card--recording">
@@ -1544,6 +1585,26 @@ const friendControllerModeTip =
     '#friend-controller-mode-tip'
   )
 
+const friendDirectHostButton =
+  requireElement<HTMLButtonElement>(
+    '#friend-direct-host'
+  )
+
+const friendDirectJoinButton =
+  requireElement<HTMLButtonElement>(
+    '#friend-direct-join'
+  )
+
+const friendDirectCancelButton =
+  requireElement<HTMLButtonElement>(
+    '#friend-direct-cancel'
+  )
+
+const friendDirectStatus =
+  requireElement<HTMLElement>(
+    '#friend-direct-status'
+  )
+
 const railLastRecordingName =
   requireElement<HTMLElement>('#rail-last-recording-name')
 const railLastRecordingMeta =
@@ -1730,6 +1791,15 @@ let masterControllerLastSource:
 // F2 research spike: direct CaptureLink-to-CaptureLink WebRTC.
 let friendControllerPeer: FriendControllerPeer | null = null
 let friendPeerRole: 'host' | 'guest' | null = null
+
+let friendDirectResponseMonitor:
+  number | null = null
+
+let friendDirectClipboardBusy =
+  false
+
+let friendDirectLastClipboard =
+  ''
 
 let friendGuestMediaVideo: HTMLVideoElement | null = null
 
@@ -5506,6 +5576,7 @@ function updateFriendDiagnosticsPanel(
 }
 
 function closeFriendControllerPeer(): void {
+  stopFriendDirectResponseMonitor()
   stopSharedHostControllerPump()
 
   friendControllerPeer?.close()
@@ -6450,6 +6521,533 @@ function makeFriendControllerPeer(): FriendControllerPeer {
   })
 }
 
+const DIRECT_FRIEND_PREFIX =
+  'CAPTURELINK-DIRECT-V1:'
+
+type DirectFriendInvite = {
+  version: 1
+  type: 'invite'
+  controllerMode: FriendControllerMode
+  offer: string
+}
+
+type DirectFriendResponse = {
+  version: 1
+  type: 'response'
+  answer: string
+}
+
+type DirectFriendEnvelope =
+  | DirectFriendInvite
+  | DirectFriendResponse
+
+function encodeDirectFriendEnvelope(
+  envelope: DirectFriendEnvelope
+): string {
+  return (
+    DIRECT_FRIEND_PREFIX +
+    btoa(
+      JSON.stringify(
+        envelope
+      )
+    )
+  )
+}
+
+function decodeDirectFriendEnvelope(
+  value: string
+): DirectFriendEnvelope {
+  const trimmed =
+    value.trim()
+
+  if (
+    !trimmed.startsWith(
+      DIRECT_FRIEND_PREFIX
+    )
+  ) {
+    throw new Error(
+      'Clipboard does not contain a CaptureLink Direct Invite.'
+    )
+  }
+
+  const encoded =
+    trimmed.slice(
+      DIRECT_FRIEND_PREFIX.length
+    )
+
+  let parsed: unknown
+
+  try {
+    parsed =
+      JSON.parse(
+        atob(encoded)
+      )
+  } catch {
+    throw new Error(
+      'The CaptureLink Direct Invite is invalid.'
+    )
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== 'object'
+  ) {
+    throw new Error(
+      'The CaptureLink Direct Invite is malformed.'
+    )
+  }
+
+  const candidate =
+    parsed as Partial<
+      DirectFriendEnvelope
+    >
+
+  if (
+    candidate.version !== 1
+  ) {
+    throw new Error(
+      'Unsupported CaptureLink Direct Invite version.'
+    )
+  }
+
+  if (
+    candidate.type === 'invite'
+  ) {
+    const invite =
+      candidate as Partial<
+        DirectFriendInvite
+      >
+
+    if (
+      typeof invite.offer !==
+        'string' ||
+      (
+        invite.controllerMode !==
+          'shared' &&
+        invite.controllerMode !==
+          'player2'
+      )
+    ) {
+      throw new Error(
+        'The CaptureLink Direct Invite is malformed.'
+      )
+    }
+
+    return {
+      version: 1,
+      type: 'invite',
+      controllerMode:
+        invite.controllerMode,
+      offer:
+        invite.offer
+    }
+  }
+
+  if (
+    candidate.type === 'response'
+  ) {
+    const response =
+      candidate as Partial<
+        DirectFriendResponse
+      >
+
+    if (
+      typeof response.answer !==
+        'string'
+    ) {
+      throw new Error(
+        'The CaptureLink Direct Response is malformed.'
+      )
+    }
+
+    return {
+      version: 1,
+      type: 'response',
+      answer:
+        response.answer
+    }
+  }
+
+  throw new Error(
+    'Unsupported CaptureLink Direct Invite type.'
+  )
+}
+
+function stopFriendDirectResponseMonitor():
+  void {
+  if (
+    friendDirectResponseMonitor !==
+    null
+  ) {
+    window.clearInterval(
+      friendDirectResponseMonitor
+    )
+
+    friendDirectResponseMonitor =
+      null
+  }
+
+  friendDirectClipboardBusy =
+    false
+
+  friendDirectLastClipboard =
+    ''
+}
+
+async function checkFriendDirectResponseClipboard():
+  Promise<void> {
+  if (
+    friendDirectClipboardBusy ||
+    friendPeerRole !== 'host' ||
+    !friendControllerPeer
+  ) {
+    return
+  }
+
+  friendDirectClipboardBusy =
+    true
+
+  try {
+    const clipboard =
+      (
+        await window.captureLink
+          .readFriendClipboard()
+      ).trim()
+
+    if (
+      !clipboard ||
+      clipboard ===
+        friendDirectLastClipboard
+    ) {
+      return
+    }
+
+    friendDirectLastClipboard =
+      clipboard
+
+    let envelope:
+      DirectFriendEnvelope
+
+    try {
+      envelope =
+        decodeDirectFriendEnvelope(
+          clipboard
+        )
+    } catch {
+      /*
+       * The user may copy normal text while waiting.
+       * Ignore anything that is not a Direct Response.
+       */
+      return
+    }
+
+    if (
+      envelope.type !==
+      'response'
+    ) {
+      return
+    }
+
+    friendDirectStatus.textContent =
+      'Friend response detected. Connecting…'
+
+    setStreamStatus(
+      'Friend response detected · establishing Direct P2P connection'
+    )
+
+    await friendControllerPeer
+      .acceptGuestAnswer(
+        envelope.answer
+      )
+
+    stopFriendDirectResponseMonitor()
+
+    friendDirectStatus.textContent =
+      'Connected directly to Friend.'
+
+    setStreamStatus(
+      'Friend connected · Direct P2P'
+    )
+  } catch (error) {
+    console.error(
+      '[CaptureLink:Direct] Could not accept Friend response:',
+      error
+    )
+
+    friendDirectStatus.textContent =
+      error instanceof Error
+        ? error.message
+        : 'Could not accept Friend response.'
+  } finally {
+    friendDirectClipboardBusy =
+      false
+  }
+}
+
+function startFriendDirectResponseMonitor():
+  void {
+  stopFriendDirectResponseMonitor()
+
+  friendDirectStatus.textContent =
+    'Invite copied. Send it to your friend, then copy their response. CaptureLink will detect it automatically.'
+
+  friendDirectResponseMonitor =
+    window.setInterval(
+      () => {
+        void checkFriendDirectResponseClipboard()
+      },
+      750
+    )
+}
+
+async function hostDirectFriendSession():
+  Promise<void> {
+  if (
+    !activePlayer ||
+    !webRtcConnected
+  ) {
+    setStreamStatus(
+      'Direct Host requires an active Xbox Remote Play session'
+    )
+    return
+  }
+
+  if (controllerAttached) {
+    setStreamStatus(
+      'Disable the normal CaptureLink controller before hosting Friend control'
+    )
+    return
+  }
+
+  const hostMedia =
+    getFriendHostMediaStream()
+
+  if (!hostMedia) {
+    setStreamStatus(
+      'Direct Host requires live Xbox video'
+    )
+    return
+  }
+
+  friendDirectHostButton.disabled =
+    true
+
+  friendDirectJoinButton.disabled =
+    true
+
+  friendDirectStatus.textContent =
+    'Creating Direct Invite…'
+
+  try {
+    closeFriendControllerPeer()
+
+    activeFriendControllerMode =
+      friendControllerMode
+
+    friendHostControllerReady =
+      false
+
+    friendRemoteControllerReady =
+      false
+
+    friendPeerRole =
+      'host'
+
+    updateFriendControllerModeUi()
+
+    friendControllerPeer =
+      makeFriendControllerPeer()
+
+    startSharedHostControllerPump()
+
+    updateInteractiveState()
+
+    const offer =
+      await friendControllerPeer
+        .createHostOffer(
+          hostMedia
+        )
+
+    const invite =
+      encodeDirectFriendEnvelope({
+        version: 1,
+        type: 'invite',
+        controllerMode:
+          getEffectiveFriendControllerMode(),
+        offer
+      })
+
+    await writeFriendClipboard(
+      invite,
+      'Direct Friend invite'
+    )
+
+    friendDirectCancelButton.hidden =
+      false
+
+    setStreamStatus(
+      'Direct Friend invite copied to clipboard'
+    )
+
+    startFriendDirectResponseMonitor()
+  } catch (error) {
+    console.error(
+      '[CaptureLink:Direct] Host failed:',
+      error
+    )
+
+    closeFriendControllerPeer()
+
+    friendDirectStatus.textContent =
+      error instanceof Error
+        ? error.message
+        : 'Could not create Direct Friend invite.'
+  } finally {
+    if (
+      friendPeerRole === null
+    ) {
+      friendDirectHostButton.disabled =
+        false
+
+      friendDirectJoinButton.disabled =
+        false
+    }
+  }
+}
+
+async function joinDirectFriendSession():
+  Promise<void> {
+  if (
+    activePlayer ||
+    webRtcConnected
+  ) {
+    setStreamStatus(
+      'Disconnect the local Xbox session before joining a Friend stream'
+    )
+    return
+  }
+
+  friendDirectHostButton.disabled =
+    true
+
+  friendDirectJoinButton.disabled =
+    true
+
+  friendDirectStatus.textContent =
+    'Reading Direct Invite…'
+
+  try {
+    const clipboard =
+      (
+        await window.captureLink
+          .readFriendClipboard()
+      ).trim()
+
+    const envelope =
+      decodeDirectFriendEnvelope(
+        clipboard
+      )
+
+    if (
+      envelope.type !==
+      'invite'
+    ) {
+      throw new Error(
+        'Clipboard contains a Friend response, not an invite.'
+      )
+    }
+
+    closeFriendControllerPeer()
+
+    activeFriendControllerMode =
+      envelope.controllerMode
+
+    friendPeerRole =
+      'guest'
+
+    updateFriendControllerModeUi()
+
+    friendControllerPeer =
+      makeFriendControllerPeer()
+
+    updateInteractiveState()
+
+    friendDirectStatus.textContent =
+      'Creating response…'
+
+    const answer =
+      await friendControllerPeer
+        .acceptHostOfferAndCreateAnswer(
+          envelope.offer
+        )
+
+    const response =
+      encodeDirectFriendEnvelope({
+        version: 1,
+        type: 'response',
+        answer
+      })
+
+    await writeFriendClipboard(
+      response,
+      'Direct Friend response'
+    )
+
+    friendDirectCancelButton.hidden =
+      false
+
+    friendDirectStatus.textContent =
+      'Response copied. Send it back to the host.'
+
+    setStreamStatus(
+      'Direct Friend response copied · send it to the host'
+    )
+  } catch (error) {
+    console.error(
+      '[CaptureLink:Direct] Join failed:',
+      error
+    )
+
+    closeFriendControllerPeer()
+
+    friendDirectStatus.textContent =
+      error instanceof Error
+        ? error.message
+        : 'Could not join Direct Friend session.'
+
+    friendDirectHostButton.disabled =
+      false
+
+    friendDirectJoinButton.disabled =
+      false
+  }
+}
+
+function cancelDirectFriendSession():
+  void {
+  stopFriendDirectResponseMonitor()
+
+  closeFriendControllerPeer()
+
+  detachRemoteSyntheticController()
+
+  friendDirectCancelButton.hidden =
+    true
+
+  friendDirectHostButton.disabled =
+    false
+
+  friendDirectJoinButton.disabled =
+    false
+
+  friendDirectStatus.textContent =
+    'Exchange one invite and one response directly with your friend.'
+
+  setStreamStatus(
+    'Direct Friend session cancelled'
+  )
+}
+
 async function writeFriendClipboard(
   value: string,
   description: string
@@ -6742,6 +7340,27 @@ document.addEventListener(
     }
   },
   true
+)
+
+friendDirectHostButton.addEventListener(
+  'click',
+  () => {
+    void hostDirectFriendSession()
+  }
+)
+
+friendDirectJoinButton.addEventListener(
+  'click',
+  () => {
+    void joinDirectFriendSession()
+  }
+)
+
+friendDirectCancelButton.addEventListener(
+  'click',
+  () => {
+    cancelDirectFriendSession()
+  }
 )
 
 controllerButton.addEventListener('click', () => {
