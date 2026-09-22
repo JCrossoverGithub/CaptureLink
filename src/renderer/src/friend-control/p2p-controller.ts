@@ -345,38 +345,152 @@ function createNeutralRemoteState(): FriendGamepadState {
   }
 }
 
-function findPhysicalGamepad(): Gamepad | null {
-  const connectedGamepads =
+function gamepadHasUsableShape(
+  gamepad: Gamepad
+): boolean {
+  return (
+    gamepad.connected &&
+    gamepad.axes.length >= 4 &&
+    gamepad.buttons.length >= 12
+  )
+}
+
+function gamepadHasMeaningfulActivity(
+  gamepad: Gamepad
+): boolean {
+  return (
+    Array.from(
+      gamepad.axes
+    ).some(
+      (value) =>
+        Number.isFinite(value) &&
+        Math.abs(value) > 0.18
+    ) ||
+    Array.from(
+      gamepad.buttons
+    ).some(
+      (button) =>
+        button.pressed ||
+        button.value > 0.15
+    )
+  )
+}
+
+function gamepadCompatibilityScore(
+  gamepad: Gamepad
+): number {
+  let score = 0
+
+  if (
+    gamepad.mapping ===
+    'standard'
+  ) {
+    score += 1000
+  }
+
+  if (
+    /xbox|xinput|dualsense|dualshock|wireless controller|8bitdo|gamepad|controller/i
+      .test(gamepad.id)
+  ) {
+    score += 250
+  }
+
+  if (
+    gamepadHasMeaningfulActivity(
+      gamepad
+    )
+  ) {
+    score += 5000
+  }
+
+  score +=
+    Math.min(
+      gamepad.buttons.length,
+      32
+    )
+
+  score +=
+    Math.min(
+      gamepad.axes.length,
+      16
+    )
+
+  return score
+}
+
+function findPhysicalGamepad(
+  preferredId: string | null = null,
+  preferredIndex: number | null = null
+): Gamepad | null {
+  const connected =
     Array.from(
       navigator.getGamepads()
     ).filter(
       (gamepad): gamepad is Gamepad =>
         gamepad !== null &&
-        gamepad.connected
+        gamepadHasUsableShape(
+          gamepad
+        )
     )
 
-  if (connectedGamepads.length === 0) {
+  if (connected.length === 0) {
     return null
   }
 
-  /*
-   * Prefer controllers Chromium has normalized to the W3C
-   * "standard" layout.
-   *
-   * This includes common Xbox controllers whether Windows
-   * receives them through USB or Bluetooth, and also allows
-   * other compatible controllers to use the same CaptureLink
-   * controller transport.
-   */
-  const standardGamepad =
-    connectedGamepads.find(
-      (gamepad) =>
-        gamepad.mapping === 'standard'
-    )
+  if (preferredId !== null) {
+    const exact =
+      connected.find(
+        (gamepad) =>
+          gamepad.id ===
+            preferredId &&
+          (
+            preferredIndex === null ||
+            gamepad.index ===
+              preferredIndex
+          )
+      )
+
+    if (exact) {
+      return exact
+    }
+
+    const sameDevice =
+      connected.find(
+        (gamepad) =>
+          gamepad.id ===
+          preferredId
+      )
+
+    if (sameDevice) {
+      return sameDevice
+    }
+  }
 
   return (
-    standardGamepad ??
-    connectedGamepads[0] ??
+    connected
+      .slice()
+      .sort(
+        (first, second) => {
+          const scoreDifference =
+            gamepadCompatibilityScore(
+              second
+            ) -
+            gamepadCompatibilityScore(
+              first
+            )
+
+          if (
+            scoreDifference !== 0
+          ) {
+            return scoreDifference
+          }
+
+          return (
+            first.index -
+            second.index
+          )
+        }
+      )[0] ??
     null
   )
 }
@@ -411,24 +525,92 @@ window.addEventListener(
 function capturePhysicalGamepad(
   gamepad: Gamepad
 ): FriendGamepadState {
+  const axes =
+    Array.from(
+      {
+        length: 4
+      },
+      (_, index) => {
+        const value =
+          gamepad.axes[index]
+
+        if (
+          typeof value !== 'number' ||
+          !Number.isFinite(value)
+        ) {
+          return 0
+        }
+
+        return Math.min(
+          1,
+          Math.max(
+            -1,
+            value
+          )
+        )
+      }
+    )
+
+  const buttons =
+    Array.from(
+      {
+        length: 17
+      },
+      (_, index) => {
+        const button =
+          gamepad.buttons[index]
+
+        if (!button) {
+          return {
+            pressed: false,
+            touched: false,
+            value: 0
+          }
+        }
+
+        const value =
+          Number.isFinite(
+            button.value
+          )
+            ? Math.min(
+                1,
+                Math.max(
+                  0,
+                  button.value
+                )
+              )
+            : (
+                button.pressed
+                  ? 1
+                  : 0
+              )
+
+        return {
+          pressed:
+            button.pressed ||
+            value > 0.5,
+
+          touched:
+            button.touched ||
+            value > 0,
+
+          value
+        }
+      }
+    )
+
   return {
     id: gamepad.id,
     index: gamepad.index,
     timestamp:
-      gamepad.timestamp || performance.now(),
-    connected: gamepad.connected,
-    mapping: gamepad.mapping,
-
-    axes: Array.from(gamepad.axes),
-
-    buttons: Array.from(
-      gamepad.buttons,
-      (button) => ({
-        pressed: button.pressed,
-        touched: button.touched,
-        value: button.value
-      })
-    )
+      gamepad.timestamp ||
+      performance.now(),
+    connected:
+      gamepad.connected,
+    mapping:
+      gamepad.mapping,
+    axes,
+    buttons
   }
 }
 
@@ -675,6 +857,12 @@ export class FriendControllerPeer {
     number | null = null
   private guestSequence = 0
   private guestHadController = false
+
+  private guestGamepadId:
+    string | null = null
+
+  private guestGamepadIndex:
+    number | null = null
 
   private lastRemoteSequence = -1
 
@@ -1052,6 +1240,8 @@ export class FriendControllerPeer {
     this.lastRemoteSequence = -1
     this.guestSequence = 0
     this.guestHadController = false
+    this.guestGamepadId = null
+    this.guestGamepadIndex = null
   }
 
   private startMediaDiagnostics(): void {
@@ -1799,7 +1989,7 @@ export class FriendControllerPeer {
 
     channel.onopen = () => {
       this.status(
-        'controller DataChannel open; streaming guest controller'
+        'controller DataChannel open; press any button on the Windows-connected controller'
       )
 
       channel.send(
@@ -1837,7 +2027,8 @@ export class FriendControllerPeer {
     this.stopGuestControllerPump()
 
     const sample = (): void => {
-      const channel = this.channel
+      const channel =
+        this.channel
 
       if (
         !channel ||
@@ -1847,32 +2038,86 @@ export class FriendControllerPeer {
       }
 
       const gamepad =
-        findPhysicalGamepad()
+        findPhysicalGamepad(
+          this.guestGamepadId,
+          this.guestGamepadIndex
+        )
 
       if (!gamepad) {
         if (!this.guestHadController) {
           return
         }
 
-        this.guestHadController = false
+        const previousId =
+          this.guestGamepadId
+
+        this.guestHadController =
+          false
+
+        this.guestGamepadId =
+          null
+
+        this.guestGamepadIndex =
+          null
 
         this.sendGamepadState(
           createNeutralRemoteState()
         )
 
         this.status(
-          'guest controller disconnected'
+          previousId
+            ? `guest controller disconnected: ${previousId} · waiting for reconnect`
+            : 'guest controller disconnected · waiting for reconnect'
         )
 
         return
       }
 
-      if (!this.guestHadController) {
-        this.guestHadController = true
+      const deviceChanged =
+        !this.guestHadController ||
+        this.guestGamepadId !==
+          gamepad.id ||
+        this.guestGamepadIndex !==
+          gamepad.index
+
+      this.guestHadController =
+        true
+
+      this.guestGamepadId =
+        gamepad.id
+
+      this.guestGamepadIndex =
+        gamepad.index
+
+      if (deviceChanged) {
+        const mapping =
+          gamepad.mapping ===
+            'standard'
+            ? 'standard mapping'
+            : 'non-standard mapping'
 
         this.status(
-          `guest controller detected: ${gamepad.id}`
+          `guest controller detected: ${gamepad.id} · ${mapping}`
         )
+
+        if (
+          gamepad.mapping !==
+          'standard'
+        ) {
+          console.warn(
+            '[CaptureLink:Controller] Controller does not expose the standard browser mapping; button compatibility may vary:',
+            {
+              id:
+                gamepad.id,
+              index:
+                gamepad.index,
+              buttons:
+                gamepad.buttons.length,
+              axes:
+                gamepad.axes.length
+            }
+          )
+        }
       }
 
       this.sendGamepadState(
@@ -1883,10 +2128,11 @@ export class FriendControllerPeer {
     }
 
     /*
-     * Controller capture is intentionally NOT driven by
-     * requestAnimationFrame. Input transport must not depend on
-     * Friend video presentation, frame rendering, or which player
-     * surface currently owns the video.
+     * Poll independently of rendering/focus.
+     *
+     * This is important for Bluetooth controllers and for Friend
+     * sessions where the video surface may not currently have
+     * animation-frame ownership.
      */
     sample()
 

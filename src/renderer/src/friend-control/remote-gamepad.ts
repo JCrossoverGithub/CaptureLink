@@ -107,41 +107,253 @@ export function createSyntheticButtonGamepadState(
   return state
 }
 
-export function findPhysicalGamepad(): Gamepad | null {
-  const gamepads =
-    Array.from(navigator.getGamepads())
+function gamepadHasUsableShape(
+  gamepad: Gamepad
+): boolean {
+  return (
+    gamepad.connected &&
+    gamepad.axes.length >= 4 &&
+    gamepad.buttons.length >= 12
+  )
+}
 
-  return gamepads.find(
-    (gamepad): gamepad is Gamepad =>
-      gamepad !== null &&
-      gamepad.connected
-  ) ?? null
+function gamepadHasMeaningfulActivity(
+  gamepad: Gamepad
+): boolean {
+  const activeAxis =
+    Array.from(gamepad.axes).some(
+      (value) =>
+        Number.isFinite(value) &&
+        Math.abs(value) > 0.18
+    )
+
+  const activeButton =
+    Array.from(gamepad.buttons).some(
+      (button) =>
+        button.pressed ||
+        button.value > 0.15
+    )
+
+  return (
+    activeAxis ||
+    activeButton
+  )
+}
+
+function gamepadCompatibilityScore(
+  gamepad: Gamepad
+): number {
+  let score = 0
+
+  /*
+   * Chromium's standard mapping is the strongest signal that
+   * CaptureLink's Xbox-style button indices are safe to use.
+   */
+  if (gamepad.mapping === 'standard') {
+    score += 1000
+  }
+
+  /*
+   * Prefer common physical controllers over generic/virtual
+   * devices when Windows exposes multiple Gamepad API entries.
+   */
+  if (
+    /xbox|xinput|dualsense|dualshock|wireless controller|8bitdo|gamepad|controller/i
+      .test(gamepad.id)
+  ) {
+    score += 250
+  }
+
+  /*
+   * A controller the user is actively touching should beat an
+   * idle virtual controller or stale device.
+   */
+  if (
+    gamepadHasMeaningfulActivity(
+      gamepad
+    )
+  ) {
+    score += 5000
+  }
+
+  score +=
+    Math.min(
+      gamepad.buttons.length,
+      32
+    )
+
+  score +=
+    Math.min(
+      gamepad.axes.length,
+      16
+    )
+
+  return score
+}
+
+export function findPhysicalGamepad(
+  preferredId: string | null = null,
+  preferredIndex: number | null = null
+): Gamepad | null {
+  const connected =
+    Array.from(
+      navigator.getGamepads()
+    ).filter(
+      (gamepad): gamepad is Gamepad =>
+        gamepad !== null &&
+        gamepadHasUsableShape(
+          gamepad
+        )
+    )
+
+  if (connected.length === 0) {
+    return null
+  }
+
+  /*
+   * Stick to the device already selected for this session.
+   * Bluetooth reconnects may receive a new browser index, so
+   * fall back to matching the controller ID as well.
+   */
+  if (preferredId !== null) {
+    const exact =
+      connected.find(
+        (gamepad) =>
+          gamepad.id ===
+            preferredId &&
+          (
+            preferredIndex === null ||
+            gamepad.index ===
+              preferredIndex
+          )
+      )
+
+    if (exact) {
+      return exact
+    }
+
+    const sameDevice =
+      connected.find(
+        (gamepad) =>
+          gamepad.id ===
+          preferredId
+      )
+
+    if (sameDevice) {
+      return sameDevice
+    }
+  }
+
+  return (
+    connected
+      .slice()
+      .sort(
+        (first, second) => {
+          const scoreDifference =
+            gamepadCompatibilityScore(
+              second
+            ) -
+            gamepadCompatibilityScore(
+              first
+            )
+
+          if (
+            scoreDifference !== 0
+          ) {
+            return scoreDifference
+          }
+
+          return (
+            first.index -
+            second.index
+          )
+        }
+      )[0] ??
+    null
+  )
 }
 
 export function capturePhysicalGamepad(
   gamepad: Gamepad
 ): FriendGamepadState {
+  const axes =
+    Array.from(
+      {
+        length:
+          STANDARD_AXIS_COUNT
+      },
+      (_, index) => {
+        const value =
+          gamepad.axes[index]
+
+        return (
+          typeof value === 'number' &&
+          Number.isFinite(value)
+        )
+          ? clamp(
+              value,
+              -1,
+              1
+            )
+          : 0
+      }
+    )
+
+  const buttons =
+    Array.from(
+      {
+        length:
+          STANDARD_BUTTON_COUNT
+      },
+      (_, index) => {
+        const button =
+          gamepad.buttons[index]
+
+        if (!button) {
+          return makeButton()
+        }
+
+        const value =
+          Number.isFinite(
+            button.value
+          )
+            ? clamp(
+                button.value,
+                0,
+                1
+              )
+            : (
+                button.pressed
+                  ? 1
+                  : 0
+              )
+
+        return {
+          pressed:
+            button.pressed ||
+            value > 0.5,
+
+          touched:
+            button.touched ||
+            value > 0,
+
+          value
+        }
+      }
+    )
+
   return {
     id: gamepad.id,
     index: gamepad.index,
     timestamp:
       gamepad.timestamp ||
       performance.now(),
-    connected: gamepad.connected,
-    mapping: gamepad.mapping,
-
-    axes: Array.from(
-      gamepad.axes
-    ),
-
-    buttons: Array.from(
-      gamepad.buttons,
-      (button) => ({
-        pressed: button.pressed,
-        touched: button.touched,
-        value: button.value
-      })
-    )
+    connected:
+      gamepad.connected,
+    mapping:
+      gamepad.mapping,
+    axes,
+    buttons
   }
 }
 
