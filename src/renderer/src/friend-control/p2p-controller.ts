@@ -346,15 +346,67 @@ function createNeutralRemoteState(): FriendGamepadState {
 }
 
 function findPhysicalGamepad(): Gamepad | null {
-  const gamepads =
-    Array.from(navigator.getGamepads())
+  const connectedGamepads =
+    Array.from(
+      navigator.getGamepads()
+    ).filter(
+      (gamepad): gamepad is Gamepad =>
+        gamepad !== null &&
+        gamepad.connected
+    )
 
-  return gamepads.find(
-    (gamepad): gamepad is Gamepad =>
-      gamepad !== null &&
-      gamepad.connected
-  ) ?? null
+  if (connectedGamepads.length === 0) {
+    return null
+  }
+
+  /*
+   * Prefer controllers Chromium has normalized to the W3C
+   * "standard" layout.
+   *
+   * This includes common Xbox controllers whether Windows
+   * receives them through USB or Bluetooth, and also allows
+   * other compatible controllers to use the same CaptureLink
+   * controller transport.
+   */
+  const standardGamepad =
+    connectedGamepads.find(
+      (gamepad) =>
+        gamepad.mapping === 'standard'
+    )
+
+  return (
+    standardGamepad ??
+    connectedGamepads[0] ??
+    null
+  )
 }
+
+window.addEventListener(
+  'gamepadconnected',
+  (event) => {
+    console.log(
+      '[CaptureLink:Controller] Browser gamepad connected:',
+      {
+        id: event.gamepad.id,
+        index: event.gamepad.index,
+        mapping: event.gamepad.mapping
+      }
+    )
+  }
+)
+
+window.addEventListener(
+  'gamepaddisconnected',
+  (event) => {
+    console.log(
+      '[CaptureLink:Controller] Browser gamepad disconnected:',
+      {
+        id: event.gamepad.id,
+        index: event.gamepad.index
+      }
+    )
+  }
+)
 
 function capturePhysicalGamepad(
   gamepad: Gamepad
