@@ -507,3 +507,122 @@ Packaged Windows builds use electron-builder and NSIS and include runtime resour
 The installer is currently unsigned.
 
 Third-party licensing, Microsoft/Xbox terms, recording/privacy disclosure, and application-license selection remain release-readiness concerns rather than architectural assumptions.
+
+---
+
+## Friend Direct Architecture
+
+CaptureLink can create a second WebRTC relationship between two CaptureLink
+clients while the Host maintains the Xbox Remote Play session.
+
+~~~text
+Xbox
+ |
+ | xHome Remote Play WebRTC
+ v
+Host CaptureLink
+ |
+ | Direct Friend WebRTC
+ v
+Guest CaptureLink
+~~~
+
+### Friend video
+
+The Host forwards the received Xbox video track into the Friend peer
+connection.
+
+The current Friend experiment is video-only. Xbox audio remains local to the
+Host and is not currently added to the Friend peer connection.
+
+The validated high-quality sender configuration targets up to 1080p60 at
+10 Mbps, uses a motion content hint, requests high RTP priority, and prefers
+maintaining frame rate when bandwidth becomes constrained.
+
+The Guest uses the browser's WebRTC receiver and requests a small jitter-buffer
+target. Chromium may choose a larger effective playout buffer when network
+conditions require it.
+
+### Friend controller transport
+
+The Guest polls a Windows-visible browser Gamepad independently of video
+rendering.
+
+Controller snapshots are sent through an unordered WebRTC DataChannel using
+the low-latency controller transport.
+
+The Host can route Friend input in two ways.
+
+Shared Controller:
+
+~~~text
+Host controller -----+
+                     +--> merged state --> Xbox gamepad 0
+Friend controller ---+
+~~~
+
+Player 2:
+
+~~~text
+Host controller   --> Xbox gamepad 0
+Friend controller --> Xbox gamepad 1
+~~~
+
+Xbox-facing RemoteGamepadAdapter attachment is deliberately lazy. A virtual
+Xbox controller is not attached until meaningful input requires it. Testing
+showed that preserving this lifecycle behavior matters for reliable gameplay
+controller ownership.
+
+### Controller devices
+
+CaptureLink consumes controllers through Chromium's browser Gamepad API.
+
+Windows therefore owns the physical transport. CaptureLink does not implement
+a separate Bluetooth protocol.
+
+Supported paths can include:
+
+- USB
+- Bluetooth
+- Xbox Wireless Adapter
+- other controllers exposed by Chromium as compatible gamepads
+
+CaptureLink prefers devices with the browser `standard` mapping and normalizes
+controller state into the Xbox-style 17-button / 4-axis representation used by
+the Friend protocol.
+
+### Direct Invite signaling
+
+The normal Direct Invite workflow does not require a CaptureLink signaling
+server.
+
+The Host:
+
+1. creates a WebRTC offer
+2. waits for ICE gathering
+3. packages the completed offer into a CaptureLink Direct Invite
+4. copies the invite to the clipboard
+
+The Friend:
+
+1. copies the Host invite
+2. chooses Join from Clipboard
+3. accepts the offer
+4. creates a completed WebRTC answer
+5. copies a CaptureLink response to the clipboard
+
+The Host monitors the clipboard while waiting and automatically accepts the
+Friend response.
+
+STUN is used for NAT/public-address discovery.
+
+There is currently no TURN fallback, so some restrictive NAT or firewall
+combinations may prevent a direct connection.
+
+An optional rendezvous experiment is preserved at:
+
+~~~text
+experiments/signaling-broker/
+~~~
+
+It is not required by Direct Invite.
