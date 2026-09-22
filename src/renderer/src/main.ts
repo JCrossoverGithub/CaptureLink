@@ -5735,17 +5735,28 @@ function updateFriendControllerModeUi():
   }
 
   if (guest) {
+    friendControllerModeBadge.textContent =
+      friendControllerModeName(
+        effectiveMode
+      )
+
     friendHostControllerStateElement.textContent =
       'Remote host'
 
     friendRemoteControllerStateElement.textContent =
-      'Forwarding locally'
+      effectiveMode === 'player2'
+        ? 'Ready · Player 2'
+        : 'Ready · Shared'
 
     friendXboxControllerStateElement.textContent =
-      'Assigned by host'
+      effectiveMode === 'player2'
+        ? 'Assigned as Player 2'
+        : 'Shared with Player 1'
 
     friendControllerModeTip.textContent =
-      'The host selects the Xbox controller mode for this Friend session.'
+      effectiveMode === 'player2'
+        ? 'The host assigned your controller as a separate Player 2 controller.'
+        : 'The host selected Shared Controller. Your input is combined with Player 1.'
 
     return
   }
