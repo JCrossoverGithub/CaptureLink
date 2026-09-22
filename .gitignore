@@ -36,3 +36,6 @@ Thumbs.db
 
 # Generated third-party browser bundle for local Remote Play development
 src/renderer/public/vendor/xCloudPlayer.min.js
+
+# Local CaptureLink development/context dumps
+/CaptureLink-*.txt
