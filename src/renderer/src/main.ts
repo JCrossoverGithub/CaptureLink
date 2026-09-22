@@ -1589,6 +1589,63 @@ let friendGuestMediaVideo: HTMLVideoElement | null = null
 
 let friendDiagnosticsPanel:
   HTMLDivElement | null = null
+
+// F4.2
+//
+// Friend Mode is now a first-class CaptureLink session source.
+// The existing Xbox booleans remain intact because many Xbox-only
+// features still legitimately depend on activePlayer/webRtcConnected.
+type CaptureLinkSessionSource =
+  | 'none'
+  | 'xbox'
+  | 'friend-host'
+  | 'friend-guest'
+
+let friendDiagnosticsVisible = true
+
+function getCaptureLinkSessionSource():
+  CaptureLinkSessionSource {
+  if (friendPeerRole === 'guest') {
+    return 'friend-guest'
+  }
+
+  if (
+    friendPeerRole === 'host' &&
+    activeServerId !== null
+  ) {
+    return 'friend-host'
+  }
+
+  if (activeServerId !== null) {
+    return 'xbox'
+  }
+
+  return 'none'
+}
+
+function hasLiveFriendGuestVideo(): boolean {
+  if (
+    friendPeerRole !== 'guest' ||
+    !friendGuestMediaVideo
+  ) {
+    return false
+  }
+
+  const source =
+    friendGuestMediaVideo.srcObject
+
+  if (!(source instanceof MediaStream)) {
+    return false
+  }
+
+  return source
+    .getVideoTracks()
+    .some(
+      (track) =>
+        track.readyState === 'live'
+    )
+}
+
 let microphoneActive = false
 let microphonePending = false
 let microphoneTimeout: ReturnType<typeof setTimeout> | null = null
@@ -3505,66 +3562,227 @@ async function toggleRecording(kind: RecordingKind): Promise<void> {
 }
 
 function updateInteractiveState(): void {
-  const sessionActive = activeServerId !== null
-  const locked = streamBusy || sessionActive
-  const mediaReady =
-    sessionActive &&
+  const sessionSource =
+    getCaptureLinkSessionSource()
+
+  const friendGuestActive =
+    sessionSource === 'friend-guest'
+
+  const friendHostActive =
+    sessionSource === 'friend-host'
+
+  const xboxSessionActive =
+    sessionSource === 'xbox' ||
+    friendHostActive
+
+  const sessionActive =
+    xboxSessionActive ||
+    friendGuestActive
+
+  const xboxMediaReady =
+    xboxSessionActive &&
     webRtcConnected &&
     !streamBusy
 
-  const videoMediaReady =
-    mediaReady &&
-    activeXboxReceiveMode !==
-      'audio-only'
+  const friendVideoMediaReady =
+    friendGuestActive &&
+    hasLiveFriendGuestVideo()
 
-  const recordingActive = mediaRecorder?.state === 'recording' ||
+  const mediaReady =
+    xboxMediaReady ||
+    friendVideoMediaReady
+
+  const videoMediaReady =
+    friendVideoMediaReady ||
+    (
+      xboxMediaReady &&
+      activeXboxReceiveMode !==
+        'audio-only'
+    )
+
+  const locked =
+    streamBusy ||
+    sessionActive
+
+  const recordingActive =
+    mediaRecorder?.state === 'recording' ||
     mediaRecorder?.state === 'paused'
 
-  document.body.classList.toggle('session-connected', webRtcConnected)
+  document.body.classList.toggle(
+    'session-connected',
+    mediaReady
+  )
+
   document.body.classList.toggle(
     'session-connecting',
-    sessionActive && streamBusy && !webRtcConnected
+    xboxSessionActive &&
+      streamBusy &&
+      !webRtcConnected
   )
-  document.body.classList.toggle('session-recording', recordingActive)
-  document.body.classList.toggle('session-saving', recordingSaving)
 
-  refreshConsolesButton.disabled = !signedIn || locked
-  disconnectButton.disabled = !sessionActive || streamBusy
+  document.body.classList.toggle(
+    'session-recording',
+    recordingActive
+  )
+
+  document.body.classList.toggle(
+    'session-saving',
+    recordingSaving
+  )
+
+  refreshConsolesButton.disabled =
+    !signedIn ||
+    locked
+
+  /*
+   * Disconnect applies to either a local Xbox session or a
+   * Friend guest session. The click handler below routes it.
+   */
+  disconnectButton.disabled =
+    !sessionActive ||
+    streamBusy
+
   fullscreenVideoButton.disabled =
     !videoMediaReady
 
   pictureInPictureButton.disabled =
     !videoMediaReady ||
     !document.pictureInPictureEnabled
-  controllerButton.disabled = !mediaReady
-  microphoneButton.disabled = !mediaReady || microphonePending
+
+  /*
+   * Friend controller forwarding is automatic. Do not route this
+   * button into CaptureLink's local Xbox controller implementation.
+   */
+  if (friendGuestActive) {
+    controllerButton.disabled = true
+
+    setButtonLabel(
+      controllerButton,
+      'Friend Controller Auto'
+    )
+
+    controllerButton.title =
+      'Friend controller forwarding is automatic during a P2P session'
+
+    controllerButton.setAttribute(
+      'aria-pressed',
+      'true'
+    )
+  } else if (friendHostActive) {
+    controllerButton.disabled = true
+
+    setButtonLabel(
+      controllerButton,
+      'Friend Controller Host'
+    )
+
+    controllerButton.title =
+      'The Friend controller is controlling this Xbox'
+
+    controllerButton.setAttribute(
+      'aria-pressed',
+      'true'
+    )
+  } else {
+    controllerButton.disabled =
+      !xboxMediaReady
+
+    setButtonLabel(
+      controllerButton,
+      controllerAttached
+        ? 'Disable Controller'
+        : 'Enable Controller'
+    )
+
+    controllerButton.setAttribute(
+      'aria-pressed',
+      String(controllerAttached)
+    )
+  }
+
+  /*
+   * Current competitive Friend Mode is video-only.
+   *
+   * Xbox microphone/audio controls remain Xbox-only until Friend
+   * audio is deliberately added to the product.
+   */
+  microphoneButton.disabled =
+    !xboxMediaReady ||
+    microphonePending
+
   microphoneDeviceSelect.disabled =
     microphoneActive ||
     microphonePending ||
     microphoneMonitorStream !== null
-  microphoneTestButton.disabled = microphoneActive || microphonePending
-  refreshAudioDevicesButton.disabled = microphonePending
-  audioMuteButton.disabled = !mediaReady
-  audioVolume.disabled = !mediaReady
-  resyncAudioButton.disabled = !mediaReady || audioResyncInProgress
-  diagnosticsButton.disabled = !mediaReady
-  settingsDiagnosticsButton.disabled = !mediaReady
-  recordAudioButton.disabled = recordingSaving ||
-    (recordingActive
-      ? recordingKind !== 'audio'
-      : !mediaReady)
+
+  microphoneTestButton.disabled =
+    microphoneActive ||
+    microphonePending
+
+  refreshAudioDevicesButton.disabled =
+    microphonePending
+
+  audioMuteButton.disabled =
+    !xboxMediaReady
+
+  audioVolume.disabled =
+    !xboxMediaReady
+
+  resyncAudioButton.disabled =
+    !xboxMediaReady ||
+    audioResyncInProgress
+
+  /*
+   * Bottom diagnostics can control either Xbox diagnostics or the
+   * Friend overlay. The Settings diagnostics panel remains Xbox-only
+   * until F4.4 moves Friend diagnostics there properly.
+   */
+  diagnosticsButton.disabled =
+    !mediaReady
+
+  if (friendGuestActive) {
+    diagnosticsButton.setAttribute(
+      'aria-pressed',
+      String(friendDiagnosticsVisible)
+    )
+  }
+
+  settingsDiagnosticsButton.disabled =
+    !xboxMediaReady
+
+  /*
+   * Existing recording code currently depends on activePlayer and
+   * the Xbox audio stream. Keep Friend recording disabled until it
+   * gets its own explicit media-source path.
+   */
+  recordAudioButton.disabled =
+    recordingSaving ||
+    (
+      recordingActive
+        ? recordingKind !== 'audio'
+        : !xboxMediaReady
+    )
+
   recordVideoButton.disabled =
     recordingSaving ||
     (
       recordingActive
         ? recordingKind !== 'video'
-        : !videoMediaReady
+        : !(
+            xboxMediaReady &&
+            activeXboxReceiveMode !==
+              'audio-only'
+          )
     )
 
   consoleList
-    .querySelectorAll<HTMLButtonElement>('.console-connect')
+    .querySelectorAll<HTMLButtonElement>(
+      '.console-connect'
+    )
     .forEach((button) => {
-      button.disabled = !signedIn || locked
+      button.disabled =
+        !signedIn ||
+        locked
     })
 }
 
@@ -4637,6 +4855,10 @@ function clearFriendDiagnosticsPanel(): void {
 function updateFriendDiagnosticsPanel(
   diagnostics: FriendMediaDiagnostics
 ): void {
+  if (!friendDiagnosticsVisible) {
+    return
+  }
+
   if (!friendDiagnosticsPanel) {
     const panel =
       document.createElement('div')
@@ -4856,6 +5078,10 @@ function closeFriendControllerPeer(): void {
 
   clearFriendGuestMedia()
   clearFriendDiagnosticsPanel()
+
+  friendDiagnosticsVisible = true
+
+  updateInteractiveState()
 }
 
 function makeFriendControllerPeer(): FriendControllerPeer {
@@ -4888,6 +5114,32 @@ function makeFriendControllerPeer(): FriendControllerPeer {
     },
 
     onDiagnostics: (diagnostics) => {
+      if (
+        diagnostics.role === 'guest' &&
+        friendPeerRole === 'guest'
+      ) {
+        const friendVideo =
+          diagnostics.resolution
+            ? `${diagnostics.resolution} @ ${
+                diagnostics.fps !== null
+                  ? diagnostics.fps.toFixed(0)
+                  : '—'
+              } fps`
+            : 'Receiving video'
+
+        const friendLatency =
+          diagnostics.peerRttMs !== null
+            ? `${diagnostics.peerRttMs.toFixed(0)} ms RTT`
+            : '—'
+
+        setRailSession(
+          'Connected',
+          'Direct P2P',
+          friendVideo,
+          friendLatency
+        )
+      }
+
       updateFriendDiagnosticsPanel(
         diagnostics
       )
@@ -4902,9 +5154,24 @@ function makeFriendControllerPeer(): FriendControllerPeer {
         stream
       )
 
-      setStreamStatus(
-        'F3 direct P2P Xbox media received'
+      friendDiagnosticsVisible = true
+
+      setRailConsole(
+        'Friend Xbox',
+        'Remote Xbox via Direct P2P',
+        'Connected'
       )
+
+      setRailSession(
+        'Connected',
+        'Direct P2P'
+      )
+
+      setStreamStatus(
+        'Friend stream · Direct P2P'
+      )
+
+      updateInteractiveState()
     }
   })
 }
@@ -5057,6 +5324,8 @@ async function joinFriendHost(): Promise<void> {
     friendPeerRole = 'guest'
     friendControllerPeer =
       makeFriendControllerPeer()
+
+    updateInteractiveState()
 
     const answer =
       await friendControllerPeer
@@ -5235,6 +5504,28 @@ autoAudioResync.addEventListener('change', () => {
 })
 
 diagnosticsButton.addEventListener('click', () => {
+  if (friendPeerRole === 'guest') {
+    friendDiagnosticsVisible =
+      !friendDiagnosticsVisible
+
+    if (!friendDiagnosticsVisible) {
+      clearFriendDiagnosticsPanel()
+    }
+
+    diagnosticsButton.setAttribute(
+      'aria-pressed',
+      String(friendDiagnosticsVisible)
+    )
+
+    setStreamStatus(
+      friendDiagnosticsVisible
+        ? 'Friend diagnostics shown'
+        : 'Friend diagnostics hidden'
+    )
+
+    return
+  }
+
   const visible = !diagnosticsVisible
   setDiagnosticsVisible(visible)
 
@@ -5479,7 +5770,7 @@ fullscreenVideoButton.addEventListener('click', () => {
 
     if (!video) {
       setStreamStatus(
-        'Xbox video is not available for fullscreen'
+        'Stream video is not available for fullscreen'
       )
       return
     }
@@ -5516,7 +5807,7 @@ pictureInPictureButton.addEventListener('click', () => {
 
     if (!video) {
       setStreamStatus(
-        'Xbox video is not available for Picture in Picture'
+        'Stream video is not available for Picture in Picture'
       )
       return
     }
@@ -5610,6 +5901,32 @@ document.addEventListener(
   true
 )
 disconnectButton.addEventListener('click', () => {
+  if (friendPeerRole === 'guest') {
+    setStreamStatus(
+      'Disconnecting Friend stream...'
+    )
+
+    closeFriendControllerPeer()
+
+    setRailConsole(
+      'No console selected',
+      'Choose an Xbox or join a Friend stream',
+      'Idle'
+    )
+
+    setRailSession(
+      'Idle',
+      'Waiting'
+    )
+
+    setStreamStatus(
+      'Friend stream disconnected'
+    )
+
+    updateInteractiveState()
+    return
+  }
+
   void disconnectFromConsole()
 })
 
