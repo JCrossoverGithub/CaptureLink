@@ -1,0 +1,17 @@
+{
+  "name": "capturelink-signaling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ephemeral signaling broker for CaptureLink Friend Mode.",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs"
+  },
+  "engines": {
+    "node": ">=24.19.0"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  }
+}
