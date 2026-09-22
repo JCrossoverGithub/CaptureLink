@@ -5397,6 +5397,8 @@ function updateFriendDiagnosticsPanel(
 }
 
 function closeFriendControllerPeer(): void {
+  stopSharedHostControllerPump()
+
   friendControllerPeer?.close()
   friendControllerPeer = null
   friendPeerRole = null
@@ -5407,6 +5409,451 @@ function closeFriendControllerPeer(): void {
   friendDiagnosticsVisible = true
 
   updateInteractiveState()
+}
+
+// F4.2.2 — Shared Controller Mixer
+//
+// Important:
+// The Xbox-facing controller lifecycle deliberately preserves the
+// known-good legacy Friend-controller experiment.
+//
+// We do NOT attach another xbox-xcloud-player Gamepad.
+// We do NOT pre-register the remote controller.
+//
+// Instead, local-host and Friend states are merged here and the
+// resulting single state is fed into the proven
+// RemoteGamepadAdapter(0) path.
+
+let sharedHostControllerState:
+  FriendGamepadState | null = null
+
+let sharedFriendControllerState:
+  FriendGamepadState | null = null
+
+let sharedHostControllerTimer:
+  number | null = null
+
+let sharedHostControllerId:
+  string | null = null
+
+function controllerButtonValue(
+  state: FriendGamepadState | null,
+  index: number
+): number {
+  if (!state) {
+    return 0
+  }
+
+  const button =
+    state.buttons[index]
+
+  if (!button) {
+    return 0
+  }
+
+  if (
+    typeof button.value === 'number' &&
+    Number.isFinite(button.value)
+  ) {
+    return Math.min(
+      1,
+      Math.max(
+        0,
+        button.value
+      )
+    )
+  }
+
+  return button.pressed
+    ? 1
+    : 0
+}
+
+function controllerAxisValue(
+  state: FriendGamepadState | null,
+  index: number
+): number {
+  if (!state) {
+    return 0
+  }
+
+  const value =
+    state.axes[index]
+
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value)
+  ) {
+    return 0
+  }
+
+  return Math.min(
+    1,
+    Math.max(
+      -1,
+      value
+    )
+  )
+}
+
+function chooseSharedStick(
+  first: FriendGamepadState | null,
+  second: FriendGamepadState | null,
+  xIndex: number,
+  yIndex: number
+): [number, number] {
+  const firstX =
+    controllerAxisValue(
+      first,
+      xIndex
+    )
+
+  const firstY =
+    controllerAxisValue(
+      first,
+      yIndex
+    )
+
+  const secondX =
+    controllerAxisValue(
+      second,
+      xIndex
+    )
+
+  const secondY =
+    controllerAxisValue(
+      second,
+      yIndex
+    )
+
+  const firstMagnitude =
+    (
+      firstX * firstX +
+      firstY * firstY
+    )
+
+  const secondMagnitude =
+    (
+      secondX * secondX +
+      secondY * secondY
+    )
+
+  if (
+    secondMagnitude >
+    firstMagnitude
+  ) {
+    return [
+      secondX,
+      secondY
+    ]
+  }
+
+  return [
+    firstX,
+    firstY
+  ]
+}
+
+function mergeSharedControllerState():
+  FriendGamepadState {
+  const local =
+    sharedHostControllerState
+
+  const friend =
+    sharedFriendControllerState
+
+  const merged =
+    createNeutralFriendGamepadState()
+
+  merged.id =
+    'CaptureLink Shared Controller'
+
+  merged.connected =
+    Boolean(
+      local?.connected ||
+      friend?.connected
+    )
+
+  merged.timestamp =
+    performance.now()
+
+  /*
+   * Treat each stick as one coherent vector.
+   *
+   * Left and right sticks are independent, allowing:
+   *
+   *   Host   -> left stick
+   *   Friend -> right stick
+   *
+   * If both users move the same stick, whichever movement has the
+   * larger magnitude owns that stick for this frame.
+   */
+  const leftStick =
+    chooseSharedStick(
+      local,
+      friend,
+      0,
+      1
+    )
+
+  const rightStick =
+    chooseSharedStick(
+      local,
+      friend,
+      2,
+      3
+    )
+
+  merged.axes = [
+    leftStick[0],
+    leftStick[1],
+    rightStick[0],
+    rightStick[1]
+  ]
+
+  /*
+   * Buttons and triggers are cooperative.
+   *
+   * If either player presses a control, the single Xbox controller
+   * receives it.
+   */
+  merged.buttons =
+    Array.from(
+      {
+        length: 17
+      },
+      (_, index) => {
+        const value =
+          Math.max(
+            controllerButtonValue(
+              local,
+              index
+            ),
+            controllerButtonValue(
+              friend,
+              index
+            )
+          )
+
+        return {
+          pressed:
+            value > 0.5,
+
+          touched:
+            value > 0,
+
+          value
+        }
+      }
+    )
+
+  /*
+   * Avoid impossible opposite D-pad pairs if the two users press
+   * opposing directions simultaneously.
+   */
+  if (
+    merged.buttons[12]?.pressed &&
+    merged.buttons[13]?.pressed
+  ) {
+    merged.buttons[12] = {
+      pressed: false,
+      touched: false,
+      value: 0
+    }
+
+    merged.buttons[13] = {
+      pressed: false,
+      touched: false,
+      value: 0
+    }
+  }
+
+  if (
+    merged.buttons[14]?.pressed &&
+    merged.buttons[15]?.pressed
+  ) {
+    merged.buttons[14] = {
+      pressed: false,
+      touched: false,
+      value: 0
+    }
+
+    merged.buttons[15] = {
+      pressed: false,
+      touched: false,
+      value: 0
+    }
+  }
+
+  return merged
+}
+
+function flushSharedControllerState(): void {
+  if (
+    !activePlayer ||
+    !webRtcConnected
+  ) {
+    return
+  }
+
+  const merged =
+    mergeSharedControllerState()
+
+  /*
+   * Preserve the exact behavior that restored Friend control:
+   * lazily attach Xbox gamepad 0 only once meaningful input exists.
+   */
+  if (!remoteGamepadAdapter) {
+    if (
+      !friendGamepadStateHasInput(
+        merged
+      )
+    ) {
+      return
+    }
+
+    remoteGamepadAdapter =
+      new RemoteGamepadAdapter(0)
+
+    remoteGamepadAdapter.attach(
+      activePlayer
+    )
+
+    console.log(
+      '[CaptureLink:F4.2.2] Shared controller lazily attached as Xbox gamepad 0'
+    )
+  }
+
+  /*
+   * Once attached, neutral states MUST still be transmitted so
+   * buttons/sticks get released correctly.
+   */
+  remoteGamepadAdapter.updateState(
+    merged
+  )
+}
+
+function updateSharedFriendController(
+  state: FriendGamepadState
+): void {
+  sharedFriendControllerState =
+    state
+
+  flushSharedControllerState()
+}
+
+function clearSharedFriendController():
+  void {
+  sharedFriendControllerState =
+    null
+
+  flushSharedControllerState()
+}
+
+function startSharedHostControllerPump():
+  void {
+  if (
+    sharedHostControllerTimer !==
+    null
+  ) {
+    return
+  }
+
+  const sample = (): void => {
+    if (
+      friendPeerRole !== 'host'
+    ) {
+      return
+    }
+
+    const gamepad =
+      findPhysicalGamepad()
+
+    if (!gamepad) {
+      if (
+        sharedHostControllerState !==
+        null
+      ) {
+        sharedHostControllerState =
+          null
+
+        sharedHostControllerId =
+          null
+
+        console.log(
+          '[CaptureLink:F4.2.2] Host controller unavailable'
+        )
+
+        flushSharedControllerState()
+      }
+
+      return
+    }
+
+    if (
+      sharedHostControllerId !==
+      gamepad.id
+    ) {
+      sharedHostControllerId =
+        gamepad.id
+
+      console.log(
+        '[CaptureLink:F4.2.2] Host controller detected:',
+        gamepad.id
+      )
+    }
+
+    sharedHostControllerState =
+      capturePhysicalGamepad(
+        gamepad
+      )
+
+    flushSharedControllerState()
+  }
+
+  sample()
+
+  sharedHostControllerTimer =
+    window.setInterval(
+      sample,
+      16
+    )
+}
+
+function stopSharedHostControllerPump():
+  void {
+  if (
+    sharedHostControllerTimer !==
+    null
+  ) {
+    window.clearInterval(
+      sharedHostControllerTimer
+    )
+
+    sharedHostControllerTimer =
+      null
+  }
+
+  sharedHostControllerState =
+    null
+
+  sharedFriendControllerState =
+    null
+
+  sharedHostControllerId =
+    null
+
+  if (remoteGamepadAdapter) {
+    /*
+     * Send neutral before detaching.
+     */
+    remoteGamepadAdapter.updateState(
+      createNeutralFriendGamepadState()
+    )
+
+    remoteGamepadAdapter.detach()
+    remoteGamepadAdapter = null
+  }
 }
 
 function makeFriendControllerPeer(): FriendControllerPeer {
@@ -5422,37 +5869,16 @@ function makeFriendControllerPeer(): FriendControllerPeer {
         return
       }
 
-      if (
-        !activePlayer ||
-        !webRtcConnected
-      ) {
-        return
-      }
-
-      if (!remoteGamepadAdapter) {
-        remoteGamepadAdapter =
-          new RemoteGamepadAdapter(0)
-
-        remoteGamepadAdapter.attach(
-          activePlayer
-        )
-
-        console.log(
-          '[CaptureLink:AB] Legacy Friend controller lazily attached as Xbox gamepad 0'
-        )
-      }
-
-      remoteGamepadAdapter.updateState(
+      updateSharedFriendController(
         state
       )
     },
 
     onRemoteControlEnded: () => {
-      remoteGamepadAdapter?.detach()
-      remoteGamepadAdapter = null
+      clearSharedFriendController()
 
       console.log(
-        '[CaptureLink:AB] Legacy Friend controller detached'
+        '[CaptureLink:F4.2.2] Friend controller source ended'
       )
     },
 
@@ -5605,6 +6031,8 @@ async function createFriendHostOffer(): Promise<void> {
   friendPeerRole = 'host'
   friendControllerPeer =
     makeFriendControllerPeer()
+
+  startSharedHostControllerPump()
 
   updateInteractiveState()
 
