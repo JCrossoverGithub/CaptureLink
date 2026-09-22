@@ -5436,6 +5436,16 @@ let sharedHostControllerTimer:
 let sharedHostControllerId:
   string | null = null
 
+type FriendControllerMode =
+  | 'shared'
+  | 'player2'
+
+let friendControllerMode:
+  FriendControllerMode = 'player2'
+
+let friendPlayerTwoGamepadAdapter:
+  RemoteGamepadAdapter | null = null
+
 function controllerButtonValue(
   state: FriendGamepadState | null,
   index: number
@@ -5688,6 +5698,82 @@ function mergeSharedControllerState():
   return merged
 }
 
+function flushPlayerOneControllerState(
+  state: FriendGamepadState | null
+): void {
+  if (
+    !activePlayer ||
+    !webRtcConnected
+  ) {
+    return
+  }
+
+  if (!remoteGamepadAdapter) {
+    if (
+      !state ||
+      !friendGamepadStateHasInput(
+        state
+      )
+    ) {
+      return
+    }
+
+    remoteGamepadAdapter =
+      new RemoteGamepadAdapter(0)
+
+    remoteGamepadAdapter.attach(
+      activePlayer
+    )
+
+    console.log(
+      '[CaptureLink:F4.2.3] PLAYER 1 attached as Xbox gamepad 0'
+    )
+  }
+
+  remoteGamepadAdapter.updateState(
+    state ??
+      createNeutralFriendGamepadState()
+  )
+}
+
+function flushPlayerTwoControllerState(
+  state: FriendGamepadState | null
+): void {
+  if (
+    !activePlayer ||
+    !webRtcConnected
+  ) {
+    return
+  }
+
+  if (!friendPlayerTwoGamepadAdapter) {
+    if (
+      !state ||
+      !friendGamepadStateHasInput(
+        state
+      )
+    ) {
+      return
+    }
+
+    friendPlayerTwoGamepadAdapter =
+      new RemoteGamepadAdapter(1)
+
+    friendPlayerTwoGamepadAdapter.attach(
+      activePlayer
+    )
+
+    console.log(
+      '[CaptureLink:F4.2.3] PLAYER 2 attached as Xbox gamepad 1'
+    )
+  }
+
+  friendPlayerTwoGamepadAdapter.updateState(
+    state ??
+      createNeutralFriendGamepadState()
+  )
+}
+
 function flushSharedControllerState(): void {
   if (
     !activePlayer ||
@@ -5739,6 +5825,17 @@ function updateSharedFriendController(
   sharedFriendControllerState =
     state
 
+  if (
+    friendControllerMode ===
+    'player2'
+  ) {
+    flushPlayerTwoControllerState(
+      state
+    )
+
+    return
+  }
+
   flushSharedControllerState()
 }
 
@@ -5746,6 +5843,17 @@ function clearSharedFriendController():
   void {
   sharedFriendControllerState =
     null
+
+  if (
+    friendControllerMode ===
+    'player2'
+  ) {
+    flushPlayerTwoControllerState(
+      null
+    )
+
+    return
+  }
 
   flushSharedControllerState()
 }
@@ -5781,10 +5889,19 @@ function startSharedHostControllerPump():
           null
 
         console.log(
-          '[CaptureLink:F4.2.2] Host controller unavailable'
+          '[CaptureLink:F4.2.3] Host controller unavailable'
         )
 
-        flushSharedControllerState()
+        if (
+          friendControllerMode ===
+          'player2'
+        ) {
+          flushPlayerOneControllerState(
+            null
+          )
+        } else {
+          flushSharedControllerState()
+        }
       }
 
       return
@@ -5798,7 +5915,7 @@ function startSharedHostControllerPump():
         gamepad.id
 
       console.log(
-        '[CaptureLink:F4.2.2] Host controller detected:',
+        '[CaptureLink:F4.2.3] Host controller detected:',
         gamepad.id
       )
     }
@@ -5808,7 +5925,16 @@ function startSharedHostControllerPump():
         gamepad
       )
 
-    flushSharedControllerState()
+    if (
+      friendControllerMode ===
+      'player2'
+    ) {
+      flushPlayerOneControllerState(
+        sharedHostControllerState
+      )
+    } else {
+      flushSharedControllerState()
+    }
   }
 
   sample()
@@ -5844,15 +5970,23 @@ function stopSharedHostControllerPump():
     null
 
   if (remoteGamepadAdapter) {
-    /*
-     * Send neutral before detaching.
-     */
     remoteGamepadAdapter.updateState(
       createNeutralFriendGamepadState()
     )
 
     remoteGamepadAdapter.detach()
     remoteGamepadAdapter = null
+  }
+
+  if (friendPlayerTwoGamepadAdapter) {
+    friendPlayerTwoGamepadAdapter.updateState(
+      createNeutralFriendGamepadState()
+    )
+
+    friendPlayerTwoGamepadAdapter.detach()
+
+    friendPlayerTwoGamepadAdapter =
+      null
   }
 }
 
