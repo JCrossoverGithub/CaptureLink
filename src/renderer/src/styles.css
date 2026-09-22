@@ -4076,3 +4076,108 @@ body {
     flex-direction: column;
   }
 }
+
+/* CaptureLink Friend controller modes */
+
+.friend-controller-card {
+  display: grid;
+  gap: 0;
+}
+
+.friend-controller-mode-picker {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  margin: 0 0 13px;
+  padding: 0;
+  border: 0;
+}
+
+.friend-controller-mode-picker legend {
+  margin-bottom: 7px;
+  color: var(--cl-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.friend-controller-mode-option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--cl-border);
+  border-radius: 9px;
+  background: #0d1318;
+  cursor: pointer;
+}
+
+.friend-controller-mode-option:hover {
+  border-color: rgba(255, 255, 255, .14);
+  background: #10171d;
+}
+
+.friend-controller-mode-option input {
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  accent-color: var(--cl-accent);
+}
+
+.friend-controller-mode-option input:disabled {
+  cursor: not-allowed;
+}
+
+.friend-controller-mode-option:has(input:checked) {
+  border-color: rgba(88, 214, 141, .28);
+  background: rgba(88, 214, 141, .055);
+}
+
+.friend-controller-mode-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.friend-controller-mode-copy strong {
+  color: #e7edf1;
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.friend-controller-mode-copy small {
+  color: var(--cl-muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.friend-controller-mode-option input:disabled +
+.friend-controller-mode-copy {
+  opacity: .68;
+}
+
+.friend-controller-facts {
+  padding-top: 11px;
+  border-top: 1px solid var(--cl-border);
+}
+
+.friend-controller-facts dd {
+  max-width: 130px;
+  overflow: hidden;
+  color: #cbd3da;
+  font-size: 10px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-controller-tip {
+  margin: 12px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--cl-border);
+  color: var(--cl-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+

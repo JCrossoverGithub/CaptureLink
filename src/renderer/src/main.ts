@@ -707,6 +707,82 @@ root.innerHTML = `
                 </dl>
               </article>
 
+              <article class="rail-card friend-controller-card">
+                <div class="rail-card__heading">
+                  <span>Friend controller</span>
+                  <span
+                    id="friend-controller-mode-badge"
+                    class="rail-status"
+                  >
+                    Next session
+                  </span>
+                </div>
+
+                <fieldset class="friend-controller-mode-picker">
+                  <legend>Controller mode</legend>
+
+                  <label class="friend-controller-mode-option">
+                    <input
+                      type="radio"
+                      name="friend-controller-mode"
+                      value="shared"
+                    />
+
+                    <span class="friend-controller-mode-copy">
+                      <strong>Shared Controller</strong>
+                      <small>
+                        Host and Friend control Player 1 together.
+                      </small>
+                    </span>
+                  </label>
+
+                  <label class="friend-controller-mode-option">
+                    <input
+                      type="radio"
+                      name="friend-controller-mode"
+                      value="player2"
+                    />
+
+                    <span class="friend-controller-mode-copy">
+                      <strong>Player 2</strong>
+                      <small>
+                        Friend joins as a separate local controller.
+                      </small>
+                    </span>
+                  </label>
+                </fieldset>
+
+                <dl class="session-facts friend-controller-facts">
+                  <div>
+                    <dt>Host</dt>
+                    <dd id="friend-host-controller-state">
+                      Not connected
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt>Friend</dt>
+                    <dd id="friend-remote-controller-state">
+                      Not connected
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt>Xbox</dt>
+                    <dd id="friend-xbox-controller-state">
+                      Not registered
+                    </dd>
+                  </div>
+                </dl>
+
+                <p
+                  id="friend-controller-mode-tip"
+                  class="friend-controller-tip"
+                >
+                  Choose how Friend input should reach the Xbox.
+                </p>
+              </article>
+
               <article class="rail-card rail-card--recording">
                 <div class="rail-card__heading">
                   <span>Last recording</span>
@@ -1435,6 +1511,39 @@ const railSessionVideo =
   requireElement<HTMLElement>('#rail-session-video')
 const railSessionLatency =
   requireElement<HTMLElement>('#rail-session-latency')
+
+const friendControllerModeInputs =
+  Array.from(
+    document.querySelectorAll<HTMLInputElement>(
+      'input[name="friend-controller-mode"]'
+    )
+  )
+
+const friendControllerModeBadge =
+  requireElement<HTMLElement>(
+    '#friend-controller-mode-badge'
+  )
+
+const friendHostControllerStateElement =
+  requireElement<HTMLElement>(
+    '#friend-host-controller-state'
+  )
+
+const friendRemoteControllerStateElement =
+  requireElement<HTMLElement>(
+    '#friend-remote-controller-state'
+  )
+
+const friendXboxControllerStateElement =
+  requireElement<HTMLElement>(
+    '#friend-xbox-controller-state'
+  )
+
+const friendControllerModeTip =
+  requireElement<HTMLElement>(
+    '#friend-controller-mode-tip'
+  )
+
 const railLastRecordingName =
   requireElement<HTMLElement>('#rail-last-recording-name')
 const railLastRecordingMeta =
@@ -5403,6 +5512,17 @@ function closeFriendControllerPeer(): void {
   friendControllerPeer = null
   friendPeerRole = null
 
+  activeFriendControllerMode =
+    null
+
+  friendHostControllerReady =
+    false
+
+  friendRemoteControllerReady =
+    false
+
+  updateFriendControllerModeUi()
+
   clearFriendGuestMedia()
   clearFriendDiagnosticsPanel()
 
@@ -5440,11 +5560,228 @@ type FriendControllerMode =
   | 'shared'
   | 'player2'
 
+const FRIEND_CONTROLLER_MODE_STORAGE_KEY =
+  'capturelink.friendControllerMode'
+
+function parseFriendControllerMode(
+  value: string | null
+): FriendControllerMode {
+  return value === 'player2'
+    ? 'player2'
+    : 'shared'
+}
+
+function loadFriendControllerMode():
+  FriendControllerMode {
+  return parseFriendControllerMode(
+    window.localStorage.getItem(
+      FRIEND_CONTROLLER_MODE_STORAGE_KEY
+    )
+  )
+}
+
+function saveFriendControllerMode(
+  mode: FriendControllerMode
+): void {
+  window.localStorage.setItem(
+    FRIEND_CONTROLLER_MODE_STORAGE_KEY,
+    mode
+  )
+}
+
 let friendControllerMode:
-  FriendControllerMode = 'player2'
+  FriendControllerMode =
+    loadFriendControllerMode()
+
+/*
+ * Frozen for the lifetime of a hosted Friend session.
+ *
+ * Controller slots must not change while a game is running.
+ */
+let activeFriendControllerMode:
+  FriendControllerMode | null = null
+
+let friendHostControllerReady = false
+let friendRemoteControllerReady = false
 
 let friendPlayerTwoGamepadAdapter:
   RemoteGamepadAdapter | null = null
+
+function getEffectiveFriendControllerMode():
+  FriendControllerMode {
+  return (
+    activeFriendControllerMode ??
+    friendControllerMode
+  )
+}
+
+function friendControllerModeName(
+  mode: FriendControllerMode
+): string {
+  return mode === 'player2'
+    ? 'Player 2'
+    : 'Shared Controller'
+}
+
+function updateFriendControllerModeUi():
+  void {
+  const host =
+    friendPeerRole === 'host'
+
+  const guest =
+    friendPeerRole === 'guest'
+
+  const locked =
+    friendPeerRole !== null
+
+  const effectiveMode =
+    getEffectiveFriendControllerMode()
+
+  friendControllerModeInputs.forEach(
+    (input) => {
+      input.checked =
+        input.value ===
+        (
+          locked
+            ? effectiveMode
+            : friendControllerMode
+        )
+
+      input.disabled =
+        locked
+    }
+  )
+
+  if (host) {
+    friendControllerModeBadge.textContent =
+      'Live'
+  } else if (guest) {
+    friendControllerModeBadge.textContent =
+      'Host controlled'
+  } else {
+    friendControllerModeBadge.textContent =
+      'Next session'
+  }
+
+  if (guest) {
+    friendHostControllerStateElement.textContent =
+      'Remote host'
+
+    friendRemoteControllerStateElement.textContent =
+      'Forwarding locally'
+
+    friendXboxControllerStateElement.textContent =
+      'Assigned by host'
+
+    friendControllerModeTip.textContent =
+      'The host selects the Xbox controller mode for this Friend session.'
+
+    return
+  }
+
+  if (!host) {
+    friendHostControllerStateElement.textContent =
+      'Not connected'
+
+    friendRemoteControllerStateElement.textContent =
+      'Not connected'
+
+    friendXboxControllerStateElement.textContent =
+      'Not registered'
+
+    friendControllerModeTip.textContent =
+      friendControllerMode === 'player2'
+        ? 'Player 2 creates a separate Xbox controller for local multiplayer. Connect both controllers before launching games that assign players at startup.'
+        : 'Shared Controller combines Host and Friend input into Xbox Controller 1.'
+
+    return
+  }
+
+  friendHostControllerStateElement.textContent =
+    friendHostControllerReady
+      ? (
+          effectiveMode === 'player2'
+            ? 'Ready · Player 1'
+            : 'Ready · Shared'
+        )
+      : 'Waiting'
+
+  friendRemoteControllerStateElement.textContent =
+    friendRemoteControllerReady
+      ? (
+          effectiveMode === 'player2'
+            ? 'Ready · Player 2'
+            : 'Ready · Shared'
+        )
+      : 'Waiting'
+
+  if (effectiveMode === 'player2') {
+    const controllerCount =
+      Number(
+        remoteGamepadAdapter !== null
+      ) +
+      Number(
+        friendPlayerTwoGamepadAdapter !==
+          null
+      )
+
+    friendXboxControllerStateElement.textContent =
+      controllerCount === 2
+        ? '2 controllers ready'
+        : controllerCount === 1
+          ? '1 of 2 ready'
+          : 'Waiting for input'
+
+    friendControllerModeTip.textContent =
+      'Local multiplayer mode. For games that assign controller slots at launch, get both controllers ready before starting the game.'
+  } else {
+    friendXboxControllerStateElement.textContent =
+      remoteGamepadAdapter
+        ? 'Controller 1 ready'
+        : 'Waiting for input'
+
+    friendControllerModeTip.textContent =
+      'Co-pilot mode. Host and Friend inputs are combined into Xbox Controller 1.'
+  }
+}
+
+friendControllerModeInputs.forEach(
+  (input) => {
+    input.addEventListener(
+      'change',
+      () => {
+        if (
+          friendPeerRole !== null ||
+          !input.checked
+        ) {
+          updateFriendControllerModeUi()
+          return
+        }
+
+        friendControllerMode =
+          input.value === 'player2'
+            ? 'player2'
+            : 'shared'
+
+        saveFriendControllerMode(
+          friendControllerMode
+        )
+
+        updateFriendControllerModeUi()
+
+        setStreamStatus(
+          `Friend controller mode: ${
+            friendControllerModeName(
+              friendControllerMode
+            )
+          }`
+        )
+      }
+    )
+  }
+)
+
+updateFriendControllerModeUi()
 
 function controllerButtonValue(
   state: FriendGamepadState | null,
@@ -5728,6 +6065,8 @@ function flushPlayerOneControllerState(
     console.log(
       '[CaptureLink:F4.2.3] PLAYER 1 attached as Xbox gamepad 0'
     )
+
+    updateFriendControllerModeUi()
   }
 
   remoteGamepadAdapter.updateState(
@@ -5766,6 +6105,8 @@ function flushPlayerTwoControllerState(
     console.log(
       '[CaptureLink:F4.2.3] PLAYER 2 attached as Xbox gamepad 1'
     )
+
+    updateFriendControllerModeUi()
   }
 
   friendPlayerTwoGamepadAdapter.updateState(
@@ -5808,6 +6149,8 @@ function flushSharedControllerState(): void {
     console.log(
       '[CaptureLink:F4.2.2] Shared controller lazily attached as Xbox gamepad 0'
     )
+
+    updateFriendControllerModeUi()
   }
 
   /*
@@ -5825,8 +6168,21 @@ function updateSharedFriendController(
   sharedFriendControllerState =
     state
 
+  const remoteReady =
+    state.connected
+
   if (
-    friendControllerMode ===
+    friendRemoteControllerReady !==
+    remoteReady
+  ) {
+    friendRemoteControllerReady =
+      remoteReady
+
+    updateFriendControllerModeUi()
+  }
+
+  if (
+    getEffectiveFriendControllerMode() ===
     'player2'
   ) {
     flushPlayerTwoControllerState(
@@ -5844,8 +6200,13 @@ function clearSharedFriendController():
   sharedFriendControllerState =
     null
 
+  friendRemoteControllerReady =
+    false
+
+  updateFriendControllerModeUi()
+
   if (
-    friendControllerMode ===
+    getEffectiveFriendControllerMode() ===
     'player2'
   ) {
     flushPlayerTwoControllerState(
@@ -5888,12 +6249,17 @@ function startSharedHostControllerPump():
         sharedHostControllerId =
           null
 
+        friendHostControllerReady =
+          false
+
+        updateFriendControllerModeUi()
+
         console.log(
           '[CaptureLink:F4.2.3] Host controller unavailable'
         )
 
         if (
-          friendControllerMode ===
+          getEffectiveFriendControllerMode() ===
           'player2'
         ) {
           flushPlayerOneControllerState(
@@ -5914,6 +6280,11 @@ function startSharedHostControllerPump():
       sharedHostControllerId =
         gamepad.id
 
+      friendHostControllerReady =
+        true
+
+      updateFriendControllerModeUi()
+
       console.log(
         '[CaptureLink:F4.2.3] Host controller detected:',
         gamepad.id
@@ -5926,7 +6297,7 @@ function startSharedHostControllerPump():
       )
 
     if (
-      friendControllerMode ===
+      getEffectiveFriendControllerMode() ===
       'player2'
     ) {
       flushPlayerOneControllerState(
@@ -6162,7 +6533,19 @@ async function createFriendHostOffer(): Promise<void> {
 
   closeFriendControllerPeer()
 
+  activeFriendControllerMode =
+    friendControllerMode
+
+  friendHostControllerReady =
+    false
+
+  friendRemoteControllerReady =
+    false
+
   friendPeerRole = 'host'
+
+  updateFriendControllerModeUi()
+
   friendControllerPeer =
     makeFriendControllerPeer()
 
@@ -6229,6 +6612,9 @@ async function joinFriendHost(): Promise<void> {
     closeFriendControllerPeer()
 
     friendPeerRole = 'guest'
+
+    updateFriendControllerModeUi()
+
     friendControllerPeer =
       makeFriendControllerPeer()
 
