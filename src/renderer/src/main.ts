@@ -1585,7 +1585,6 @@ let remoteSyntheticReleaseTimer: number | null = null
 let friendControllerPeer: FriendControllerPeer | null = null
 let friendPeerRole: 'host' | 'guest' | null = null
 
-let friendGuestMediaPanel: HTMLDivElement | null = null
 let friendGuestMediaVideo: HTMLVideoElement | null = null
 
 let friendDiagnosticsPanel:
@@ -4496,115 +4495,121 @@ function getFriendHostMediaStream(): MediaStream | null {
 }
 
 function clearFriendGuestMedia(): void {
-  if (friendGuestMediaVideo) {
+  const video =
+    friendGuestMediaVideo
+
+  if (video) {
     try {
-      friendGuestMediaVideo.pause()
-      friendGuestMediaVideo.srcObject = null
+      video.pause()
+      video.srcObject = null
     } catch {
       // Media element may already be detached.
     }
+
+    /*
+     * Only remove the video element created by Friend Mode.
+     *
+     * A normal Xbox Remote Play video element belongs to
+     * xbox-xcloud-player and must never be removed here.
+     */
+    if (
+      video.dataset.capturelinkSource ===
+        'friend'
+    ) {
+      video.remove()
+    }
   }
 
-  friendGuestMediaPanel?.remove()
-
-  friendGuestMediaPanel = null
   friendGuestMediaVideo = null
+
+  /*
+   * Friend guests do not have a local Xbox player occupying the
+   * stream surface, so return the normal application player to
+   * its idle state when the P2P session ends.
+   */
+  if (
+    !activePlayer &&
+    !webRtcConnected
+  ) {
+    showStreamPlaceholder(
+      'Choose an Xbox or join a Friend stream.'
+    )
+  }
 }
 
 function showFriendGuestMedia(
   stream: MediaStream
 ): void {
-  if (!friendGuestMediaPanel) {
-    const panel =
-      document.createElement('div')
+  /*
+   * F4.1:
+   *
+   * Friend Mode now uses the exact same CaptureLink stream
+   * surface as local Xbox Remote Play rather than an experimental
+   * full-window overlay.
+   */
+  let video =
+    friendGuestMediaVideo
 
-    panel.id =
-      'capturelink-friend-media-spike'
-
-    panel.style.position = 'fixed'
-    panel.style.inset = '24px'
-    panel.style.zIndex = '2147483646'
-    panel.style.background = '#050505'
-    panel.style.border =
-      '1px solid rgba(255,255,255,0.16)'
-    panel.style.borderRadius = '14px'
-    panel.style.boxShadow =
-      '0 24px 80px rgba(0,0,0,0.7)'
-    panel.style.display = 'flex'
-    panel.style.flexDirection = 'column'
-    panel.style.overflow = 'hidden'
-
-    const header =
-      document.createElement('div')
-
-    header.textContent =
-      'CaptureLink Friend Stream · Direct P2P'
-
-    header.style.padding =
-      '10px 14px'
-    header.style.fontSize =
-      '12px'
-    header.style.fontWeight =
-      '700'
-    header.style.letterSpacing =
-      '0.05em'
-    header.style.background =
-      'rgba(255,255,255,0.06)'
-
-    const video =
+  if (
+    !video ||
+    !video.isConnected
+  ) {
+    video =
       document.createElement('video')
 
     video.autoplay = true
-    video.controls = true
+    video.controls = false
     video.playsInline = true
-    video.muted = false
+    video.muted = true
 
-    video.style.width = '100%'
-    video.style.height = '100%'
-    video.style.flex = '1'
-    video.style.minHeight = '0'
-    video.style.objectFit = 'contain'
-    video.style.background = '#000'
+    video.dataset.capturelinkSource =
+      'friend'
 
-    panel.append(
-      header,
+    /*
+     * streamHolder's existing CSS handles sizing/object-fit for
+     * direct-child video elements, exactly as it does for the
+     * normal Xbox player.
+     */
+    streamHolder.appendChild(video)
+
+    friendGuestMediaVideo =
       video
-    )
-
-    document.body.appendChild(
-      panel
-    )
-
-    friendGuestMediaPanel = panel
-    friendGuestMediaVideo = video
   }
 
-  const video =
-    friendGuestMediaVideo
-
-  if (!video) {
-    return
+  if (
+    video.srcObject !== stream
+  ) {
+    video.srcObject =
+      stream
   }
 
-  if (video.srcObject !== stream) {
-    video.srcObject = stream
-  }
+  hideStreamPlaceholder()
+
+  /*
+   * Receiving gameplay should take the guest directly to the
+   * normal CaptureLink Stream view.
+   */
+  setActiveView('stream')
 
   void video
     .play()
     .then(() => {
       console.log(
-        '[CaptureLink:F3] Friend media playback started.'
+        '[CaptureLink:F4.1] Friend media attached to main player.'
+      )
+
+      setStreamStatus(
+        'Friend stream · Direct P2P'
       )
     })
     .catch((error) => {
       console.warn(
-        '[CaptureLink:F3] Automatic friend media playback was blocked:',
+        '[CaptureLink:F4.1] Automatic Friend playback was blocked:',
         error
       )
 
       setStreamStatus(
-        'F3 media received · press Play in the friend video window'
+        'Friend stream received · playback waiting'
       )
     })
 }
@@ -5031,6 +5036,16 @@ async function createFriendHostOffer(): Promise<void> {
 }
 
 async function joinFriendHost(): Promise<void> {
+  if (
+    activePlayer ||
+    webRtcConnected
+  ) {
+    setStreamStatus(
+      'Disconnect the local Xbox session before joining a Friend stream'
+    )
+    return
+  }
+
   try {
     const offer =
       await readFriendClipboard(
