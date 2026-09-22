@@ -5422,15 +5422,37 @@ function makeFriendControllerPeer(): FriendControllerPeer {
         return
       }
 
-      updateMasterControllerSource(
-        'friend',
+      if (
+        !activePlayer ||
+        !webRtcConnected
+      ) {
+        return
+      }
+
+      if (!remoteGamepadAdapter) {
+        remoteGamepadAdapter =
+          new RemoteGamepadAdapter(0)
+
+        remoteGamepadAdapter.attach(
+          activePlayer
+        )
+
+        console.log(
+          '[CaptureLink:AB] Legacy Friend controller lazily attached as Xbox gamepad 0'
+        )
+      }
+
+      remoteGamepadAdapter.updateState(
         state
       )
     },
 
     onRemoteControlEnded: () => {
-      clearMasterControllerSource(
-        'friend'
+      remoteGamepadAdapter?.detach()
+      remoteGamepadAdapter = null
+
+      console.log(
+        '[CaptureLink:AB] Legacy Friend controller detached'
       )
     },
 
@@ -5561,6 +5583,13 @@ async function createFriendHostOffer(): Promise<void> {
     return
   }
 
+  if (controllerAttached) {
+    setStreamStatus(
+      'Disable the local CaptureLink controller before hosting Friend control'
+    )
+    return
+  }
+
   const hostMedia =
     getFriendHostMediaStream()
 
@@ -5577,7 +5606,6 @@ async function createFriendHostOffer(): Promise<void> {
   friendControllerPeer =
     makeFriendControllerPeer()
 
-  ensureMasterController()
   updateInteractiveState()
 
   try {
