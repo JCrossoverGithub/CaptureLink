@@ -312,3 +312,139 @@ Current release-readiness work includes:
 The original motivation remains unchanged:
 
 **Recording the Xbox media already arriving at a computer should not require rebuilding that same media path with unnecessary hardware.**
+
+---
+
+## From capture utility to Friend experimentation
+
+After the core Remote Play and recording workflow became reliable, CaptureLink
+started exploring a second question:
+
+**Could the same Remote Play foundation allow another person to interact with
+the Host's Xbox from another CaptureLink client?**
+
+The first experiments focused only on controller state.
+
+A second Windows PC captured its locally connected controller through the
+browser Gamepad API and sent that state to the Host over a WebRTC DataChannel.
+
+The Host translated the remote controller state back into the xHome controller
+frames already used by CaptureLink.
+
+That experiment successfully controlled the physical Xbox.
+
+## Direct Internet peer-to-peer
+
+The controller experiment was then moved beyond a local/manual proof.
+
+STUN-assisted WebRTC traversal established a direct Internet peer-to-peer path
+between two physical Windows computers without requiring TURN in the tested
+network configuration.
+
+Measured controller-path RTT during successful tests was in the single-digit
+millisecond range.
+
+This changed the project from a purely local capture application into an
+experiment in extending local Xbox gameplay across the network.
+
+## Friend video
+
+The next milestone forwarded the Host's received Xbox video to the Friend peer.
+
+CaptureLink progressively tested:
+
+- direct Friend video
+- video-only streaming
+- receiver jitter-buffer behavior
+- 720p60 low-latency tuning
+- 1080p60 streaming
+- bitrate and decode diagnostics
+
+Under the validated test conditions, the 1080p60 path sustained approximately
+10 Mbps with low decode and network latency.
+
+These results are test observations rather than guaranteed performance across
+all networks or hardware.
+
+## Remote local multiplayer
+
+The original remote-controller path controlled the same Xbox controller as the
+Host.
+
+CaptureLink then tested two separate product concepts.
+
+### Shared Controller
+
+Host and Friend controller state can be combined into one logical Xbox
+controller.
+
+Buttons and triggers are cooperative, while stick arbitration chooses the
+stronger movement for each stick.
+
+The mixer prototype worked during earlier validation, but the current
+Bluetooth-era build requires another controlled Shared Controller retest.
+
+### Player 2
+
+CaptureLink also created a second independent xHome controller.
+
+The Host became Xbox controller 1 and the Friend became Xbox controller 2.
+
+This was successfully validated in NBA 2K Blacktop using two physical Windows
+PCs, demonstrating that CaptureLink could extend a game's local multiplayer
+controller interface across the network.
+
+A later test also validated the Friend controller path using a
+Bluetooth-connected controller.
+
+## Direct Invite
+
+Early Friend experiments exchanged raw WebRTC offer and answer information
+manually.
+
+CaptureLink later wrapped that exchange in Direct Invite.
+
+The Host creates an invite and sends it to the Friend. The Friend joins from
+the copied invite and returns a response. The Host monitors for the response
+and completes the connection automatically.
+
+The signaling exchange itself requires no CaptureLink-hosted service.
+
+After signaling, gameplay video and controller traffic travel directly between
+the peers.
+
+An optional short-code WebSocket rendezvous prototype was preserved under:
+
+~~~text
+experiments/signaling-broker/
+~~~
+
+It is not required by the current Direct Invite workflow.
+
+## Controller compatibility
+
+Friend controller capture originally assumed the first browser-visible
+gamepad.
+
+The compatibility path was later hardened to:
+
+- prefer Chromium's `standard` gamepad mapping
+- support Windows-visible USB controllers
+- support Windows-visible Bluetooth controllers
+- normalize controller arrays for the Xbox mapping
+- handle disconnect/reconnect
+- avoid coupling controller sampling to video rendering
+
+The transport itself does not need to know whether Windows received a
+controller through USB or Bluetooth.
+
+## Current direction
+
+CaptureLink remains a local-first Xbox Remote Play and recording application.
+
+Friend Mode is now a significant experimental extension of that foundation,
+with Player 2 and Direct Invite proven end-to-end and Shared Controller still
+requiring additional validation.
+
+The project continues to avoid making a CaptureLink-operated cloud backend a
+requirement for its core workflows.

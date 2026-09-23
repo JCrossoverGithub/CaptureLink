@@ -20,13 +20,37 @@ The application uses Electron's Chromium runtime for the Remote Play media path.
 
 ## Repository setup
 
-Clone the repository and install dependencies:
+Clone the repository and install dependencies from Windows PowerShell:
 
-```bash
+~~~powershell
 git clone https://github.com/JCrossoverGithub/CaptureLink.git
-cd CaptureLink
-npm install
-```
+Set-Location CaptureLink
+npm ci
+~~~
+
+`npm ci` is preferred when reproducing the checked-in dependency state.
+
+## WSL and Windows tooling
+
+The repository may be edited and managed with Git from WSL against the Windows
+checkout.
+
+Node, npm, Electron, dependency installation, development runtime, and
+production packaging should be executed using the Windows Node/npm toolchain.
+
+Do not run `npm install` or `npm ci` from WSL against the same checkout's
+Windows `node_modules` directory. Native/platform-specific dependencies can be
+replaced with Linux variants and break Electron on Windows.
+
+A typical command from WSL is:
+
+~~~bash
+powershell.exe -NoProfile -Command '
+Set-Location "C:\Users\thede\projects\CaptureLink"
+npm run typecheck
+npm run build
+'
+~~~
 
 ## Development mode
 
@@ -146,11 +170,17 @@ Expected release artifacts are written beneath:
 release/
 ```
 
-The primary installer is:
+The primary installer follows this naming convention:
 
-```text
-CaptureLink-Setup-0.2.0.exe
-```
+~~~text
+CaptureLink-Setup-<version>.exe
+~~~
+
+For example, development version `0.2.1` produces:
+
+~~~text
+CaptureLink-Setup-0.2.1.exe
+~~~
 
 A corresponding unpacked application is produced beneath:
 

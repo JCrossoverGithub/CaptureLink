@@ -1,148 +1,188 @@
-# CaptureLink v0.1 Release Scope
+# CaptureLink Release Scope
 
-## Release goal
+## Current phase
 
-CaptureLink v0.1 is a Windows-first technical preview of the local Xbox Remote Play and recording workflow.
+CaptureLink is pre-release Windows software.
 
-The purpose of v0.1 is to establish a usable, installable application around the media path already proven during XboxLink research.
+Current development version:
 
-It is not intended to be a complete streaming platform or cloud service.
+~~~text
+0.2.1
+~~~
 
-## Included
+The published GitHub release may lag behind the development version while
+features are being validated.
 
-### Xbox connection
+## Core product scope
+
+CaptureLink is a Windows-first Xbox Remote Play application focused on:
+
+- Xbox Remote Play
+- local Xbox media playback
+- incoming in-game voice-chat capture when present in the Remote Play audio
+- microphone uplink
+- local recording
+- recording-library management
+- media export
+- diagnostics
+- controller input
+
+CaptureLink also contains experimental Friend functionality for direct
+peer-to-peer gameplay and controller transport.
+
+## Xbox Remote Play
+
+Included:
 
 - Microsoft/Xbox sign-in
-- persisted authentication outside the repository
+- authentication persistence outside the repository
 - Xbox console discovery
-- console selection
 - xHome Remote Play session creation
-- SDP and ICE exchange
-- session keepalive
-- connect/disconnect behavior
-
-### Media
-
-- live Xbox video
-- live Xbox game audio
-- incoming in-game voice chat when present in the received Remote Play stream
-- local playback volume
-- local mute
-- supported speaker/output selection
+- SDP/ICE negotiation
+- session lifecycle handling
+- Xbox video
+- Xbox game audio
+- incoming in-game voice chat when present in the received stream
+- audio-only Remote Play mode
+- PC-connected controller input
+- microphone uplink
 - fullscreen
 - Picture-in-Picture
+- diagnostics
+- audio resynchronization
 
-### Input and chat controls
+## Recording
 
-- optional PC-connected controller
-- keyboard controls provided through the player adapter
-- microphone device selection
-- microphone input meter
-- Remote Play microphone uplink
-- microphone start/stop controls
-
-### Diagnostics
-
-- connection state
-- WebRTC statistics
-- audio/video timing information
-- audio jitter-buffer information
-- manual audio resynchronization
-- conservative automatic audio resynchronization
-
-### Recording
+Included:
 
 - audio-only recording
-- video + audio recording
-- optional local microphone inclusion
-- independent recording-microphone gain
-- disk-backed recording writes
+- video + Xbox-audio recording
+- optional local microphone recording mix
+- recording-only microphone gain
+- disk-backed recording
 - disk-space checks
-- elapsed recording state
-- safe finalization during expected shutdown/disconnect paths
-
-### Recording library
-
-- persisted recording metadata
-- recording history
-- open recording
-- reveal in folder
+- recording library
 - rename
 - delete
-- missing-file handling
+- open
+- reveal in folder
+- original WebM export
 
-### Export
+WebM is CaptureLink's native recording format.
 
-- original WebM copy
-- MP4 export for video
-- MP3 export for audio
-- WAV export for audio
-- export progress
-- external FFmpeg integration for MP4, MP3, and WAV export
+## Converted exports
 
-### Windows distribution
+CaptureLink supports FFmpeg-based conversion paths for:
 
-- Electron desktop build
+- MP4
+- MP3
+- WAV
+
+The current CaptureLink Windows installer does **not** bundle an FFmpeg
+executable.
+
+Converted exports therefore require an FFmpeg runtime that CaptureLink can
+resolve separately.
+
+The native WebM recording path does not require FFmpeg.
+
+## Friend Direct
+
+Current experimental Friend functionality includes:
+
+- direct CaptureLink-to-CaptureLink WebRTC
+- STUN-assisted Internet traversal
+- serverless Direct Invite signaling
+- direct Friend video
+- low-latency controller DataChannel
+- Shared Controller mode
+- Player 2 mode
+- USB and Bluetooth Windows gamepad support
+- controller reconnect handling
+- Friend media diagnostics
+
+Player 2 has been validated with a remote Bluetooth-connected controller.
+
+Shared Controller still requires additional validation.
+
+The current Friend media path is video-only. Xbox audio is not yet forwarded
+to the Friend.
+
+There is currently no TURN fallback.
+
+## Distribution
+
+Current Windows distribution includes:
+
+- Electron desktop application
 - NSIS installer
-- CaptureLink executable identity
-- application icon
-- installer icon
+- CaptureLink executable and installer identity
+- CaptureLink icon
 - desktop shortcut
 - Start Menu shortcut
-- packaged Xbox player bundle
-- packaged FFmpeg runtime
+- pinned Xbox player browser bundle
+- third-party notices and provenance metadata
 
-## Explicitly deferred
+The installer is currently unsigned.
 
-The following are not requirements for v0.1:
+## Explicitly out of core scope
+
+CaptureLink does not currently require:
 
 - CaptureLink cloud accounts
-- CaptureLink-hosted control plane
+- a CaptureLink-hosted control plane
 - cloud recording storage
-- remote relay infrastructure
-- transcription
-- GPULink integration
-- collaborative workflows
-- built-in editing suite
-- direct streaming to third-party platforms
-- guaranteed macOS or Linux releases
-- touch-control productization
-- dedicated mouse-input productization
-- Party Chat claims until separately validated
+- GPU infrastructure
+- transcription infrastructure
+- a required signaling backend
+- a required TURN service
+- a built-in editing suite
+- third-party livestream-platform integration
+- macOS support
+- Linux support
 
-## Known limitation accepted for v0.1
+Optional infrastructure may be explored later without becoming a requirement
+for the core application.
 
-Some games can assign gameplay controller ownership to the Remote Play endpoint when Remote Play is active during gameplay initialization.
+## Known limitations
 
-This behavior has also been reproduced with Microsoft's own Remote Play client.
+Current limitations include:
 
-For v0.1, CaptureLink documents the behavior and workaround rather than modifying the stable Remote Play protocol path aggressively.
+- Shared Controller needs further validation.
+- Direct Friend connectivity can fail on restrictive NAT/firewall combinations.
+- Friend audio is not yet transported.
+- Some games have title-specific Remote Play controller-ownership behavior.
+- Party Chat has not been independently validated.
+- Converted exports depend on an external FFmpeg runtime.
+- The Windows installer is unsigned.
 
 See:
 
-```text
-docs/known-issues/xbox-controller-ownership.md
-```
+~~~text
+docs/known-issues/
+~~~
 
-## Remaining release-readiness work
+## Release-readiness work
 
-Before calling v0.1 a public technical preview, the project still needs to complete or explicitly resolve:
+Before a broader public release, CaptureLink should explicitly resolve or
+accept:
 
 - Microsoft/Xbox service-terms review
-- trademark/product-naming review
-- third-party licensing and attribution review
-- FFmpeg redistribution review completed; v0.1 does not bundle the audited GPLv3 executable
-- application-license decision
-- user-facing recording/privacy disclosure
+- product naming/trademark review
+- CaptureLink repository-license decision
+- recording/privacy disclosure
 - native-Windows regression testing
 - long-session testing
-- installer/code-signing strategy
-- final release artifact verification
+- installed-build testing
+- code-signing strategy
+- release artifact checksum verification
 
 ## Product positioning
 
-CaptureLink is a local Xbox Remote Play viewing and recording application.
+CaptureLink is an independent local Xbox Remote Play and recording application
+with experimental direct Friend functionality.
 
-Recording should be described as local capture of media received through the user's own Remote Play session.
+It should not imply Microsoft or Xbox endorsement.
 
-CaptureLink should not imply that it is an official Xbox application or that Microsoft endorses the project.
+Recording should be described as capture of media received through the user's
+own Remote Play session.
