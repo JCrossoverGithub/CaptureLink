@@ -4308,3 +4308,55 @@ body {
 .rail-console-primary:hover:not(:disabled), .stream-connect-action:hover:not(:disabled) { background: #337acf; }
 .rail-console-primary:disabled, .stream-connect-action:disabled { opacity: .55; cursor: default; }
 .stream-connect-action { display: inline-flex; align-items: center; justify-content: center; margin-top: 12px; }
+/* CAPTURELINK_SETUP_PROGRESSIVE_DISCLOSURE_2026_10_22 */
+/* Stream visuals and friend controls are intentionally unchanged. */
+[data-panel="connect"] .view-heading--compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.connect-return-to-stream {
+  align-self: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--cl-border, rgba(127,146,174,.24));
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  min-height: 38px;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.connect-return-to-stream:hover { background: rgba(127,146,174,.09); }
+.connect-return-to-stream:focus-visible,
+.connect-support > summary:focus-visible {
+  outline: 2px solid #61a6ff;
+  outline-offset: 3px;
+}
+.connect-support {
+  margin-top: 14px;
+  border: 1px solid var(--cl-border, rgba(127,146,174,.24));
+  border-radius: 12px;
+  padding: 0 16px;
+}
+.connect-support > summary {
+  cursor: pointer;
+  padding: 15px 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+.connect-support[open] > summary { border-bottom: 1px solid var(--cl-border, rgba(127,146,174,.24)); }
+.connect-support > .connect-overview {
+  margin: 14px 0 0;
+}
+.connect-support > .remote-play-setup-slot { margin-bottom: 14px; }
+.connect-support > .remote-play-setup-slot:empty { display: none; }
+@media (max-width: 700px) {
+  [data-panel="connect"] .view-heading--compact { align-items: flex-start; }
+  .connect-return-to-stream { width: 100%; }
+  .connect-support > .connect-overview { grid-template-columns: 1fr; }
+}

@@ -400,10 +400,10 @@ root.innerHTML = `
         <section class="view-panel" data-panel="connect">
           <div class="view-heading view-heading--compact">
             <div>
-              <div class="eyebrow">CONNECT</div>
-              <h1>Xbox connection</h1>
+              <div class="eyebrow">XBOX SETUP</div>
+              <h1>Consoles &amp; setup</h1>
               <p class="view-heading__support">
-                Sign in, confirm Remote Play, and choose the Xbox you want to capture.
+                Your consoles and connection help. To start playing, connect from Stream.
               </p>
             </div>
           </div>
@@ -463,7 +463,7 @@ root.innerHTML = `
             <div class="section-heading section-heading--minimal">
               <div>
                 <div class="eyebrow">CONSOLES</div>
-                <h2>Your Xboxes</h2>
+                <h2>Available Xboxes</h2>
                 <p id="console-message" aria-live="polite">Sign in to discover your Xbox consoles.</p>
               </div>
 
@@ -4456,6 +4456,9 @@ function renderConsoleState(
   title: string,
   message: string
 ): void {
+  if (state === 'empty' || state === 'error' || state === 'signed-out') {
+    connectSupport.open = true
+  }
   const icon = state === 'loading'
     ? '<span class="console-list-state__spinner" aria-hidden="true"></span>'
     : state === 'error'
@@ -4605,6 +4608,31 @@ remotePlaySetupSlot.append(xboxSetupBanner)
 const xboxSetupDetails =
   xboxSetupBanner.querySelector<HTMLDetailsElement>('.xbox-setup-details')
 
+// CAPTURELINK_SETUP_PROGRESSIVE_DISCLOSURE_2026_10_22
+// Put the primary task (available consoles) before advanced account/setup details.
+// Move existing nodes rather than duplicating Xbox account or help controls.
+const connectPanel = requireElement<HTMLElement>('[data-panel="connect"]')
+const connectOverview = requireElement<HTMLElement>('.connect-overview')
+const connectConsoleSurface = requireElement<HTMLElement>('.console-surface')
+const connectSupport = document.createElement('details')
+connectSupport.id = 'connect-support'
+connectSupport.className = 'connect-support'
+connectSupport.open = true // Keep first-launch account information visible until auth resolves.
+const connectSupportSummary = document.createElement('summary')
+connectSupportSummary.textContent = 'Account & Remote Play help'
+connectSupport.append(connectSupportSummary, connectOverview, remotePlaySetupSlot)
+connectConsoleSurface.insertAdjacentElement('afterend', connectSupport)
+
+const returnToStreamButton = document.createElement('button')
+returnToStreamButton.type = 'button'
+returnToStreamButton.className = 'connect-return-to-stream'
+returnToStreamButton.textContent = 'Back to Stream'
+returnToStreamButton.addEventListener('click', () => setActiveView('stream'))
+const connectHeading = connectPanel.querySelector<HTMLElement>('.view-heading')
+if (connectHeading) {
+  connectHeading.append(returnToStreamButton)
+}
+
 connectSetupToggle.addEventListener('click', () => {
   if (!xboxSetupDetails) {
     return
@@ -4620,6 +4648,7 @@ xboxSetupDetails?.addEventListener('toggle', () => {
 })
 
 function setAuthenticated(): void {
+  connectSupport.open = false
   signOutButton.hidden = false
   signInButton.hidden = true
   topbarAccountDivider.hidden = false
@@ -4642,6 +4671,7 @@ function setAuthenticated(): void {
 }
 
 function setSignedOut(): void {
+  connectSupport.open = true
   signOutButton.hidden = true
   signInButton.hidden = false
   topbarAccountDivider.hidden = true
