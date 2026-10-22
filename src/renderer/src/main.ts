@@ -354,7 +354,7 @@ root.innerHTML = `
               <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
               <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
             </svg>
-            <span>Connect</span>
+            <span>Xbox setup</span>
           </button>
 
           <button class="nav-item is-active" type="button" data-view="stream" aria-current="page">
@@ -488,7 +488,7 @@ root.innerHTML = `
                 <div id="stream-holder" class="stream-holder">
                   <div id="stream-placeholder" class="stream-placeholder">
                     <div class="stream-mark">CL</div>
-                    <p>Choose an Xbox in Connect to start Remote Play.</p>
+                    <p>Connect to an Xbox to start Remote Play.</p>
                   </div>
                 </div>
 
@@ -635,31 +635,30 @@ root.innerHTML = `
                   <span id="rail-console-status" class="rail-status">Idle</span>
                 </div>
 
-                <div class="rail-console rail-console--select">
-                  <div class="rail-console__icon rail-console__icon--device" aria-hidden="true">
+                <button id="rail-console-select" class="rail-console rail-console--select" type="button" aria-expanded="false" aria-controls="rail-console-menu" aria-label="Choose an Xbox">
+                  <span class="rail-console__icon rail-console__icon--device" aria-hidden="true">
                     <svg viewBox="0 0 32 32">
                       <rect x="7" y="3.5" width="11" height="25" rx="2"/>
                       <circle cx="12.5" cy="8" r="1.2"/>
                       <path d="M21 18.5h4.5a3 3 0 0 1 2.7 4.3l-.9 1.9a1.7 1.7 0 0 1-2.8.5L23 24h-3l-1.5 1.2"/>
                     </svg>
-                  </div>
-
-                  <div class="rail-console__copy">
+                  </span>
+                  <span class="rail-console__copy">
                     <strong id="rail-console-name">No console selected</strong>
-                    <span id="rail-console-detail">Choose one in Connect</span>
-                  </div>
-
+                    <span id="rail-console-detail">Sign in or discover your Xbox</span>
+                  </span>
                   <svg class="rail-console__chevron" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="m8 10 4 4 4-4"/>
                   </svg>
-                </div>
-
+                </button>
+                <div id="rail-console-menu" class="rail-console-menu" hidden aria-label="Available Xbox consoles"></div>
+                <button id="rail-console-connect" class="rail-console-primary" type="button">Connect to Xbox</button>
                 <button class="rail-link rail-link--with-icon view-jump" type="button" data-view-target="connect">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M20 6v5h-5M4 18v-5h5"/>
                     <path d="M6.1 9a7 7 0 0 1 11.4-2.4L20 11M4 13l2.5 4.4A7 7 0 0 0 17.9 15"/>
                   </svg>
-                  <span>Manage consoles</span>
+                  <span>Console setup &amp; help</span>
                 </button>
               </article>
 
@@ -1544,6 +1543,14 @@ const railConsoleDetail =
   requireElement<HTMLElement>('#rail-console-detail')
 const railConsoleStatus =
   requireElement<HTMLElement>('#rail-console-status')
+const railConsoleSelect = requireElement<HTMLButtonElement>('#rail-console-select')
+const railConsoleMenu = requireElement<HTMLDivElement>('#rail-console-menu')
+const railConsoleConnect = requireElement<HTMLButtonElement>('#rail-console-connect')
+const streamConnectAction = document.createElement('button')
+streamConnectAction.id = 'stream-connect-action'
+streamConnectAction.type = 'button'
+streamConnectAction.className = 'stream-connect-action'
+streamHolder.querySelector('#stream-placeholder')?.append(streamConnectAction)
 const railSessionState =
   requireElement<HTMLElement>('#rail-session-state')
 const railSessionConnection =
@@ -1747,6 +1754,37 @@ document.querySelectorAll<HTMLButtonElement>('.view-jump[data-view-target]')
 setActiveView('stream')
 
 let signedIn = false
+// CAPTURELINK_STREAM_FIRST_UX_2026_10_22
+// Console data is independent of Connect-page DOM; Stream and Connect use one session path.
+type DiscoveredXbox = Awaited<ReturnType<typeof window.captureLink.getXboxConsoles>>[number]
+const LAST_XBOX_STORAGE_KEY = 'capturelink.lastSuccessfulXboxServerId'
+let discoveredXboxes: DiscoveredXbox[] = []
+function loadRememberedXboxId(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_XBOX_STORAGE_KEY)
+  } catch {
+    // Remote Play remains usable even if Electron storage is unavailable.
+    return null
+  }
+}
+function saveRememberedXboxId(serverId: string): void {
+  try {
+    window.localStorage.setItem(LAST_XBOX_STORAGE_KEY, serverId)
+  } catch {
+    // Saving the preference must never interrupt a successful Xbox connection.
+  }
+}
+function clearRememberedXboxId(): void {
+  try {
+    window.localStorage.removeItem(LAST_XBOX_STORAGE_KEY)
+  } catch {
+    // Signing out must not fail due to unavailable preference storage.
+  }
+}
+let preferredXboxServerId = loadRememberedXboxId()
+let selectedXboxServerId: string | null = null
+let xboxDiscoveryBusy = false
+let xboxDiscoveryGeneration = 0
 let streamBusy = false
 let activeServerId: string | null = null
 let activePlayer: CaptureLinkPlayer | null = null
@@ -2419,6 +2457,9 @@ function showStreamPlaceholder(message: string): void {
     `
     streamHolder.prepend(placeholder)
   }
+  if (streamConnectAction.parentElement !== placeholder) {
+    placeholder.append(streamConnectAction)
+  }
 
   const text = placeholder.querySelector<HTMLParagraphElement>('p')
 
@@ -2438,7 +2479,7 @@ function hideStreamPlaceholder(): void {
   }
 }
 
-function resetStreamHolder(message = 'Choose an Xbox below to start Remote Play.'): void {
+function resetStreamHolder(message = 'Connect to an Xbox to start Remote Play.'): void {
   streamHolder.querySelectorAll('video, audio').forEach((element) => {
     element.remove()
   })
@@ -4066,6 +4107,113 @@ async function toggleRecording(kind: RecordingKind): Promise<void> {
   await startRecording(kind)
 }
 
+// The existing Xbox WebRTC/session function is the only connection entry point.
+// These renderers expose it on Stream as well as on the setup page.
+function getSelectedXbox(): DiscoveredXbox | undefined {
+  return discoveredXboxes.find((xbox) => xbox.serverId === selectedXboxServerId)
+}
+
+function closeXboxConsoleMenu(): void {
+  railConsoleMenu.hidden = true
+  railConsoleSelect.setAttribute('aria-expanded', 'false')
+}
+
+function renderXboxConsoleMenu(): void {
+  railConsoleMenu.replaceChildren()
+  if (!signedIn) {
+    const note = document.createElement('p')
+    note.textContent = 'Sign in with Microsoft to find your Xbox.'
+    railConsoleMenu.append(note)
+  } else if (discoveredXboxes.length === 0) {
+    const note = document.createElement('p')
+    note.textContent = xboxDiscoveryBusy ? 'Searching for Xbox consoles…' : 'No Xbox consoles found yet.'
+    railConsoleMenu.append(note)
+  } else {
+    for (const xbox of discoveredXboxes) {
+      const option = document.createElement('button')
+      option.type = 'button'
+      option.className = 'rail-console-option'
+      option.dataset.serverId = xbox.serverId
+      option.setAttribute('aria-pressed', String(selectedXboxServerId === xbox.serverId))
+      option.textContent = `${xbox.deviceName} · ${formatConsoleType(xbox.consoleType)}`
+      option.disabled = streamBusy || getCaptureLinkSessionSource() !== 'none'
+      railConsoleMenu.append(option)
+    }
+  }
+  const refresh = document.createElement('button')
+  refresh.type = 'button'
+  refresh.className = 'rail-console-refresh'
+  refresh.textContent = 'Refresh consoles'
+  refresh.disabled = !signedIn || streamBusy || xboxDiscoveryBusy || getCaptureLinkSessionSource() !== 'none'
+  refresh.addEventListener('click', () => {
+    closeXboxConsoleMenu()
+    void loadConsoles()
+  })
+  railConsoleMenu.append(refresh)
+}
+
+function selectXbox(serverId: string): void {
+  const xbox = discoveredXboxes.find((item) => item.serverId === serverId)
+  if (!xbox || streamBusy || getCaptureLinkSessionSource() !== 'none') {
+    return
+  }
+  selectedXboxServerId = xbox.serverId
+  setRailConsole(
+    xbox.deviceName,
+    `${formatConsoleType(xbox.consoleType)} · ${xbox.powerState}`,
+    'Ready'
+  )
+  renderXboxConsoleMenu()
+  updateXboxQuickConnect()
+}
+
+function updateXboxQuickConnect(): void {
+  const sessionSource = getCaptureLinkSessionSource()
+  const isFriendGuest = sessionSource === 'friend-guest'
+  const canStart = signedIn && !streamBusy && sessionSource === 'none'
+  const xbox = getSelectedXbox()
+  railConsoleSelect.disabled = streamBusy || sessionSource !== 'none'
+  railConsoleSelect.setAttribute(
+    'aria-label',
+    xbox ? `Choose an Xbox; currently selected: ${xbox.deviceName}` : 'Choose an Xbox'
+  )
+  railConsoleConnect.hidden = isFriendGuest || sessionSource === 'xbox' || sessionSource === 'friend-host'
+  railConsoleConnect.disabled = !signedIn ? false : !canStart || xboxDiscoveryBusy
+  railConsoleConnect.textContent = !signedIn
+    ? 'Sign in with Microsoft'
+    : xboxDiscoveryBusy
+      ? 'Finding Xboxes…'
+      : xbox
+        ? `Connect to ${xbox.deviceName}`
+        : 'Find your Xbox'
+  streamConnectAction.hidden = streamHolder.querySelector<HTMLDivElement>('#stream-placeholder')?.hidden === true ||
+    isFriendGuest || sessionSource === 'xbox' || sessionSource === 'friend-host'
+  streamConnectAction.disabled = railConsoleConnect.disabled
+  streamConnectAction.textContent = railConsoleConnect.textContent
+  consoleList.querySelectorAll<HTMLButtonElement>('.console-connect').forEach((button) => {
+    const id = button.closest<HTMLElement>('.console-card')?.dataset.serverId
+    button.textContent = id === activeServerId
+      ? (streamBusy ? 'Connecting…' : 'Connected')
+      : 'Connect'
+  })
+}
+
+function startXboxFromQuickConnect(): void {
+  if (!signedIn) {
+    signInButton.click()
+    return
+  }
+  if (streamBusy || getCaptureLinkSessionSource() !== 'none') {
+    return
+  }
+  const xbox = getSelectedXbox()
+  if (xbox) {
+    void connectToConsole(xbox.serverId)
+  } else {
+    void loadConsoles()
+  }
+}
+
 function updateInteractiveState(): void {
   const sessionSource =
     getCaptureLinkSessionSource()
@@ -4292,6 +4440,7 @@ function updateInteractiveState(): void {
         !signedIn ||
         locked
     })
+  updateXboxQuickConnect()
 }
 
 function resetConsoleButtonLabels(): void {
@@ -4325,11 +4474,12 @@ function renderConsoleState(
 }
 
 async function loadConsoles(): Promise<void> {
-  if (streamBusy || activeServerId) {
+  if (!signedIn || streamBusy || activeServerId || xboxDiscoveryBusy || getCaptureLinkSessionSource() !== 'none') {
     return
   }
-
-  consoleMessage.textContent = 'Looking for Xbox consoles...'
+  const generation = ++xboxDiscoveryGeneration
+  xboxDiscoveryBusy = true
+  consoleMessage.textContent = 'Looking for Xbox consoles…'
   consoleList.setAttribute('aria-busy', 'true')
   renderConsoleState(
     'loading',
@@ -4338,92 +4488,76 @@ async function loadConsoles(): Promise<void> {
   )
   refreshConsolesButton.disabled = true
   refreshConsolesButton.classList.add('is-busy')
+  updateXboxQuickConnect()
+  renderXboxConsoleMenu()
 
   try {
     const consoles = await window.captureLink.getXboxConsoles()
+    // Ignore stale results if the user signs out or a session starts mid-discovery.
+    if (generation !== xboxDiscoveryGeneration || !signedIn || activeServerId || getCaptureLinkSessionSource() !== 'none') return
+    discoveredXboxes = consoles
+    const selectedStillExists = consoles.some((xbox) => xbox.serverId === selectedXboxServerId)
+    const remembered = consoles.find((xbox) => xbox.serverId === preferredXboxServerId)
+    selectedXboxServerId = selectedStillExists
+      ? selectedXboxServerId
+      : (remembered?.serverId ?? consoles[0]?.serverId ?? null)
 
     if (consoles.length === 0) {
-      consoleMessage.textContent =
-        'No Xbox consoles were found for this account.'
+      consoleMessage.textContent = 'No Xbox consoles were found for this account.'
       renderConsoleState(
         'empty',
         'No Xbox consoles found',
-        'Check the account and confirm Remote features are enabled on the console.'
+        'Check your Microsoft account and confirm Remote features are enabled on the Xbox.'
       )
-      setRailConsole('No console found', 'Check your Xbox account and Remote Play settings', 'Unavailable')
+      setRailConsole('No Xbox found', 'Refresh or check Remote Play setup', 'Unavailable')
       return
     }
 
-    const firstConsole = consoles[0]
-
-    if (firstConsole) {
+    consoleMessage.textContent = `${consoles.length} Xbox console${consoles.length === 1 ? '' : 's'} available.`
+    consoleList.innerHTML = consoles.map((xbox) => `
+      <div class="console-card console-card--minimal" data-server-id="${escapeHtml(xbox.serverId)}">
+        <div class="console-card__identity">
+          <div class="console-card__device" aria-hidden="true">X</div>
+          <div>
+            <div class="console-name">${escapeHtml(xbox.deviceName)}</div>
+            <div class="console-model">${escapeHtml(formatConsoleType(xbox.consoleType))}</div>
+          </div>
+        </div>
+        <div class="console-card__actions">
+          <div class="console-power">
+            <span class="console-power__dot" aria-hidden="true"></span>
+            ${escapeHtml(xbox.powerState)}
+          </div>
+          <button type="button" class="console-connect" title="Start Xbox Remote Play">Connect</button>
+        </div>
+      </div>
+    `).join('')
+    const selected = getSelectedXbox()
+    if (selected) {
       setRailConsole(
-        firstConsole.deviceName,
-        `${formatConsoleType(firstConsole.consoleType)} · ${firstConsole.powerState}`,
+        selected.deviceName,
+        `${formatConsoleType(selected.consoleType)} · ${selected.powerState}`,
         'Ready'
       )
     }
-
-    consoleMessage.textContent =
-      `${consoles.length} console${consoles.length === 1 ? '' : 's'} found.`
-
-    consoleList.innerHTML = consoles
-      .map(
-        (console) => `
-          <div
-            class="console-card console-card--minimal"
-            data-server-id="${escapeHtml(console.serverId)}"
-          >
-            <div class="console-card__identity">
-              <div class="console-card__device" aria-hidden="true">X</div>
-              <div>
-                <div class="console-name">
-                  ${escapeHtml(console.deviceName)}
-                </div>
-
-                <div class="console-model">
-                  ${escapeHtml(formatConsoleType(console.consoleType))}
-                </div>
-              </div>
-            </div>
-
-            <div class="console-card__actions">
-              <div class="console-power">
-                <span class="console-power__dot" aria-hidden="true"></span>
-                ${escapeHtml(console.powerState)}
-              </div>
-
-              <button
-                type="button"
-                class="console-connect"
-                title="Start Xbox Remote Play"
-              >
-                Connect
-              </button>
-            </div>
-          </div>
-        `
-      )
-      .join('')
   } catch (error) {
-    const message = error instanceof Error
-      ? error.message
-      : 'Xbox console discovery failed.'
-
+    if (generation !== xboxDiscoveryGeneration || !signedIn || activeServerId || getCaptureLinkSessionSource() !== 'none') return
+    discoveredXboxes = []
+    selectedXboxServerId = null
+    const message = error instanceof Error ? error.message : 'Xbox discovery failed.'
     consoleMessage.textContent = message
-    renderConsoleState(
-      'error',
-      'Console discovery failed',
-      message
-    )
-    setRailConsole('Console unavailable', 'Discovery failed', 'Error')
+    renderConsoleState('error', 'Console discovery failed', message)
+    setRailConsole('Xbox unavailable', 'Refresh or open console setup', 'Error')
   } finally {
-    consoleList.setAttribute('aria-busy', 'false')
-    refreshConsolesButton.classList.remove('is-busy')
-    updateInteractiveState()
+    if (generation === xboxDiscoveryGeneration) {
+      xboxDiscoveryBusy = false
+      consoleList.setAttribute('aria-busy', 'false')
+      refreshConsolesButton.classList.remove('is-busy')
+      renderXboxConsoleMenu()
+      updateInteractiveState()
+    }
   }
 }
-
 // CAPTURELINK_REMOTE_PLAY_SETUP_UI
 const signOutButton = document.createElement('button')
 signOutButton.id = 'sign-out-xbox'
@@ -4515,6 +4649,11 @@ function setSignedOut(): void {
   topbarAccountMenu.open = false
   settingsSignOutButton.hidden = true
   signedIn = false
+  ++xboxDiscoveryGeneration
+  xboxDiscoveryBusy = false
+  discoveredXboxes = []
+  selectedXboxServerId = null
+  closeXboxConsoleMenu()
   accountStatus.textContent = 'Signed out'
   connectAccountState.textContent = 'Not signed in'
   connectAccountBadge.textContent = 'Signed out'
@@ -4536,7 +4675,9 @@ function setSignedOut(): void {
 
   setRailConsole('No console selected', 'Sign in to discover your Xboxes', 'Idle')
   setRailSession('Idle', 'Waiting')
-  setActiveView('connect')
+  setActiveView('stream')
+  showStreamPlaceholder('Sign in with Microsoft to connect to your Xbox.')
+  renderXboxConsoleMenu()
   updateInteractiveState()
 }
 
@@ -4607,44 +4748,40 @@ async function disconnectFromConsole(): Promise<void> {
     streamBusy = false
     resetConsoleButtonLabels()
     resetStreamHolder()
-    railConsoleStatus.textContent = signedIn ? 'Ready' : 'Idle'
+    const selected = getSelectedXbox()
+    if (selected) {
+      setRailConsole(selected.deviceName, `${formatConsoleType(selected.consoleType)} · ${selected.powerState}`, 'Ready')
+    } else {
+      setRailConsole('No Xbox selected', 'Refresh to discover an Xbox', 'Idle')
+    }
     setRailSession('Idle', 'Waiting')
     setStreamStatus('Remote Play idle')
     updateInteractiveState()
   }
 }
 
-async function connectToConsole(
-  serverId: string,
-  button: HTMLButtonElement
-): Promise<void> {
-  if (streamBusy || activeServerId) {
+async function connectToConsole(serverId: string): Promise<void> {
+  if (!signedIn || streamBusy || getCaptureLinkSessionSource() !== 'none') {
     return
   }
-
+  const xbox = discoveredXboxes.find((item) => item.serverId === serverId)
+  if (!xbox) {
+    setStreamStatus('Xbox not found. Refresh the console list and try again.')
+    return
+  }
   const playerConstructor = getPlayerExports()?.Player
-
   if (!playerConstructor) {
-    consoleMessage.textContent =
-      'Xbox WebRTC player bundle is missing. Run npm run vendor:xbox-player and restart CaptureLink.'
+    const message = 'Xbox WebRTC player bundle is missing. Run npm run vendor:xbox-player and restart CaptureLink.'
+    consoleMessage.textContent = message
+    setStreamStatus(message)
+    showStreamPlaceholder(message)
     return
   }
-
+  closeXboxConsoleMenu()
+  selectedXboxServerId = serverId
   streamBusy = true
   activeServerId = serverId
-  button.textContent = 'Connecting...'
-
-  const consoleCard = button.closest<HTMLElement>('.console-card')
-  const consoleName = consoleCard
-    ?.querySelector<HTMLElement>('.console-name')
-    ?.textContent
-    ?.trim() || 'Xbox console'
-  const consoleModel = consoleCard
-    ?.querySelector<HTMLElement>('.console-model')
-    ?.textContent
-    ?.trim() || 'Remote Play'
-
-  setRailConsole(consoleName, consoleModel, 'Connecting')
+  setRailConsole(xbox.deviceName, formatConsoleType(xbox.consoleType), 'Connecting')
   setRailSession('Connecting', 'Provisioning')
   setActiveView('stream')
   showStreamPlaceholder('Starting Xbox Remote Play...')
@@ -4713,6 +4850,10 @@ async function connectToConsole(
 
       if (state === 'connected') {
         webRtcConnected = true
+        if (activePlayer === player && activeServerId === serverId) {
+          preferredXboxServerId = serverId
+          saveRememberedXboxId(serverId)
+        }
 
         if (
           activeXboxReceiveMode ===
@@ -4817,7 +4958,6 @@ async function connectToConsole(
     player.setRemoteIceCandidates(remoteCandidates)
 
     streamBusy = false
-    button.textContent = 'Connected'
     updateInteractiveState()
   } catch (error) {
     console.error('[CaptureLink] Remote Play connection failed:', error)
@@ -4841,7 +4981,6 @@ async function connectToConsole(
 
     activeServerId = null
     streamBusy = false
-    button.textContent = 'Connect'
     railConsoleStatus.textContent = 'Ready'
     setRailSession('Failed', 'Could not connect')
     updateInteractiveState()
@@ -7595,6 +7734,8 @@ signOutButton.addEventListener('click', () => {
       // session is torn down.
       await disconnectFromConsole()
       await window.captureLink.signOutXbox()
+      preferredXboxServerId = null
+      clearRememberedXboxId()
       setSignedOut()
     } catch (error) {
       const message =
@@ -7853,6 +7994,36 @@ disconnectButton.addEventListener('click', () => {
   void disconnectFromConsole()
 })
 
+railConsoleSelect.addEventListener('click', () => {
+  if (railConsoleSelect.disabled) return
+  if (railConsoleMenu.hidden) {
+    renderXboxConsoleMenu()
+    railConsoleMenu.hidden = false
+    railConsoleSelect.setAttribute('aria-expanded', 'true')
+  } else {
+    closeXboxConsoleMenu()
+  }
+})
+railConsoleMenu.addEventListener('click', (event) => {
+  const target = event.target
+  if (!(target instanceof Element)) return
+  const option = target.closest<HTMLButtonElement>('.rail-console-option')
+  if (!option || option.disabled || !option.dataset.serverId) return
+  selectXbox(option.dataset.serverId)
+  closeXboxConsoleMenu()
+  railConsoleSelect.focus()
+})
+document.addEventListener('click', (event) => {
+  if (event.target instanceof Node &&
+    !railConsoleMenu.contains(event.target) &&
+    !railConsoleSelect.contains(event.target)) closeXboxConsoleMenu()
+})
+railConsoleSelect.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeXboxConsoleMenu()
+})
+railConsoleConnect.addEventListener('click', startXboxFromQuickConnect)
+streamConnectAction.addEventListener('click', startXboxFromQuickConnect)
+
 consoleList.addEventListener('click', (event) => {
   const target = event.target
 
@@ -7870,7 +8041,8 @@ consoleList.addEventListener('click', (event) => {
   const serverId = card?.dataset.serverId
 
   if (serverId) {
-    void connectToConsole(serverId, button)
+    selectXbox(serverId)
+    void connectToConsole(serverId)
   }
 })
 

@@ -4246,3 +4246,65 @@ body {
   font-size: 9px;
   line-height: 1.45;
 }
+
+/* CAPTURELINK_STREAM_FIRST_UX_2026_10_22 — contained UI additions */
+#rail-console-select {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+}
+#rail-console-select:hover:not(:disabled) { background: rgba(127, 146, 174, 0.09); }
+#rail-console-select:focus-visible,
+.rail-console-primary:focus-visible,
+.stream-connect-action:focus-visible,
+.rail-console-menu button:focus-visible { outline: 2px solid #61a6ff; outline-offset: 2px; }
+#rail-console-select:disabled { cursor: default; opacity: 0.8; }
+#rail-console-select .rail-console__copy { min-width: 0; }
+#rail-console-select .rail-console__copy strong,
+#rail-console-select .rail-console__copy span { display: block; }
+#rail-console-menu[hidden], #rail-console-connect[hidden], #stream-connect-action[hidden] { display: none !important; }
+.rail-console-menu {
+  margin: 8px 0;
+  padding: 7px;
+  border: 1px solid rgba(127,146,174,.24);
+  border-radius: 10px;
+  background: rgba(17,24,38,.96);
+  display: grid;
+  gap: 4px;
+}
+.rail-console-menu p { margin: 4px 8px; font-size: 12px; line-height: 1.5; }
+.rail-console-menu button {
+  padding: 9px 10px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rail-console-menu button:hover:not(:disabled) { background: rgba(127,146,174,.18); }
+.rail-console-menu button[aria-pressed="true"] { background: rgba(78,139,230,.2); }
+.rail-console-menu button:disabled { opacity: .5; cursor: default; }
+.rail-console-refresh { border-top: 1px solid rgba(127,146,174,.24) !important; border-radius: 0 !important; }
+.rail-console-primary, .stream-connect-action {
+  min-height: 38px;
+  padding: 10px 14px;
+  border: 1px solid rgba(102,164,255,.48);
+  border-radius: 9px;
+  background: #2667bb;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rail-console-primary { width: 100%; margin: 10px 0 4px; }
+.rail-console-primary:hover:not(:disabled), .stream-connect-action:hover:not(:disabled) { background: #337acf; }
+.rail-console-primary:disabled, .stream-connect-action:disabled { opacity: .55; cursor: default; }
+.stream-connect-action { display: inline-flex; align-items: center; justify-content: center; margin-top: 12px; }
