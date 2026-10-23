@@ -1,3 +1,4 @@
+import { installFriendModeUx } from './friend-mode-ux'
 import {
   RemoteGamepadAdapter,
   capturePhysicalGamepad,
@@ -1611,6 +1612,10 @@ const friendDirectStatus =
   requireElement<HTMLElement>(
     '#friend-direct-status'
   )
+
+// CAPTURELINK_FRIEND_MODE_UX_PHASE3_2026_10_22
+// Mount after all original Friend Mode controls are present, without replacing them.
+installFriendModeUx()
 
 const railLastRecordingName =
   requireElement<HTMLElement>('#rail-last-recording-name')
