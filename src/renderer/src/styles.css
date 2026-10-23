@@ -4387,3 +4387,19 @@ body {
 .friend-controller-card[data-friend-ux-role="join"] #friend-controller-mode-tip { display: none !important; }
 @media (max-width: 350px) { .friend-ux-role-picker { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .friend-ux-role { transition: none; } }
+
+/* CAPTURELINK_FRIEND_INVITE_GUIDE_PHASE3B_2026_10_22 */
+.friend-invite-guide[hidden], .friend-invite-guide [hidden] { display: none !important; }
+.friend-invite-guide { display: grid; gap: 10px; padding: 10px; border: 1px solid var(--cl-border, rgba(127,146,174,.24)); border-radius: 10px; background: rgba(111,147,189,.06); }
+.friend-invite-guide__host, .friend-invite-guide__guest, .friend-invite-guide__outbound, .friend-invite-guide__answer { display: grid; gap: 8px; }
+.friend-invite-guide__step { margin: 0; display: grid; gap: 3px; line-height: 1.45; font-size: 11px; }
+.friend-invite-guide__step strong { font-size: 12px; font-weight: 700; }
+.friend-invite-guide__step span { color: var(--cl-text-muted, #b9c3d0); }
+.friend-invite-guide label { display: block; margin: 2px 0 0; font-size: 11px; font-weight: 650; }
+.friend-invite-guide textarea { box-sizing: border-box; width: 100%; min-width: 0; min-height: 58px; resize: vertical; padding: 9px; border-radius: 8px; background: rgba(12,15,20,.8); border: 1px solid var(--cl-border, #39414d); color: inherit; font: 12px/1.4 ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+.friend-invite-guide__button { display: inline-flex; justify-content: center; align-items: center; width: 100%; padding: 9px 12px; min-height: 36px; border: 1px solid var(--cl-border, #39414d); border-radius: 8px; color: inherit; background: rgba(97,166,255,.12); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.friend-invite-guide__button:disabled { opacity: .5; cursor: not-allowed; }
+.friend-invite-guide__button:focus-visible, .friend-invite-guide textarea:focus-visible { outline: 2px solid #61a6ff; outline-offset: 2px; }
+.friend-invite-guide__feedback { margin: 0; min-height: 0; font-size: 11px; line-height: 1.5; }
+.friend-invite-guide__feedback:empty { display: none; }
+.friend-invite-guide__privacy { margin: 0; font-size: 10px; line-height: 1.5; color: var(--cl-text-muted, #b9c3d0); opacity: .9; }

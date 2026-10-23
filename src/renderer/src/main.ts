@@ -1,3 +1,4 @@
+import { installFriendInviteGuide } from './friend-invite-guide'
 import { installFriendModeUx } from './friend-mode-ux'
 import {
   RemoteGamepadAdapter,
@@ -1616,6 +1617,9 @@ const friendDirectStatus =
 // CAPTURELINK_FRIEND_MODE_UX_PHASE3_2026_10_22
 // Mount after all original Friend Mode controls are present, without replacing them.
 installFriendModeUx()
+
+// CAPTURELINK_FRIEND_INVITE_GUIDE_PHASE3B_2026_10_22
+installFriendInviteGuide()
 
 const railLastRecordingName =
   requireElement<HTMLElement>('#rail-last-recording-name')
