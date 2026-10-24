@@ -1,3 +1,4 @@
+import { installConnectionRecoveryUx } from './connection-recovery-ux'
 import { installFriendInviteGuide } from './friend-invite-guide'
 import { installFriendModeUx } from './friend-mode-ux'
 import {
@@ -1620,6 +1621,16 @@ installFriendModeUx()
 
 // CAPTURELINK_FRIEND_INVITE_GUIDE_PHASE3B_2026_10_22
 installFriendInviteGuide()
+
+// CAPTURELINK_XBOX_RECOVERY_PHASE4_2026_10_22: explicit retry only; the existing session lifecycle remains in main.ts.
+const xboxConnectionRecovery = installConnectionRecoveryUx({
+  retryXbox: retryXboxAfterFailure,
+  refreshConsoles: async () => {
+    if (!signedIn || streamBusy || getCaptureLinkSessionSource() !== 'none') return
+    await loadConsoles()
+  },
+  openSetup: () => setActiveView('connect')
+})
 
 const railLastRecordingName =
   requireElement<HTMLElement>('#rail-last-recording-name')
@@ -4508,6 +4519,7 @@ async function loadConsoles(): Promise<void> {
     // Ignore stale results if the user signs out or a session starts mid-discovery.
     if (generation !== xboxDiscoveryGeneration || !signedIn || activeServerId || getCaptureLinkSessionSource() !== 'none') return
     discoveredXboxes = consoles
+    if (consoles.length > 0) xboxConnectionRecovery.clearKind('discovery')
     const selectedStillExists = consoles.some((xbox) => xbox.serverId === selectedXboxServerId)
     const remembered = consoles.find((xbox) => xbox.serverId === preferredXboxServerId)
     selectedXboxServerId = selectedStillExists
@@ -4522,6 +4534,7 @@ async function loadConsoles(): Promise<void> {
         'Check your Microsoft account and confirm Remote features are enabled on the Xbox.'
       )
       setRailConsole('No Xbox found', 'Refresh or check Remote Play setup', 'Unavailable')
+      xboxConnectionRecovery.show({ kind: 'discovery', stage: 'discovery', detail: 'No Xbox consoles found' })
       return
     }
 
@@ -4560,6 +4573,7 @@ async function loadConsoles(): Promise<void> {
     consoleMessage.textContent = message
     renderConsoleState('error', 'Console discovery failed', message)
     setRailConsole('Xbox unavailable', 'Refresh or open console setup', 'Error')
+    xboxConnectionRecovery.show({ kind: 'discovery', stage: 'discovery', detail: message })
   } finally {
     if (generation === xboxDiscoveryGeneration) {
       xboxDiscoveryBusy = false
@@ -4680,6 +4694,8 @@ function setAuthenticated(): void {
 }
 
 function setSignedOut(): void {
+  lastRecoveryXboxServerId = null
+  xboxConnectionRecovery.clear()
   connectSupport.open = true
   signOutButton.hidden = true
   signInButton.hidden = false
@@ -4763,6 +4779,7 @@ function destroyPlayer(): void {
 }
 
 async function disconnectFromConsole(): Promise<void> {
+  xboxConnectionRecovery.clear()
   if (!activeServerId && !streamBusy) {
     return
   }
@@ -4799,13 +4816,51 @@ async function disconnectFromConsole(): Promise<void> {
   }
 }
 
+// A manual retry must tear down the previous Xbox session before starting a new one.
+// Never steal the Xbox or interrupt an active Friend session.
+let lastRecoveryXboxServerId: string | null = null
+
+async function retryXboxAfterFailure(): Promise<void> {
+  const serverId = lastRecoveryXboxServerId ?? activeServerId ?? selectedXboxServerId
+  const source = getCaptureLinkSessionSource()
+  if (!signedIn || !serverId) {
+    xboxConnectionRecovery.show({ kind: 'discovery', stage: 'discovery', detail: 'Xbox or account unavailable' })
+    return
+  }
+  if (source === 'friend-host' || source === 'friend-guest') {
+    xboxConnectionRecovery.show({ kind: 'xbox', stage: 'start', detail: 'Friend session active' })
+    return
+  }
+  if (streamBusy) return
+  if (recordingSaving) {
+    xboxConnectionRecovery.show({ kind: 'xbox', stage: 'start', detail: 'Recording is still saving' })
+    return
+  }
+  if (activeServerId) {
+    await disconnectFromConsole() // already handles recording finalization and Xbox teardown
+  }
+  if (!signedIn || streamBusy || getCaptureLinkSessionSource() !== 'none') return
+
+  if (!discoveredXboxes.some((item) => item.serverId === serverId)) {
+    await loadConsoles()
+  }
+  if (!discoveredXboxes.some((item) => item.serverId === serverId)) {
+    xboxConnectionRecovery.show({ kind: 'discovery', stage: 'discovery', detail: 'Xbox not found' })
+    return
+  }
+  selectXbox(serverId)
+  await connectToConsole(serverId)
+}
+
 async function connectToConsole(serverId: string): Promise<void> {
   if (!signedIn || streamBusy || getCaptureLinkSessionSource() !== 'none') {
     return
   }
+  xboxConnectionRecovery.clear()
   const xbox = discoveredXboxes.find((item) => item.serverId === serverId)
   if (!xbox) {
     setStreamStatus('Xbox not found. Refresh the console list and try again.')
+    xboxConnectionRecovery.show({ kind: 'discovery', stage: 'discovery', detail: 'Xbox not found' })
     return
   }
   const playerConstructor = getPlayerExports()?.Player
@@ -4814,6 +4869,7 @@ async function connectToConsole(serverId: string): Promise<void> {
     consoleMessage.textContent = message
     setStreamStatus(message)
     showStreamPlaceholder(message)
+    xboxConnectionRecovery.show({ kind: 'xbox', stage: 'start', detail: 'WebRTC player bundle unavailable' })
     return
   }
   closeXboxConsoleMenu()
@@ -4884,10 +4940,12 @@ async function connectToConsole(serverId: string): Promise<void> {
     })
 
     player.onConnectionStateChange((state) => {
+      if (activePlayer !== player || activeServerId !== serverId) return
       console.log(`[CaptureLink] WebRTC connection state: ${state}`)
       setStreamStatus(`WebRTC: ${state}`)
 
       if (state === 'connected') {
+        xboxConnectionRecovery.clear()
         webRtcConnected = true
         if (activePlayer === player && activeServerId === serverId) {
           preferredXboxServerId = serverId
@@ -4930,6 +4988,8 @@ async function connectToConsole(serverId: string): Promise<void> {
       }
 
       if (state === 'failed' || state === 'disconnected') {
+        lastRecoveryXboxServerId = serverId
+        xboxConnectionRecovery.show({ kind: 'xbox', stage: state === 'failed' ? 'webrtc-failed' : 'webrtc-disconnected' })
         webRtcConnected = false
         setRailSession(
           state === 'failed' ? 'Failed' : 'Disconnected',
@@ -5006,6 +5066,8 @@ async function connectToConsole(serverId: string): Promise<void> {
         ? error.message
         : 'Remote Play connection failed.'
 
+    lastRecoveryXboxServerId = serverId
+    xboxConnectionRecovery.show({ kind: 'xbox', stage: 'start', detail: message })
     setStreamStatus('Remote Play failed')
     showStreamPlaceholder(message)
     consoleMessage.textContent = message

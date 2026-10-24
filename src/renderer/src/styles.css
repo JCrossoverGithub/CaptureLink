@@ -4403,3 +4403,36 @@ body {
 .friend-invite-guide__feedback { margin: 0; min-height: 0; font-size: 11px; line-height: 1.5; }
 .friend-invite-guide__feedback:empty { display: none; }
 .friend-invite-guide__privacy { margin: 0; font-size: 10px; line-height: 1.5; color: var(--cl-text-muted, #b9c3d0); opacity: .9; }
+
+/* CAPTURELINK_XBOX_RECOVERY_PHASE4_2026_10_22 */
+.xbox-recovery-panel[hidden] { display: none !important; }
+.xbox-recovery-panel {
+  margin: 12px 0 0;
+  padding: 15px 16px;
+  display: grid;
+  gap: 11px;
+  border: 1px solid var(--cl-border, rgba(127,146,174,.26));
+  border-radius: 12px;
+  background: rgba(122,153,194,.07);
+}
+.xbox-recovery-panel__copy { min-width: 0; }
+.xbox-recovery-panel__copy strong { display: block; font-size: 14px; line-height: 1.35; }
+.xbox-recovery-panel__copy p { margin: 6px 0 0; font-size: 12px; line-height: 1.55; color: var(--cl-text-muted, #b9c3d0); }
+.xbox-recovery-panel__progress:empty { display: none; }
+.xbox-recovery-panel__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.xbox-recovery-panel__actions button {
+  min-height: 36px;
+  padding: 8px 13px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  color: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--cl-border, rgba(127,146,174,.32));
+  background: rgba(125,145,173,.11);
+  cursor: pointer;
+}
+#xbox-recovery-primary { color: #fff; background: #2667bb; border-color: rgba(102,164,255,.48); }
+#xbox-recovery-primary:hover:not(:disabled) { background: #337acf; }
+.xbox-recovery-panel__actions button:disabled { opacity: .55; cursor: default; }
+.xbox-recovery-panel__actions button:focus-visible { outline: 2px solid #61a6ff; outline-offset: 2px; }
