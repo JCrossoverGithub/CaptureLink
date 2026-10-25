@@ -1,0 +1,170 @@
+/* CaptureLink stable Slate visual system. Loaded by index.html, not JS-only CSS injection. */
+:root,
+:root[data-cl-tone="slate"] {
+  --cl-bg: #18212a;
+  --cl-panel: #202b35;
+  --cl-panel-2: #25313c;
+  --cl-panel-3: #2b3944;
+  --cl-border: #384752;
+  --cl-border-strong: #50606a;
+  --cl-text: #f5f8fa;
+  --cl-muted: #b2bdc6;
+  --cl-subtle: #94a3af;
+  --cl-accent: #43e06f;
+  --cl-accent-ink: #43e06f;
+  --cl-on-accent: #101820;
+  --cl-accent-soft: color-mix(in srgb, var(--cl-accent) 15%, transparent);
+  --cl-accent-hover: color-mix(in srgb, var(--cl-accent) 85%, #ffffff);
+  --cl-highlight: color-mix(in srgb, var(--cl-text) 5%, transparent);
+  --cl-surface-dialog: #202b35;
+  --cl-surface-raised: #2b3944;
+  --cl-surface-input: #17212a;
+  --cl-success: #68d6a0;
+  --cl-danger: #fa8793;
+  --cl-warning: #ffd18a;
+  --cl-info: #8cb8ff;
+  --cl-shadow-heavy: 0 22px 68px rgb(0 0 0 / 35%);
+  --cl-radius-control: 10px;
+  --cl-radius-card: 14px;
+  --cl-radius-dialog: 18px;
+  --cl-focus: var(--cl-accent-ink);
+  color-scheme: dark;
+}
+/* Root-level shell and panels share one semantic palette. */
+html, body { color: var(--cl-text); background-color: var(--cl-bg); }
+body { background-image: none !important; }
+:root .app-shell, :root .app-layout, :root .app-main,
+:root .main-content, :root .view-panel, :root .view-content,
+:root .workspace { color: var(--cl-text); }
+:root :is(.surface, .rail-card, .settings-card, .stream-card, .session-card,
+ .connect-card, .diagnostics-panel, .audio-devices-panel, .recording-library-panel,
+ .sidebar-card, .console-card, .friend-card, .topbar-account-popover) {
+  background-color: var(--cl-panel);
+  border-color: var(--cl-border);
+  color: var(--cl-text);
+}
+:root :is(.app-sidebar, .sidebar, .app-nav, .nav-rail, .side-panel,
+ .stream-sidebar, .session-sidebar, .right-rail, .topbar, .app-header) {
+  border-color: var(--cl-border);
+  background-color: var(--cl-panel);
+}
+:root :is(.eyebrow, .section-label) { color: var(--cl-accent-ink); }
+:root :is(.view-heading__support, .settings-card p, .rail-card p, .card-description) { color: var(--cl-muted); }
+:root :is(.nav-item.is-active, .nav-item[aria-current="page"], .view-tab.is-active) {
+  background: var(--cl-accent-soft);
+  border-color: color-mix(in srgb, var(--cl-accent) 34%, var(--cl-border));
+  color: var(--cl-accent-ink);
+}
+:root :is(.surface-icon--xbox, .connect-card__icon--xbox) {
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+}
+:root :is(.primary-button, .button--primary, .btn-primary, .action-primary) {
+  background: var(--cl-accent);
+  border-color: var(--cl-accent);
+  color: var(--cl-on-accent);
+}
+:root :is(button, select, input, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--cl-focus);
+  outline-offset: 2px;
+}
+:root :is(input[type="checkbox"], input[type="radio"], input[type="range"]) { accent-color: var(--cl-accent); }
+/* Explicitly don't recolor video, screenshots, recordings, canvas, status meaning or images. */
+
+
+/* --- Accent preferences: fixed Slate backdrop, no alternate interface selector. --- */
+#capturelink-appearance.cl-appearance {
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  background: var(--cl-panel);
+  color: var(--cl-text);
+}
+#capturelink-appearance .cl-appearance__body { min-width: 0; }
+#capturelink-appearance .cl-appearance__icon { color: var(--cl-accent-ink); }
+#capturelink-appearance .cl-appearance__icon svg {
+  width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7;
+}
+#capturelink-appearance h2 { color: var(--cl-text); }
+#capturelink-appearance p { color: var(--cl-muted); }
+#capturelink-appearance .cl-appearance__swatches { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 17px; }
+#capturelink-appearance .cl-swatch {
+  display: grid; place-items: center; width: 40px; height: 40px; padding: 4px;
+  border-radius: 11px; border: 1px solid var(--cl-border-strong);
+  background: transparent; cursor: pointer; transition: border-color .15s, background .15s;
+}
+#capturelink-appearance .cl-swatch:hover { background: var(--cl-highlight); }
+#capturelink-appearance .cl-swatch span { width: 26px; height: 26px; border-radius: 7px; }
+#capturelink-appearance .cl-swatch[data-accent="green"] span { background: #43e06f; }
+#capturelink-appearance .cl-swatch[data-accent="blue"] span { background: #629af6; }
+#capturelink-appearance .cl-swatch[data-accent="violet"] span { background: #b296f5; }
+#capturelink-appearance .cl-swatch[data-accent="teal"] span { background: #44cfc5; }
+#capturelink-appearance .cl-swatch[data-accent="amber"] span { background: #edb65b; }
+#capturelink-appearance .cl-swatch[aria-pressed="true"] {
+  border-color: var(--cl-accent-ink); box-shadow: 0 0 0 1px var(--cl-accent-ink);
+}
+#capturelink-appearance .cl-swatch:focus-visible { outline: 2px solid var(--cl-focus); outline-offset: 3px; }
+#capturelink-appearance .cl-custom {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  gap: 7px; min-height: 40px; padding: 0 13px; border: 1px solid var(--cl-border-strong);
+  border-radius: 11px; font-size: 12px; color: var(--cl-muted); cursor: pointer; overflow: hidden;
+}
+#capturelink-appearance .cl-custom input {
+  position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; opacity: 0;
+}
+#capturelink-appearance .cl-custom:focus-within { outline: 2px solid var(--cl-focus); outline-offset: 3px; }
+#capturelink-appearance.cl-appearance--custom .cl-custom { border-color: var(--cl-accent-ink); color: var(--cl-accent-ink); }
+#capturelink-appearance .cl-appearance__footer {
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--cl-border);
+  display: flex; gap: 12px; justify-content: space-between; align-items: center;
+}
+#capturelink-appearance #cl-appearance-status { font-size: 12px; color: var(--cl-muted); }
+#capturelink-appearance #cl-appearance-reset {
+  font-size: 12px; color: var(--cl-accent-ink); background: transparent;
+  border: 0; cursor: pointer; padding: 7px 0;
+}
+
+/* --- Header refinement --- */
+.app-topbar {
+  position: relative !important; z-index: 100 !important; overflow: visible !important;
+  background: #18212a !important; border-bottom: 1px solid var(--cl-border) !important;
+  backdrop-filter: none;
+}
+.app-frame { position: relative; z-index: 0; }
+.app-topbar .brand-lockup { display: inline-flex; gap: 12px; align-items: center; }
+.app-topbar .brand-mark {
+  display: grid; place-items: center; flex: none; width: 38px; height: 38px;
+  border-radius: 11px; border: 1px solid color-mix(in srgb, var(--cl-accent) 32%, var(--cl-border));
+  background: var(--cl-panel-2); color: var(--cl-accent-ink);
+  box-shadow: none; letter-spacing: normal;
+}
+.app-topbar .brand-mark svg {
+  width: 21px; height: 21px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.app-topbar .brand-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; line-height: 1; }
+.app-topbar .brand-name {
+  color: var(--cl-text) !important; font-size: 17px; line-height: 1.15;
+  font-weight: 700; letter-spacing: -.035em;
+}
+.app-topbar .brand-descriptor {
+  color: var(--cl-muted); font-size: 9px; font-weight: 700; letter-spacing: .16em;
+}
+/* Keep account menu above stream cards/icons regardless of their local z-index. */
+.app-topbar .topbar-account { position: relative; z-index: 2; }
+.app-topbar .topbar-account-menu { position: relative; z-index: 3; }
+.app-topbar .topbar-account-menu[open] { z-index: 10; }
+.app-topbar .topbar-account-popover {
+  position: absolute; z-index: 20 !important; top: calc(100% + 12px); right: 0;
+  background: var(--cl-panel-2) !important; color: var(--cl-text) !important;
+  border: 1px solid var(--cl-border-strong) !important;
+  border-radius: 14px; box-shadow: 0 18px 48px rgb(0 0 0 / 50%) !important;
+  isolation: isolate;
+}
+.app-topbar .topbar-account-popover__identity { position: relative; z-index: 1; }
+@media (max-width: 680px) {
+  .app-topbar .brand-copy { display: flex; }
+  .app-topbar .brand-name { font-size: 15px; }
+  .app-topbar .brand-descriptor { font-size: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { #capturelink-appearance * { transition: none !important; } }
