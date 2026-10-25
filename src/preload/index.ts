@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('captureLink', {
   startXboxAuth: () =>
     ipcRenderer.invoke('capturelink:xbox-auth-start'),
 
+  openXboxAuthVerification: () =>
+    ipcRenderer.invoke('capturelink:xbox-auth-open-verification'),
+
   startXboxStream: (serverId: string) =>
     ipcRenderer.invoke('capturelink:xbox-stream-start', serverId),
 
@@ -122,6 +125,12 @@ contextBridge.exposeInMainWorld('captureLink', {
       { id, format }
     ),
 
+
+  onXboxAuthDeviceCode: (
+    callback: (info: { userCode: string; verificationUri: string; expiresIn: number }) => void
+  ) => {
+    ipcRenderer.on('capturelink:xbox-auth-device-code', (_event, info) => callback(info))
+  },
 
   onXboxAuthOutput: (
     callback: (message: string) => void

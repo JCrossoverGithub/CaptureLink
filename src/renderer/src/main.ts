@@ -1,4 +1,10 @@
 import { installConnectionRecoveryUx } from './connection-recovery-ux'
+import { installXboxAuthDialog } from './xbox-auth-dialog'
+import './capturelink-design.css'
+import { installCaptureLinkAppearance } from './capturelink-appearance'
+import './xbox-auth-dialog.css'
+import { installControllerResponsiveness } from './controller-responsiveness'
+import './controller-responsiveness.css'
 import { installFriendInviteGuide } from './friend-invite-guide'
 import { installFriendModeUx } from './friend-mode-ux'
 import {
@@ -283,9 +289,19 @@ if (!root) {
 root.innerHTML = `
   <main class="shell app-shell">
     <header class="app-topbar">
+      <!-- CAPTURELINK_SLATE_REFINEMENT_2026_10_25: restrained product wordmark -->
       <div class="brand-lockup" aria-label="CaptureLink">
-        <div class="brand-mark">CL</div>
-        <div class="brand-name">CaptureLink</div>
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="m8.8 15.2-1.7 1.7a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0"/>
+            <path d="m15.2 8.8 1.7-1.7a3.5 3.5 0 0 1 5 5l-4 4a3.5 3.5 0 0 1-5 0"/>
+            <path d="m9 15 6-6"/>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <div class="brand-name">CaptureLink</div>
+          <span class="brand-descriptor">REMOTE PLAY</span>
+        </div>
       </div>
 
       <div class="topbar-account">
@@ -1329,6 +1345,12 @@ const authMessage =
 const authOutput =
   requireElement<HTMLPreElement>('#auth-output')
 
+// CAPTURELINK_XBOX_AUTH_UX_2026_10_25
+const xboxAuthDialog = installXboxAuthDialog({
+  openMicrosoftPage: () => window.captureLink.openXboxAuthVerification(),
+  retry: () => signInButton.click()
+})
+
 const consoleMessage =
   requireElement<HTMLParagraphElement>('#console-message')
 
@@ -1702,6 +1724,22 @@ type CaptureLinkView = 'connect' | 'stream' | 'audio' | 'recordings' | 'settings
 const navItems = Array.from(
   document.querySelectorAll<HTMLButtonElement>('.nav-item[data-view]')
 )
+
+// CAPTURELINK_DESIGN_V2_2026_10_25: initialize user theme, never modify Xbox/streaming lifecycle
+installCaptureLinkAppearance()
+
+// CAPTURELINK_STYLESHEET_HEALTH_CHECK: surface actual renderer CSS failures.
+requestAnimationFrame(() => {
+  const icon = document.querySelector<SVGElement>('#xbox-auth-dialog .xbox-auth-dialog__brand-symbol svg')
+  const swatch = document.querySelector<HTMLElement>('#capturelink-appearance .cl-swatch')
+  const iconWidth = icon ? Number.parseFloat(getComputedStyle(icon).width) : NaN
+  const swatchWidth = swatch ? Number.parseFloat(getComputedStyle(swatch).width) : NaN
+  if (!Number.isFinite(iconWidth) || iconWidth > 30 || !Number.isFinite(swatchWidth) || swatchWidth < 35 || document.documentElement.dataset.clTone !== 'slate') {
+    console.error('[CaptureLink] UI stylesheet health check FAILED', { iconWidth, swatchWidth, tone: document.documentElement.dataset.clTone, message: 'Check renderer/index.html external stylesheet loads and CSP.' })
+  } else {
+    console.info('[CaptureLink] UI stylesheet health check PASS', { iconWidth, swatchWidth, tone: 'slate' })
+  }
+})
 
 const viewPanels = Array.from(
   document.querySelectorAll<HTMLElement>('.view-panel[data-panel]')
@@ -2145,7 +2183,7 @@ function startLocalControllerPump(): void {
   localControllerTimer =
     window.setInterval(
       sample,
-      16
+      controllerResponsiveness.getIntervalMs()
     )
 }
 
@@ -4535,6 +4573,12 @@ async function loadConsoles(): Promise<void> {
       )
       setRailConsole('No Xbox found', 'Refresh or check Remote Play setup', 'Unavailable')
       xboxConnectionRecovery.show({ kind: 'discovery', stage: 'discovery', detail: 'No Xbox consoles found' })
+      const switchButton = document.createElement('button')
+      switchButton.type = 'button'
+      switchButton.className = 'xbox-change-account-button'
+      switchButton.textContent = 'Using the wrong Microsoft account? Change Xbox account'
+      switchButton.addEventListener('click', () => changeXboxAccountButton.click())
+      consoleList.querySelector('.console-list-state')?.append(switchButton)
       return
     }
 
@@ -4592,6 +4636,13 @@ signOutButton.className = 'xbox-sign-out'
 signOutButton.textContent = 'Sign out'
 signOutButton.hidden = true
 topbarAccountPopover.append(signOutButton)
+
+const changeXboxAccountButton = document.createElement('button')
+changeXboxAccountButton.type = 'button'
+changeXboxAccountButton.className = 'xbox-sign-out'
+changeXboxAccountButton.textContent = 'Change Xbox account'
+changeXboxAccountButton.hidden = true
+topbarAccountPopover.insertBefore(changeXboxAccountButton, signOutButton)
 
 const xboxSetupBanner = document.createElement('aside')
 xboxSetupBanner.className = 'xbox-setup-banner'
@@ -4673,6 +4724,7 @@ xboxSetupDetails?.addEventListener('toggle', () => {
 function setAuthenticated(): void {
   connectSupport.open = false
   signOutButton.hidden = false
+  changeXboxAccountButton.hidden = false
   signInButton.hidden = true
   topbarAccountDivider.hidden = false
   topbarAccountMenu.hidden = false
@@ -4698,6 +4750,7 @@ function setSignedOut(): void {
   xboxConnectionRecovery.clear()
   connectSupport.open = true
   signOutButton.hidden = true
+  changeXboxAccountButton.hidden = true
   signInButton.hidden = false
   topbarAccountDivider.hidden = true
   topbarAccountMenu.hidden = true
@@ -5864,6 +5917,24 @@ let sharedFriendControllerState:
 let sharedHostControllerTimer:
   number | null = null
 
+// CAPTURELINK_CONTROLLER_RESPONSIVENESS_PRODUCT_2026_10_25
+// Apply a new preference by restarting only active polling loops.
+// Never detach controllers, clear sources, or change Xbox/Peer transports.
+const controllerResponsiveness = installControllerResponsiveness({
+  onModeChanged: () => {
+    if (localControllerTimer !== null) {
+      window.clearInterval(localControllerTimer)
+      localControllerTimer = null
+      startLocalControllerPump()
+    }
+    if (sharedHostControllerTimer !== null) {
+      window.clearInterval(sharedHostControllerTimer)
+      sharedHostControllerTimer = null
+      startSharedHostControllerPump()
+    }
+  }
+})
+
 let sharedHostControllerId:
   string | null = null
 
@@ -6635,7 +6706,7 @@ function startSharedHostControllerPump():
   sharedHostControllerTimer =
     window.setInterval(
       sample,
-      16
+      controllerResponsiveness.getIntervalMs()
     )
 }
 
@@ -7824,6 +7895,12 @@ navigator.mediaDevices?.addEventListener('devicechange', () => {
 })
 
 // CAPTURELINK_XBOX_SIGN_OUT_HANDLER
+let switchXboxAccountAfterSignOut = false
+changeXboxAccountButton.addEventListener('click', () => {
+  if (!signedIn || signOutButton.disabled) return
+  switchXboxAccountAfterSignOut = true
+  signOutButton.click()
+})
 signOutButton.addEventListener('click', () => {
   void (async () => {
     signOutButton.disabled = true
@@ -7838,6 +7915,10 @@ signOutButton.addEventListener('click', () => {
       preferredXboxServerId = null
       clearRememberedXboxId()
       setSignedOut()
+      if (switchXboxAccountAfterSignOut) {
+        switchXboxAccountAfterSignOut = false
+        signInButton.click()
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown Xbox sign-out error'
@@ -7845,6 +7926,7 @@ signOutButton.addEventListener('click', () => {
       console.error('[CaptureLink] Xbox sign-out failed:', error)
       setStreamStatus(`Xbox sign-out failed: ${message}`)
     } finally {
+      switchXboxAccountAfterSignOut = false
       signOutButton.disabled = false
       settingsSignOutButton.disabled = false
     }
@@ -7860,34 +7942,34 @@ settingsDiagnosticsButton.addEventListener('click', () => {
 })
 
 signInButton.addEventListener('click', async () => {
+  // A dismissed dialog must be recoverable without creating a second device code.
+  if (xboxAuthDialog.isPending()) {
+    xboxAuthDialog.reopen()
+    return
+  }
+  xboxAuthDialog.start()
   signInButton.disabled = true
-  signInButton.textContent = 'Waiting for Microsoft...'
-
+  signInButton.textContent = 'Requesting code...'
   accountStatus.textContent = 'Signing in'
-  authMessage.textContent =
-    'Follow the Microsoft sign-in instructions.'
-
+  authMessage.textContent = 'Follow the code shown in the CaptureLink sign-in window.'
   authOutput.textContent = ''
-
   try {
-    const result =
-      await window.captureLink.startXboxAuth()
-
+    const result = await window.captureLink.startXboxAuth()
     if (!result.started) {
-      authMessage.textContent =
-        result.reason ?? 'Could not start authentication.'
-
-      signInButton.disabled = false
+      const reason = result.reason ?? 'Could not start authentication.'
+      xboxAuthDialog.failToStart(reason)
+      authMessage.textContent = reason
       signInButton.textContent = 'Sign in with Microsoft'
+    } else {
+      signInButton.textContent = 'View sign-in code'
     }
   } catch (error) {
-    authMessage.textContent =
-      error instanceof Error
-        ? error.message
-        : 'Authentication could not be started.'
-
-    signInButton.disabled = false
+    const reason = error instanceof Error ? error.message : 'Authentication could not be started.'
+    xboxAuthDialog.failToStart(reason)
+    authMessage.textContent = reason
     signInButton.textContent = 'Sign in with Microsoft'
+  } finally {
+    signInButton.disabled = false
   }
 })
 
@@ -8147,6 +8229,10 @@ consoleList.addEventListener('click', (event) => {
   }
 })
 
+window.captureLink.onXboxAuthDeviceCode((details) => {
+  xboxAuthDialog.present(details)
+})
+
 window.captureLink.onXboxAuthOutput((message) => {
   authOutput.textContent += message
   authOutput.scrollTop = authOutput.scrollHeight
@@ -8154,12 +8240,9 @@ window.captureLink.onXboxAuthOutput((message) => {
 
 window.captureLink.onXboxAuthComplete((result) => {
   authMessage.textContent = result.message
-
-  if (result.success) {
-    setAuthenticated()
-  } else {
-    setSignedOut()
-  }
+  if (result.success) setAuthenticated()
+  else setSignedOut()
+  xboxAuthDialog.finish(result)
 })
 
 window.captureLink.onRecordingExportProgress((progress) => {

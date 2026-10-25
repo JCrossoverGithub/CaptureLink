@@ -150,6 +150,8 @@ declare global {
         reason?: string
       }>
 
+      openXboxAuthVerification(): Promise<void>
+
       startXboxStream(serverId: string): Promise<{
         sessionId: string
         state: string
@@ -246,6 +248,12 @@ declare global {
         format?: 'mp4' | 'mp3' | 'wav'
       }>
 
+
+      onXboxAuthDeviceCode(callback: (info: {
+        userCode: string
+        verificationUri: string
+        expiresIn: number
+      }) => void): void
 
       onXboxAuthOutput(
         callback: (message: string) => void

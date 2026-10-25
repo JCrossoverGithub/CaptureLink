@@ -6,10 +6,6 @@
  */
 
 type PayloadKind = 'invite' | 'response'
-type ClipboardApi = {
-  readFriendClipboard(): Promise<string>
-  writeFriendClipboard(value: string): Promise<void>
-}
 
 const DIRECT_PREFIX = 'CAPTURELINK-DIRECT-V1:'
 const MAX_PAYLOAD_LENGTH = 1_000_000
@@ -42,7 +38,7 @@ export function installFriendInviteGuide(): void {
   const hostAction = card?.querySelector<HTMLButtonElement>('#friend-direct-host')
   const joinAction = card?.querySelector<HTMLButtonElement>('#friend-direct-join')
   const cancelAction = card?.querySelector<HTMLButtonElement>('#friend-direct-cancel')
-  const clipboard = (window as Window & { captureLink?: ClipboardApi }).captureLink
+  const clipboard = window.captureLink
   if (!card || !flow || !status || !hostAction || !joinAction || !cancelAction ||
       !clipboard?.readFriendClipboard || !clipboard?.writeFriendClipboard) {
     console.warn('[CaptureLink] Guided Friend invites unavailable; original Direct Invite remains available.')

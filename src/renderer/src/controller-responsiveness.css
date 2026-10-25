@@ -1,0 +1,49 @@
+/* One compact product setting; no Latency Lab dashboard or graph. */
+.controller-responsiveness-card {
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
+}
+.controller-responsiveness-card__body { min-width: 0; }
+.controller-responsiveness-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 8px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.controller-responsiveness-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--cl-border, #69727e);
+  border-radius: 9px;
+  cursor: pointer;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.controller-responsiveness-option:has(input:checked) {
+  border-color: var(--cl-accent, #58a6ff);
+  background: rgba(80, 140, 230, 0.08);
+}
+.controller-responsiveness-option:focus-within {
+  outline: 2px solid var(--cl-accent, #58a6ff);
+  outline-offset: 2px;
+}
+.controller-responsiveness-option input { flex: 0 0 auto; accent-color: var(--cl-accent, #58a6ff); }
+.controller-responsiveness-option span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.controller-responsiveness-option small { opacity: 0.75; line-height: 1.3; }
+.controller-responsiveness-note { font-size: 0.8rem; opacity: 0.75; }
+.controller-responsiveness-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

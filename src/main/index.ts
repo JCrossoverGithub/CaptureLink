@@ -19,6 +19,7 @@ import {
 
 let mainWindow: BrowserWindow | null = null
 let authProcessRunning = false
+let activeXboxVerificationUri: string | null = null
 const xboxHome = new XboxHomeManager()
 
 type RecordingKind = 'audio' | 'video'
@@ -475,6 +476,19 @@ ipcMain.handle('capturelink:xbox-auth-sign-out', async () => {
   return { signedOut: true }
 })
 
+ipcMain.handle('capturelink:xbox-auth-open-verification', async () => {
+  if (!authProcessRunning || !activeXboxVerificationUri) {
+    throw new Error('Start sign-in in CaptureLink to obtain a verification code first.')
+  }
+  // Never accept an arbitrary URL from renderer IPC.
+  const address = new URL(activeXboxVerificationUri)
+  if (address.protocol !== 'https:' ||
+      !(address.hostname === 'microsoft.com' || address.hostname.endsWith('.microsoft.com'))) {
+    throw new Error('Unexpected Microsoft verification address.')
+  }
+  await shell.openExternal(address.toString())
+})
+
 ipcMain.handle('capturelink:xbox-auth-start', async () => {
   if (authProcessRunning) {
     return {
@@ -508,11 +522,14 @@ ipcMain.handle('capturelink:xbox-auth-start', async () => {
         await msal.doDeviceCodeAuth()
 
       emit(deviceCodeDetails.message)
+      activeXboxVerificationUri = deviceCodeDetails.verification_uri
+      mainWindow?.webContents.send('capturelink:xbox-auth-device-code', {
+        userCode: deviceCodeDetails.user_code,
+        verificationUri: deviceCodeDetails.verification_uri,
+        expiresIn: deviceCodeDetails.expires_in
+      })
 
-      await shell.openExternal(
-        deviceCodeDetails.verification_uri
-      )
-
+      // Wait while CaptureLink shows the code; browser opens on explicit action.
       await msal.doPollForDeviceCodeAuth(
         deviceCodeDetails.device_code,
         deviceCodeDetails.expires_in * 1000
@@ -548,6 +565,7 @@ ipcMain.handle('capturelink:xbox-auth-start', async () => {
         }
       )
     } finally {
+      activeXboxVerificationUri = null
       authProcessRunning = false
     }
   })()
