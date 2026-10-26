@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, shell } from 'electron'
 import { Msal, TokenStore } from 'xal-node'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -351,6 +351,7 @@ function createMainWindow(): void {
       const isCaptureLinkWindow = webContents === null || webContents.id === window.webContents.id
       return isCaptureLinkWindow && (
         permission === 'media' ||
+        permission === 'display-capture' ||
         permission === 'speaker-selection'
       )
     }
@@ -361,10 +362,45 @@ function createMainWindow(): void {
       const isCaptureLinkWindow = webContents.id === window.webContents.id
       callback(isCaptureLinkWindow && (
         permission === 'media' ||
+        permission === 'display-capture' ||
         permission === 'speaker-selection'
       ))
     }
   )
+
+  // RQ3 Windows desktop audio: a recording-only getDisplayMedia request.
+  // Only the top-level CaptureLink renderer can obtain system loopback.
+  // The screen video track is never attached to the recording; it exists
+  // only because Chromium requires video when requesting display audio.
+  window.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+    // Electron supports null to reject the request; 44.2.0's TypeScript
+    // declaration incorrectly types this callback as Streams-only.
+    const denyCaptureRequest = (): void => {
+      (callback as (streams: Parameters<typeof callback>[0] | null) => void)(null)
+    }
+    if (
+      process.platform !== 'win32' ||
+      request.frame !== window.webContents.mainFrame ||
+      !request.audioRequested ||
+      !request.videoRequested ||
+      !request.userGesture
+    ) {
+      denyCaptureRequest()
+      return
+    }
+
+    void desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+      const source = sources[0]
+      if (window.isDestroyed() || !source) {
+        denyCaptureRequest()
+        return
+      }
+      callback({ video: source, audio: 'loopback' })
+    }).catch((error) => {
+      console.error('[CaptureLink] Windows desktop audio capture denied:', error)
+      denyCaptureRequest()
+    })
+  })
 
   window.once('ready-to-show', () => window.show())
 
@@ -723,7 +759,7 @@ ipcMain.handle(
       handle,
       bytesWritten: 0,
       startedAt: Date.now(),
-      targetFilePath: kind === 'video' ? destination : undefined
+      ...(kind === 'video' ? { targetFilePath: destination } : {})
     }
 
     activeRecording = recording

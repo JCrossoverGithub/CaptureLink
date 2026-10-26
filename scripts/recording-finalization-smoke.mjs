@@ -9,7 +9,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
-const ts = createRequire(import.meta.url)('typescript')
+// TypeScript 7's native compiler does not export transpileModule.
+// esbuild is already part of CaptureLink's Electron/Vite toolchain.
+const { transformSync } = createRequire(import.meta.url)('esbuild')
 
 const root = resolve(import.meta.dirname, '..')
 const workspace = mkdtempSync(join(tmpdir(), 'capturelink-rq2-'))
@@ -58,9 +60,14 @@ const electron = {
   clipboard: { writeText() {}, readText() { return '' } },
 }
 function loadTs(file, mocks = {}) {
-  const compiled = ts.transpileModule(readFileSync(file, 'utf8'), {
-    fileName: file,
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  const source = readFileSync(file, 'utf8').replaceAll(
+    'import.meta.url', JSON.stringify(`file://${file.replaceAll('\\', '/')}`)
+  )
+  const compiled = transformSync(source, {
+    loader: 'ts',
+    format: 'cjs',
+    target: 'es2022',
+    sourcefile: file
   })
   const module = { exports: {} }
   const nativeRequire = createRequire(file)
@@ -69,7 +76,7 @@ function loadTs(file, mocks = {}) {
     if (id in mocks) return mocks[id]
     return nativeRequire(id)
   }
-  vm.runInNewContext(compiled.outputText.replaceAll('import.meta.url', JSON.stringify(`file://${file.replaceAll('\\', '/')}`)), {
+  vm.runInNewContext(compiled.code, {
     require: requireShim, module, exports: module.exports, process,
     console, setTimeout, clearTimeout, Buffer, __dirname: dirname(file),
     URL, TextEncoder,

@@ -261,3 +261,40 @@ conversion finishes. This version does not attempt background conversion on
 next launch after a power outage or process crash; the original WebM remains on
 disk in that case and can be recovered manually. Installed application FFmpeg
 verification and licensing review remain release requirements.
+
+
+## RQ3 Windows desktop-audio capture (opt-in prototype)
+
+Settings > Recording audio > Include desktop audio enables Windows system
+loopback on the **next** video or audio recording. It is off by default. Audio
+from the selected Windows default output device is mixed with the Xbox audio
+and any enabled microphone track. Desktop mix gain is adjustable 0-200%.
+
+Electron 44 `setDisplayMediaRequestHandler()` grants a screen plus system loopback
+for a user-initiated `getDisplayMedia` request. The screen video track is not
+recorded, and both tracks are stopped when recording ends. The renderer asks
+Chromium for `restrictOwnAudio: true` to exclude CaptureLink playback; however,
+this behavior MUST be verified on physical Windows audio devices before making
+any guarantees about double-recording. If the desktop source becomes unavailable,
+recording stops rather than silently dropping the selected audio source.
+
+**Privacy:** System loopback can capture *all* other applications, including
+calls, notifications, and music. Obtain consent and honor local law. The output
+captures the Windows system/default device, not a separately selected output
+device; switching devices mid-recording is not yet supported. `getDisplayMedia`
+may expose a system screen-share indicator even though the screen video track
+is not saved. This is not a system-wide screen recorder.
+
+Required operator acceptance:
+- Off => only Xbox + selected microphone; no desktop permission request.
+- On => hear independent desktop app audio exactly once in finished MP4.
+- Mute Xbox playback in CaptureLink: desktop mix should not duplicate Xbox.
+- Cancel/deny screen-audio capture => no recording starts, with clear error.
+- Stop/disconnect/close => no lingering system capture tracks.
+- Pause/unplug/change Windows output device => verify safe failure/recovery.
+- Test audio-only and video captures; no added Xbox playback latency.
+- Test both USB headset and speakers, with and without a separate PC app.
+
+A future isolated per-process WASAPI loopback adapter may be necessary if
+`restrictOwnAudio` does not reliably exclude local Xbox playback. Do not ship
+this as production-ready until the above tests pass.

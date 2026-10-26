@@ -1256,6 +1256,27 @@ root.innerHTML = `
             </article>
           </div>
 
+          <article class="surface recording-desktop-settings" aria-label="Recording audio options">
+            <div class="recording-desktop-settings__intro">
+              <div class="eyebrow">RECORDING AUDIO</div>
+              <h2>Desktop audio</h2>
+              <p>Optionally capture sounds from other Windows apps in your Xbox recordings. Xbox audio and microphone mixing stay independent.</p>
+            </div>
+            <label class="recording-desktop-settings__toggle" for="recording-desktop-audio">
+              <span>
+                <strong>Include desktop audio</strong>
+                <small>Off by default · Windows only · Applies to the next recording</small>
+              </span>
+              <input id="recording-desktop-audio" type="checkbox" />
+            </label>
+            <label class="recording-desktop-settings__volume" for="recording-desktop-gain">
+              <span>Desktop audio recording volume</span>
+              <input id="recording-desktop-gain" type="range" min="0" max="200" step="5" value="100" />
+              <output id="recording-desktop-gain-value" for="recording-desktop-gain">100%</output>
+            </label>
+            <p class="recording-desktop-settings__note" id="recording-desktop-note">Windows system capture may include private notifications or calls. CaptureLink requests exclusion of its own Xbox playback, but check for doubled audio before relying on this setting.</p>
+          </article>
+
           <section
             id="diagnostics-panel"
             class="diagnostics-panel diagnostics-panel--settings"
@@ -1473,6 +1494,15 @@ const recordingMicGain =
 
 const recordingMicGainValue =
   requireElement<HTMLOutputElement>('#recording-mic-gain-value')
+
+const recordingDesktopAudioToggle =
+  requireElement<HTMLInputElement>('#recording-desktop-audio')
+const recordingDesktopGain =
+  requireElement<HTMLInputElement>('#recording-desktop-gain')
+const recordingDesktopGainValue =
+  requireElement<HTMLOutputElement>('#recording-desktop-gain-value')
+const recordingDesktopNote =
+  requireElement<HTMLParagraphElement>('#recording-desktop-note')
 
 const speakerDeviceSelect =
   requireElement<HTMLSelectElement>('#speaker-device')
@@ -2298,6 +2328,12 @@ let recordingMicrophoneGainNode: GainNode | null = null
 let recordingAudioDestination: MediaStreamAudioDestinationNode | null = null
 let recordingMicrophoneTrackId = ''
 let recordingMicrophoneGainLevel = 1
+let recordingDesktopAudioEnabled = false
+let recordingDesktopAudioGainLevel = 1
+let recordingDesktopCapture: MediaStream | null = null
+let recordingDesktopAudioSource: MediaStreamAudioSourceNode | null = null
+let recordingDesktopGainNode: GainNode | null = null
+let recordingStartPending = false
 
 function formatConsoleType(consoleType: string): string {
   switch (consoleType) {
@@ -3690,6 +3726,15 @@ function syncRecordingMicrophoneSource(): void {
 function cleanupRecordingAudioMix(): void {
   detachRecordingMicrophoneSource()
 
+  try { recordingDesktopAudioSource?.disconnect() } catch { /* Already detached */ }
+  try { recordingDesktopGainNode?.disconnect() } catch { /* Already detached */ }
+  recordingDesktopAudioSource = null
+  recordingDesktopGainNode = null
+
+  const capture = recordingDesktopCapture
+  recordingDesktopCapture = null
+  capture?.getTracks().forEach((track) => track.stop())
+
   try {
     recordingXboxAudioSource?.disconnect()
   } catch {
@@ -3707,7 +3752,7 @@ function cleanupRecordingAudioMix(): void {
   }
 }
 
-async function createRecordingAudioMix(): Promise<MediaStream | null> {
+async function createRecordingAudioMix(desktopCapture: MediaStream | null): Promise<MediaStream | null> {
   const incoming = getIncomingAudioRecordingStream()
 
   if (!incoming) {
@@ -3715,6 +3760,7 @@ async function createRecordingAudioMix(): Promise<MediaStream | null> {
   }
 
   cleanupRecordingAudioMix()
+  recordingDesktopCapture = desktopCapture
 
   const context = new AudioContext()
 
@@ -3730,6 +3776,25 @@ async function createRecordingAudioMix(): Promise<MediaStream | null> {
     recordingXboxAudioSource = source
     recordingAudioDestination = destination
 
+    if (desktopCapture) {
+      const desktopTrack = desktopCapture.getAudioTracks().find(
+        (candidate) => candidate.readyState === 'live'
+      )
+      if (!desktopTrack) throw new Error('Windows did not supply a live desktop audio track.')
+      const desktopSource = context.createMediaStreamSource(new MediaStream([desktopTrack]))
+      const desktopGain = context.createGain()
+      desktopGain.gain.value = recordingDesktopAudioGainLevel
+      desktopSource.connect(desktopGain)
+      desktopGain.connect(destination)
+      recordingDesktopAudioSource = desktopSource
+      recordingDesktopGainNode = desktopGain
+      desktopTrack.addEventListener('ended', () => {
+        if (recordingDesktopCapture !== desktopCapture || !mediaRecorder) return
+        setStreamStatus('Desktop audio capture ended; stopping recording to avoid a silent desktop mix.')
+        void stopRecording()
+      }, { once: true })
+    }
+
     // If Xbox game-chat microphone transmission is already active, mix that
     // exact outbound track into the local recording. If the user toggles the
     // microphone later, toggleMicrophone()/stopMicrophone() resync this bus.
@@ -3737,8 +3802,8 @@ async function createRecordingAudioMix(): Promise<MediaStream | null> {
 
     return destination.stream
   } catch (error) {
-    void context.close().catch(() => undefined)
     cleanupRecordingAudioMix()
+    void context.close().catch(() => undefined)
     throw error
   }
 }
@@ -3987,7 +4052,27 @@ async function finalizeRecording(
   }
 }
 
-async function startRecording(kind: RecordingKind): Promise<void> {
+async function requestDesktopAudioCapture(): Promise<MediaStream> {
+  if (window.captureLink.platform !== 'win32') {
+    throw new Error('Desktop audio capture is supported only on Windows.')
+  }
+
+  // Electron 44 supports restrictOwnAudio. Never downgrade to unconstrained
+  // loopback as that can record CaptureLink's Xbox audio a second time.
+  const request = navigator.mediaDevices.getDisplayMedia({
+    video: true,
+    audio: { restrictOwnAudio: true },
+    systemAudio: 'include'
+  } as DisplayMediaStreamOptions)
+  const capture = await request
+  if (!capture.getAudioTracks().some((track) => track.readyState === 'live')) {
+    capture.getTracks().forEach((track) => track.stop())
+    throw new Error('Desktop audio was unavailable or permission was denied.')
+  }
+  return capture
+}
+
+async function startRecordingInternal(kind: RecordingKind): Promise<void> {
   if (
     mediaRecorder ||
     recordingSaving ||
@@ -4004,10 +4089,18 @@ async function startRecording(kind: RecordingKind): Promise<void> {
   }
 
   let recordingAudio: MediaStream | null
+  let desktopCapture: MediaStream | null = null
 
   try {
-    recordingAudio = await createRecordingAudioMix()
+    if (recordingDesktopAudioEnabled) {
+      setStreamStatus('Preparing Windows desktop audio capture…')
+      // Call before any await to preserve the recording button's user gesture.
+      desktopCapture = await requestDesktopAudioCapture()
+    }
+    recordingAudio = await createRecordingAudioMix(desktopCapture)
   } catch (error) {
+    desktopCapture?.getTracks().forEach((track) => track.stop())
+    cleanupRecordingAudioMix()
     setRecordingUi('error', kind)
     setStreamStatus(
       `Could not prepare recording audio mix: ${recordingErrorMessage(error)}`
@@ -4016,6 +4109,8 @@ async function startRecording(kind: RecordingKind): Promise<void> {
   }
 
   if (!recordingAudio) {
+    desktopCapture?.getTracks().forEach((track) => track.stop())
+    cleanupRecordingAudioMix()
     setRecordingUi('error', kind)
     setStreamStatus('Xbox audio stream is not available for recording')
     return
@@ -4103,10 +4198,17 @@ async function startRecording(kind: RecordingKind): Promise<void> {
   }
 
   recorder.onstop = () => {
+    // Stop system loopback immediately; MP4 conversion can run much longer.
+    cleanupRecordingAudioMix()
     void finalizeRecording(kind, recordingId)
   }
 
   try {
+    if (recordingDesktopAudioEnabled && !recordingDesktopCapture?.getAudioTracks().some(
+      (track) => track.readyState === 'live'
+    )) {
+      throw new Error('Desktop audio capture ended before recording started.')
+    }
     recorder.start(1000)
   } catch (error) {
     mediaRecorder = null
@@ -4131,12 +4233,24 @@ async function startRecording(kind: RecordingKind): Promise<void> {
   recordingTimerHandle = setInterval(updateRecordingTimer, 250)
   setRecordingUi('recording', kind)
   const microphoneIncluded = recordingMicrophoneSource !== null
+  const desktopIncluded = recordingDesktopAudioSource !== null
   setStreamStatus(
     kind === 'video'
-      ? `Recording Xbox video + audio${microphoneIncluded ? ' + microphone' : ''} to ${recordingFilePath}`
-      : `Recording Xbox audio${microphoneIncluded ? ' + microphone' : ''} to ${recordingFilePath}`
+      ? `Recording Xbox video + audio${microphoneIncluded ? ' + microphone' : ''}${desktopIncluded ? ' + desktop' : ''} to ${recordingFilePath}`
+      : `Recording Xbox audio${microphoneIncluded ? ' + microphone' : ''}${desktopIncluded ? ' + desktop' : ''} to ${recordingFilePath}`
   )
   updateInteractiveState()
+}
+
+async function startRecording(kind: RecordingKind): Promise<void> {
+  if (recordingStartPending) return
+  recordingStartPending = true
+  try {
+    await startRecordingInternal(kind)
+  } finally {
+    recordingStartPending = false
+    updateInteractiveState()
+  }
 }
 
 function stopRecording(): Promise<void> {
@@ -4331,6 +4445,12 @@ function updateInteractiveState(): void {
   const recordingActive =
     mediaRecorder?.state === 'recording' ||
     mediaRecorder?.state === 'paused'
+
+  recordingDesktopAudioToggle.disabled =
+    window.captureLink.platform !== 'win32' ||
+    recordingStartPending ||
+    mediaRecorder !== null ||
+    recordingSaving
 
   document.body.classList.toggle(
     'session-connected',
@@ -7719,6 +7839,32 @@ audioVolume.addEventListener('input', () => {
   applyAudioControls()
 })
 
+recordingDesktopAudioToggle.addEventListener('change', () => {
+  if (mediaRecorder || recordingSaving || recordingStartPending) {
+    recordingDesktopAudioToggle.checked = recordingDesktopAudioEnabled
+    return
+  }
+  recordingDesktopAudioEnabled = recordingDesktopAudioToggle.checked
+  window.localStorage.setItem(
+    'capturelink.recording.desktopAudio', String(recordingDesktopAudioEnabled)
+  )
+})
+
+recordingDesktopGain.addEventListener('input', () => {
+  const value = Number(recordingDesktopGain.value)
+  const clamped = Math.min(200, Math.max(0, Number.isFinite(value) ? value : 100))
+  recordingDesktopAudioGainLevel = clamped / 100
+  recordingDesktopGain.value = String(clamped)
+  recordingDesktopGainValue.textContent = `${clamped}%`
+  recordingDesktopGainValue.value = `${clamped}%`
+  window.localStorage.setItem('capturelink.recording.desktopGain', String(clamped))
+  if (recordingDesktopGainNode && recordingAudioContext) {
+    recordingDesktopGainNode.gain.setValueAtTime(
+      recordingDesktopAudioGainLevel, recordingAudioContext.currentTime
+    )
+  }
+})
+
 recordingMicGain.addEventListener('input', () => {
   const parsed = Number(recordingMicGain.value)
   const clamped = Math.min(200, Math.max(0, Number.isFinite(parsed) ? parsed : 100))
@@ -8292,6 +8438,26 @@ dockButtonLabels.forEach(([button, label]) => {
 
 setInlineButtonLabel(microphoneTestButton, 'Test microphone')
 setInlineButtonLabel(resyncAudioButton, 'Resync')
+
+// Desktop recording option is intentionally opt-in; prior installs stay off.
+recordingDesktopAudioEnabled = window.localStorage.getItem(
+  'capturelink.recording.desktopAudio'
+) === 'true' && window.captureLink.platform === 'win32'
+recordingDesktopAudioToggle.checked = recordingDesktopAudioEnabled
+if (window.captureLink.platform !== 'win32') {
+  recordingDesktopAudioToggle.disabled = true
+  recordingDesktopNote.textContent = 'Desktop audio recording is currently available on Windows only.'
+}
+const storedDesktopGain = Number(window.localStorage.getItem(
+  'capturelink.recording.desktopGain'
+) ?? '100')
+const initialDesktopGain = Math.min(200, Math.max(0,
+  Number.isFinite(storedDesktopGain) ? storedDesktopGain : 100
+))
+recordingDesktopAudioGainLevel = initialDesktopGain / 100
+recordingDesktopGain.value = String(initialDesktopGain)
+recordingDesktopGainValue.value = `${initialDesktopGain}%`
+recordingDesktopGainValue.textContent = `${initialDesktopGain}%`
 
 const savedRecordingMicGain = Number(
   window.localStorage.getItem('capturelink.recordingMicGain') ?? '100'
