@@ -4473,3 +4473,31 @@ body {
   .recording-desktop-settings__volume { grid-template-columns: 1fr 48px; }
   .recording-desktop-settings__volume > span { grid-column: 1 / -1; }
 }
+
+
+/* RQ4: concise MP4 file-size setting; does not touch source capture quality. */
+.recording-quality-settings__choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+.recording-quality-settings__choice select {
+  appearance: auto;
+  width: min(100%, 250px);
+  min-height: 38px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-panel-2);
+  color: var(--cl-text);
+  padding: 7px 10px;
+}
+.recording-quality-settings__choice select:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 2px;
+}
+.recording-quality-settings__choice select:disabled { opacity: .55; }

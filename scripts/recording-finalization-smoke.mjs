@@ -96,10 +96,10 @@ const ipc = (name, ...args) => {
   return handler({}, ...args)
 }
 
-async function recordToLibrary(outputPath) {
+async function recordToLibrary(outputPath, mp4Quality = 'balanced') {
   savedPaths.push(outputPath)
   const begin = await ipc('capturelink:recording-begin', {
-    kind: 'video', suggestedName: 'CaptureLink-Video.webm'
+    kind: 'video', suggestedName: 'CaptureLink-Video.webm', mp4Quality
   })
   assert.equal(begin.started, true)
   assert.equal(begin.filePath, outputPath)
@@ -115,6 +115,7 @@ async function recordToLibrary(outputPath) {
 
 const target = join(videos, 'CaptureLink', 'my-game.mp4')
 let { result, item } = await recordToLibrary(target)
+const balancedBytes = result.bytesWritten
 assert.equal(result.format, 'mp4')
 assert.equal(result.filePath, target)
 assert.equal(result.warning, undefined)
@@ -146,6 +147,14 @@ const deleted = await ipc('capturelink:recordings-delete', item.id)
 assert.equal(deleted.deleted, true)
 assert.equal(existsSync(sourcePath), false, 'source removed with library recording')
 assert.equal(existsSync(renamed.filePath), false, 'MP4 removed with library recording')
+
+// Smaller MP4 must affect FFmpeg's actual encoding, not live recording.
+const smallerTarget = join(videos, 'CaptureLink', 'smaller.mp4')
+;({ result, item } = await recordToLibrary(smallerTarget, 'smaller'))
+assert.equal(result.format, 'mp4')
+assert.equal(item.originalExists, true)
+assert.ok(result.bytesWritten < balancedBytes,
+  `Smaller MP4 (${result.bytesWritten}) should use fewer bytes than Balanced (${balancedBytes})`)
 
 // Existing output is never overwritten by automatic finalization.
 const conflict = join(videos, 'CaptureLink', 'collision.mp4')
