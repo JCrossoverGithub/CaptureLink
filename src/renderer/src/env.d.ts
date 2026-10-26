@@ -181,7 +181,8 @@ declare global {
 
       beginRecording(
         kind: 'audio' | 'video',
-        suggestedName: string
+        suggestedName: string,
+        mp4Quality?: 'balanced' | 'smaller'
       ): Promise<{
         started: boolean
         recordingId?: string

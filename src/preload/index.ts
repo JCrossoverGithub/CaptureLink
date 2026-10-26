@@ -61,11 +61,12 @@ contextBridge.exposeInMainWorld('captureLink', {
 
   beginRecording: (
     kind: 'audio' | 'video',
-    suggestedName: string
+    suggestedName: string,
+    mp4Quality: 'balanced' | 'smaller' = 'balanced'
   ) =>
     ipcRenderer.invoke(
       'capturelink:recording-begin',
-      { kind, suggestedName }
+      { kind, suggestedName, mp4Quality }
     ),
 
   appendRecordingChunk: (

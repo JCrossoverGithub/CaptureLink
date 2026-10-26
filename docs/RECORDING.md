@@ -298,3 +298,23 @@ Required operator acceptance:
 A future isolated per-process WASAPI loopback adapter may be necessary if
 `restrictOwnAudio` does not reliably exclude local Xbox playback. Do not ship
 this as production-ready until the above tests pass.
+
+
+## RQ4 MP4 file-size preference
+
+Settings > Recording video > Finished MP4 file size offers **Balanced**
+(default, H.264 CRF 20) and **Smaller MP4** (H.264 CRF 26). This option is
+persisted locally and frozen when each recording begins; changes apply to the
+next recording. Audio-only recordings and other manual export paths are
+unchanged. Existing installations stay on Balanced without user intervention.
+
+This setting affects the **post-capture FFmpeg MP4 conversion only**. It does
+not affect the Xbox WebRTC feed, in-game latency, MediaRecorder's WebM video
+bitrate, recorded resolution, or the WebM recovery master. The master remains
+in `.capturelink-sources` even if Smaller MP4 is selected. Therefore total
+on-disk savings are **less** than the reduction in size of the finished MP4.
+Actual savings vary by gameplay. The 12-second sample used to select this
+feature was 7.03 MiB in Balanced versus 3.32 MiB in Smaller MP4, with no
+noticeable difference reported by the tester; other gameplay can show
+additional artifacts. No High preset is exposed until larger output files can
+be justified by a meaningful, observable improvement.

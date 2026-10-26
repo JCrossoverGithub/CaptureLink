@@ -14,7 +14,8 @@ import {
 import {
   exportRecordingWithFfmpeg,
   getFfmpegSupport,
-  type RecordingExportFormat
+  type RecordingExportFormat,
+  type Mp4Quality
 } from './recording/export'
 
 let mainWindow: BrowserWindow | null = null
@@ -31,6 +32,7 @@ interface ActiveRecording {
   handle: FileHandle
   bytesWritten: number
   startedAt: number
+  mp4Quality: Mp4Quality
   targetFilePath?: string
 }
 
@@ -686,6 +688,7 @@ ipcMain.handle(
     payload: {
       kind: RecordingKind
       suggestedName: string
+      mp4Quality?: Mp4Quality
     }
   ) => {
     if (activeRecording || recordingFinalizing) {
@@ -759,6 +762,8 @@ ipcMain.handle(
       handle,
       bytesWritten: 0,
       startedAt: Date.now(),
+      // Validate renderer-controlled preference and freeze it for this recording.
+      mp4Quality: payload.mp4Quality === 'smaller' ? 'smaller' : 'balanced',
       ...(kind === 'video' ? { targetFilePath: destination } : {})
     }
 
@@ -882,6 +887,7 @@ ipcMain.handle(
           }
           await exportRecordingWithFfmpeg({
             source, format: 'mp4', outputPath: target,
+            mp4Quality: recording.mp4Quality,
             onProgress: (percent) => mainWindow?.webContents.send(
               'capturelink:recording-mp4-progress', percent
             )

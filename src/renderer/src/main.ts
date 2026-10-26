@@ -1256,6 +1256,22 @@ root.innerHTML = `
             </article>
           </div>
 
+          <article class="surface recording-desktop-settings recording-quality-settings" aria-label="Recording quality options">
+            <div class="recording-desktop-settings__intro">
+              <div class="eyebrow">RECORDING VIDEO</div>
+              <h2>Finished MP4 file size</h2>
+              <p>Choose the file-size preference for your next video recording. This does not change Xbox streaming quality or the original WebM capture.</p>
+            </div>
+            <label class="recording-quality-settings__choice" for="recording-mp4-quality">
+              <span>MP4 encoding</span>
+              <select id="recording-mp4-quality">
+                <option value="balanced">Balanced (default)</option>
+                <option value="smaller">Smaller MP4</option>
+              </select>
+            </label>
+            <p class="recording-desktop-settings__note">Smaller MP4 reduces the converted file size, but may lose detail in complex scenes. CaptureLink also retains the original WebM source for recovery, so total disk savings will be less than the MP4 savings.</p>
+          </article>
+
           <article class="surface recording-desktop-settings" aria-label="Recording audio options">
             <div class="recording-desktop-settings__intro">
               <div class="eyebrow">RECORDING AUDIO</div>
@@ -1494,6 +1510,9 @@ const recordingMicGain =
 
 const recordingMicGainValue =
   requireElement<HTMLOutputElement>('#recording-mic-gain-value')
+
+const recordingMp4QualitySelect =
+  requireElement<HTMLSelectElement>('#recording-mp4-quality')
 
 const recordingDesktopAudioToggle =
   requireElement<HTMLInputElement>('#recording-desktop-audio')
@@ -2305,6 +2324,7 @@ let previousStatsSample: {
   outboundAudioBytes: number
 } | null = null
 type RecordingKind = 'audio' | 'video'
+type Mp4Quality = 'balanced' | 'smaller'
 
 let mediaRecorder: MediaRecorder | null = null
 let recordingKind: RecordingKind | null = null
@@ -2328,6 +2348,7 @@ let recordingMicrophoneGainNode: GainNode | null = null
 let recordingAudioDestination: MediaStreamAudioDestinationNode | null = null
 let recordingMicrophoneTrackId = ''
 let recordingMicrophoneGainLevel = 1
+let recordingMp4Quality: Mp4Quality = 'balanced'
 let recordingDesktopAudioEnabled = false
 let recordingDesktopAudioGainLevel = 1
 let recordingDesktopCapture: MediaStream | null = null
@@ -4149,7 +4170,9 @@ async function startRecordingInternal(kind: RecordingKind): Promise<void> {
   let beginResult: Awaited<ReturnType<typeof window.captureLink.beginRecording>>
 
   try {
-    beginResult = await window.captureLink.beginRecording(kind, suggestedName)
+    beginResult = await window.captureLink.beginRecording(
+      kind, suggestedName, recordingMp4Quality
+    )
   } catch (error) {
     cleanupRecordingAudioMix()
     setRecordingUi('error', kind)
@@ -4445,6 +4468,9 @@ function updateInteractiveState(): void {
   const recordingActive =
     mediaRecorder?.state === 'recording' ||
     mediaRecorder?.state === 'paused'
+
+  recordingMp4QualitySelect.disabled = recordingStartPending ||
+    mediaRecorder !== null || recordingSaving
 
   recordingDesktopAudioToggle.disabled =
     window.captureLink.platform !== 'win32' ||
@@ -7839,6 +7865,16 @@ audioVolume.addEventListener('input', () => {
   applyAudioControls()
 })
 
+recordingMp4QualitySelect.addEventListener('change', () => {
+  if (mediaRecorder || recordingSaving || recordingStartPending) {
+    recordingMp4QualitySelect.value = recordingMp4Quality
+    return
+  }
+  recordingMp4Quality = recordingMp4QualitySelect.value === 'smaller'
+    ? 'smaller' : 'balanced'
+  window.localStorage.setItem('capturelink.recording.mp4Quality', recordingMp4Quality)
+})
+
 recordingDesktopAudioToggle.addEventListener('change', () => {
   if (mediaRecorder || recordingSaving || recordingStartPending) {
     recordingDesktopAudioToggle.checked = recordingDesktopAudioEnabled
@@ -8438,6 +8474,12 @@ dockButtonLabels.forEach(([button, label]) => {
 
 setInlineButtonLabel(microphoneTestButton, 'Test microphone')
 setInlineButtonLabel(resyncAudioButton, 'Resync')
+
+// New and existing installs use the previously verified Balanced MP4 encode.
+recordingMp4Quality = window.localStorage.getItem(
+  'capturelink.recording.mp4Quality'
+) === 'smaller' ? 'smaller' : 'balanced'
+recordingMp4QualitySelect.value = recordingMp4Quality
 
 // Desktop recording option is intentionally opt-in; prior installs stay off.
 recordingDesktopAudioEnabled = window.localStorage.getItem(

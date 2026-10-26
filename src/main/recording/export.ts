@@ -6,6 +6,7 @@ import { basename, dirname, join } from 'node:path'
 import { app } from 'electron'
 
 export type RecordingExportFormat = 'mp4' | 'mp3' | 'wav'
+export type Mp4Quality = 'balanced' | 'smaller'
 
 export interface RecordingExportSource {
   id: string
@@ -23,6 +24,7 @@ export interface FfmpegExportOptions {
   source: RecordingExportSource
   format: RecordingExportFormat
   outputPath: string
+  mp4Quality?: Mp4Quality
   onProgress?: (percent: number) => void
 }
 
@@ -107,7 +109,8 @@ export async function getFfmpegSupport(): Promise<FfmpegSupport> {
 function getRecordingExportArgs(
   source: RecordingExportSource,
   format: RecordingExportFormat,
-  outputPath: string
+  outputPath: string,
+  mp4Quality: Mp4Quality = 'balanced'
 ): string[] {
   const common = [
     '-hide_banner',
@@ -128,7 +131,8 @@ function getRecordingExportArgs(
       '-map', '0:a:0?',
       '-c:v', 'libx264',
       '-preset', 'medium',
-      '-crf', '20',
+      // Only the finished MP4 changes; the recoverable WebM master does not.
+      '-crf', mp4Quality === 'smaller' ? '26' : '20',
       '-pix_fmt', 'yuv420p',
       // Chrome/Electron MediaRecorder WebM can advertise a nominal 1000 fps
       // time base even though real frames arrive at normal gameplay cadence.
@@ -182,7 +186,7 @@ async function runFfmpegExport(
 ): Promise<void> {
   const { source, format, outputPath, onProgress } = options
   const command = getFfmpegCommand()
-  const args = getRecordingExportArgs(source, format, outputPath)
+  const args = getRecordingExportArgs(source, format, outputPath, options.mp4Quality)
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
