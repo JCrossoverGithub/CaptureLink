@@ -113,6 +113,7 @@ declare global {
     durationMs: number
     bytes: number
     exists: boolean
+    originalExists: boolean
   }
 
   interface Window {
@@ -202,6 +203,8 @@ declare global {
         saved: boolean
         filePath: string
         bytesWritten: number
+        format: 'mp4' | 'webm'
+        warning?: string
       }>
 
       cancelRecording(
@@ -211,6 +214,8 @@ declare global {
         filePath: string
         bytesWritten: number
       }>
+
+      onRecordingMp4Progress(callback: (percent: number) => void): void
 
       getRecordings(): Promise<CaptureLinkRecordingItem[]>
 

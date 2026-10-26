@@ -224,3 +224,77 @@ See:
 ```text
 docs/LEGAL_REVIEW.md
 ```
+
+## RQ1 MP4 export hardening (2026-10-25)
+
+Video capture continues to be WebM. **MP4 is not yet the automatic post-recording default**; this change prepares that feature without weakening capture recovery.
+
+- Windows release builds explicitly include a verified `ffmpeg.exe` at `resources/bin/ffmpeg.exe`.
+- `npm run dist:win` runs a preflight checking the binary and required H.264/AAC encoders. Run `npm run verify:ffmpeg` on Windows to check it independently.
+- Export requires true `libx264` H.264 and AAC; older MPEG-4 Part 2 is not silently substituted.
+- Conversion writes a unique temporary sibling file and moves it to the chosen destination only after successful encoding. Failed conversions remove only their temporary file, preserving both the WebM source and any existing destination.
+- `node scripts/recording-mp4-smoke.mjs` exercises the installed FFmpeg binary on synthetic five-second WebM with audio and verifies MP4 codecs, duration, seeking, and front-loaded `moov` metadata.
+
+**Before distributing installer builds:** examine the **exact** bundled FFmpeg binary's license, compilation options, corresponding-source/distribution obligations, and bundled license notices; H.264/AAC encoder inclusion can have additional obligations. Verify an installed CaptureLink copy on a clean Windows machine with no FFmpeg on `PATH`.
+
+The next milestone will implement automatic post-recording MP4 finalization with WebM master retention and recording-library lifecycle support. It must handle shutdown, rename/delete, retry after failure, and interrupted conversions.
+
+
+## Automatic MP4 finalization (RQ2)
+
+Video recording now chooses the finished `.mp4` destination before capture. The
+live MediaRecorder still writes a unique original WebM file to the adjacent
+`.capturelink-sources/` folder. After the recorder stops, CaptureLink registers
+that source in the library, runs FFmpeg H.264/AAC conversion, and updates the
+same library entry to the playable, seekable MP4 on success. If FFmpeg fails,
+the library retains the WebM source and displays the conversion warning. No
+user recording is discarded because conversion fails.
+
+The original WebM remains available through **Export WebM source**. Deleting an
+MP4 recording in the library deletes its companion source after confirmation;
+renaming changes only the primary MP4 name, since the master filename uses the
+stable recording ID. For an older WebM recording, the original action continues
+to export the source itself. Existing recording library records are supported.
+
+Closing CaptureLink while MP4 finalization is in progress defers closing until
+conversion finishes. This version does not attempt background conversion on
+next launch after a power outage or process crash; the original WebM remains on
+disk in that case and can be recovered manually. Installed application FFmpeg
+verification and licensing review remain release requirements.
+
+
+## RQ3 Windows desktop-audio capture (opt-in prototype)
+
+Settings > Recording audio > Include desktop audio enables Windows system
+loopback on the **next** video or audio recording. It is off by default. Audio
+from the selected Windows default output device is mixed with the Xbox audio
+and any enabled microphone track. Desktop mix gain is adjustable 0-200%.
+
+Electron 44 `setDisplayMediaRequestHandler()` grants a screen plus system loopback
+for a user-initiated `getDisplayMedia` request. The screen video track is not
+recorded, and both tracks are stopped when recording ends. The renderer asks
+Chromium for `restrictOwnAudio: true` to exclude CaptureLink playback; however,
+this behavior MUST be verified on physical Windows audio devices before making
+any guarantees about double-recording. If the desktop source becomes unavailable,
+recording stops rather than silently dropping the selected audio source.
+
+**Privacy:** System loopback can capture *all* other applications, including
+calls, notifications, and music. Obtain consent and honor local law. The output
+captures the Windows system/default device, not a separately selected output
+device; switching devices mid-recording is not yet supported. `getDisplayMedia`
+may expose a system screen-share indicator even though the screen video track
+is not saved. This is not a system-wide screen recorder.
+
+Required operator acceptance:
+- Off => only Xbox + selected microphone; no desktop permission request.
+- On => hear independent desktop app audio exactly once in finished MP4.
+- Mute Xbox playback in CaptureLink: desktop mix should not duplicate Xbox.
+- Cancel/deny screen-audio capture => no recording starts, with clear error.
+- Stop/disconnect/close => no lingering system capture tracks.
+- Pause/unplug/change Windows output device => verify safe failure/recovery.
+- Test audio-only and video captures; no added Xbox playback latency.
+- Test both USB headset and speakers, with and without a separate PC app.
+
+A future isolated per-process WASAPI loopback adapter may be necessary if
+`restrictOwnAudio` does not reliably exclude local Xbox playback. Do not ship
+this as production-ready until the above tests pass.

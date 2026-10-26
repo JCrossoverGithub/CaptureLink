@@ -126,6 +126,10 @@ contextBridge.exposeInMainWorld('captureLink', {
     ),
 
 
+  onRecordingMp4Progress: (callback: (percent: number) => void) => {
+    ipcRenderer.on('capturelink:recording-mp4-progress', (_event, percent: number) => callback(percent))
+  },
+
   onXboxAuthDeviceCode: (
     callback: (info: { userCode: string; verificationUri: string; expiresIn: number }) => void
   ) => {

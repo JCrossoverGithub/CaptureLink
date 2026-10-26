@@ -4436,3 +4436,40 @@ body {
 #xbox-recovery-primary:hover:not(:disabled) { background: #337acf; }
 .xbox-recovery-panel__actions button:disabled { opacity: .55; cursor: default; }
 .xbox-recovery-panel__actions button:focus-visible { outline: 2px solid #61a6ff; outline-offset: 2px; }
+
+
+/* RQ3: Windows desktop-audio recording controls (Slate semantic surfaces). */
+.recording-desktop-settings {
+  grid-column: 1 / -1;
+  padding: 20px 22px;
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--cl-border);
+  border-radius: 14px;
+  background: var(--cl-panel);
+}
+.recording-desktop-settings h2 { margin: 3px 0 0; font-size: 16px; font-weight: 650; color: var(--cl-text); }
+.recording-desktop-settings p { margin: 6px 0 0; font-size: 12px; line-height: 1.55; color: var(--cl-muted); }
+.recording-desktop-settings__toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 15px 16px;
+  border: 1px solid var(--cl-border);
+  background: var(--cl-panel-2);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.recording-desktop-settings__toggle span { display: grid; gap: 4px; }
+.recording-desktop-settings__toggle strong { color: var(--cl-text); font-size: 13px; }
+.recording-desktop-settings__toggle small { color: var(--cl-muted); font-size: 11px; }
+.recording-desktop-settings__toggle input { width: 18px; height: 18px; flex: none; accent-color: var(--cl-accent); }
+.recording-desktop-settings__volume { display: grid; grid-template-columns: 1fr minmax(120px, 220px) 48px; align-items: center; gap: 12px; font-size: 12px; color: var(--cl-text); }
+.recording-desktop-settings__volume input { accent-color: var(--cl-accent); width: 100%; }
+.recording-desktop-settings__volume output { color: var(--cl-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.recording-desktop-settings__note { border-top: 1px solid var(--cl-border); padding-top: 12px; }
+@media (max-width: 750px) {
+  .recording-desktop-settings__volume { grid-template-columns: 1fr 48px; }
+  .recording-desktop-settings__volume > span { grid-column: 1 / -1; }
+}

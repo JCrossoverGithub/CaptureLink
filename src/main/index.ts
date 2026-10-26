@@ -1,10 +1,10 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, shell } from 'electron'
 import { Msal, TokenStore } from 'xal-node'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
 import { copyFile, open, readFile, rename, stat, statfs, unlink, writeFile, type FileHandle } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join, parse } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
 import {
@@ -31,6 +31,7 @@ interface ActiveRecording {
   handle: FileHandle
   bytesWritten: number
   startedAt: number
+  targetFilePath?: string
 }
 
 interface RecordingLibraryEntry {
@@ -40,15 +41,18 @@ interface RecordingLibraryEntry {
   createdAt: string
   durationMs: number
   bytes: number
+  sourceFilePath?: string
 }
 
 interface RecordingLibraryItem extends RecordingLibraryEntry {
   fileName: string
   exists: boolean
+  originalExists: boolean
 }
 
 let activeRecording: ActiveRecording | null = null
 let recordingClosePromptOpen = false
+let recordingFinalizing = false
 let closeAfterRecording = false
 let activeRecordingExport: {
   recordingId: string
@@ -102,7 +106,8 @@ async function readRecordingLibrary(): Promise<RecordingLibraryEntry[]> {
         typeof candidate.filePath === 'string' &&
         typeof candidate.createdAt === 'string' &&
         typeof candidate.durationMs === 'number' &&
-        typeof candidate.bytes === 'number'
+        typeof candidate.bytes === 'number' &&
+        (candidate.sourceFilePath === undefined || typeof candidate.sourceFilePath === 'string')
     })
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -149,11 +154,16 @@ async function listRecordingLibrary(): Promise<RecordingLibraryItem[]> {
       exists = false
     }
 
+    const originalPath = entry.sourceFilePath ??
+      (extname(entry.filePath).toLowerCase() === '.webm' ? entry.filePath : null)
+    const originalExists = originalPath ? existsSync(originalPath) : false
+
     return {
       ...entry,
       bytes,
       fileName: basename(entry.filePath),
-      exists
+      exists,
+      originalExists
     }
   }))
 }
@@ -219,6 +229,16 @@ function sanitizeVideoRecordingName(name: string): string {
   return candidate.toLowerCase().endsWith('.webm')
     ? candidate
     : `${candidate}.webm`
+}
+
+async function availableRecordingPath(preferred: string): Promise<string> {
+  const extension = extname(preferred)
+  const base = preferred.slice(0, -extension.length)
+  for (let n = 0; n < 1000; n += 1) {
+    const candidate = n === 0 ? preferred : `${base} (${n})${extension}`
+    if (!existsSync(candidate)) return candidate
+  }
+  throw new Error('Too many existing recordings with this file name.')
 }
 
 async function getAvailableDiskBytes(directory: string): Promise<number> {
@@ -331,6 +351,7 @@ function createMainWindow(): void {
       const isCaptureLinkWindow = webContents === null || webContents.id === window.webContents.id
       return isCaptureLinkWindow && (
         permission === 'media' ||
+        permission === 'display-capture' ||
         permission === 'speaker-selection'
       )
     }
@@ -341,10 +362,45 @@ function createMainWindow(): void {
       const isCaptureLinkWindow = webContents.id === window.webContents.id
       callback(isCaptureLinkWindow && (
         permission === 'media' ||
+        permission === 'display-capture' ||
         permission === 'speaker-selection'
       ))
     }
   )
+
+  // RQ3 Windows desktop audio: a recording-only getDisplayMedia request.
+  // Only the top-level CaptureLink renderer can obtain system loopback.
+  // The screen video track is never attached to the recording; it exists
+  // only because Chromium requires video when requesting display audio.
+  window.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+    // Electron supports null to reject the request; 44.2.0's TypeScript
+    // declaration incorrectly types this callback as Streams-only.
+    const denyCaptureRequest = (): void => {
+      (callback as (streams: Parameters<typeof callback>[0] | null) => void)(null)
+    }
+    if (
+      process.platform !== 'win32' ||
+      request.frame !== window.webContents.mainFrame ||
+      !request.audioRequested ||
+      !request.videoRequested ||
+      !request.userGesture
+    ) {
+      denyCaptureRequest()
+      return
+    }
+
+    void desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+      const source = sources[0]
+      if (window.isDestroyed() || !source) {
+        denyCaptureRequest()
+        return
+      }
+      callback({ video: source, audio: 'loopback' })
+    }).catch((error) => {
+      console.error('[CaptureLink] Windows desktop audio capture denied:', error)
+      denyCaptureRequest()
+    })
+  })
 
   window.once('ready-to-show', () => window.show())
 
@@ -354,6 +410,13 @@ function createMainWindow(): void {
   })
 
   window.on('close', (event) => {
+    if (recordingFinalizing) {
+      // Conversion must not be abandoned when the user closes the app.
+      event.preventDefault()
+      closeAfterRecording = true
+      return
+    }
+
     if (!activeRecording || closeAfterRecording) {
       return
     }
@@ -625,8 +688,8 @@ ipcMain.handle(
       suggestedName: string
     }
   ) => {
-    if (activeRecording) {
-      throw new Error('A CaptureLink recording is already active.')
+    if (activeRecording || recordingFinalizing) {
+      throw new Error('A CaptureLink recording is already active or finalizing.')
     }
 
     if (payload?.kind !== 'audio' && payload?.kind !== 'video') {
@@ -637,16 +700,20 @@ ipcMain.handle(
     const suggestedName = kind === 'video'
       ? sanitizeVideoRecordingName(payload.suggestedName)
       : sanitizeRecordingName(payload.suggestedName)
-    const defaultPath = join(getRecordingDirectory(), suggestedName)
+    // Video users select the *finished* MP4 path. Capture continues safely
+    // as a WebM source in a companion directory until conversion succeeds.
+    const defaultPath = join(getRecordingDirectory(), kind === 'video'
+      ? suggestedName.replace(/\.webm$/i, '.mp4')
+      : suggestedName)
     const options = {
       title: kind === 'video'
-        ? 'Choose CaptureLink video recording location'
+        ? 'Save finished CaptureLink MP4 video'
         : 'Choose CaptureLink audio recording location',
       defaultPath,
       filters: [
         {
-          name: kind === 'video' ? 'WebM video' : 'WebM audio',
-          extensions: ['webm']
+          name: kind === 'video' ? 'MP4 video' : 'WebM audio',
+          extensions: [kind === 'video' ? 'mp4' : 'webm']
         }
       ]
     }
@@ -661,7 +728,10 @@ ipcMain.handle(
       }
     }
 
-    const directory = dirname(result.filePath)
+    const destination = kind === 'video' && extname(result.filePath).toLowerCase() !== '.mp4'
+      ? `${result.filePath}.mp4`
+      : result.filePath
+    const directory = dirname(destination)
     const availableBytes = await getAvailableDiskBytes(directory)
     const minimumBytes = MINIMUM_START_SPACE[kind]
 
@@ -673,14 +743,23 @@ ipcMain.handle(
       )
     }
 
-    const handle = await open(result.filePath, 'w')
+    const id = randomUUID()
+    const capturePath = kind === 'video'
+      ? join(directory, '.capturelink-sources', `${id}.webm`)
+      : destination
+    if (kind === 'video') {
+      mkdirSync(dirname(capturePath), { recursive: true })
+    }
+    // A unique WebM capture path must not overwrite a previous recording.
+    const handle = await open(capturePath, kind === 'video' ? 'wx' : 'w')
     const recording: ActiveRecording = {
-      id: randomUUID(),
+      id,
       kind,
-      filePath: result.filePath,
+      filePath: capturePath,
       handle,
       bytesWritten: 0,
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      ...(kind === 'video' ? { targetFilePath: destination } : {})
     }
 
     activeRecording = recording
@@ -691,7 +770,7 @@ ipcMain.handle(
     return {
       started: true,
       recordingId: recording.id,
-      filePath: recording.filePath,
+      filePath: recording.targetFilePath ?? recording.filePath,
       availableBytes
     }
   }
@@ -761,6 +840,7 @@ ipcMain.handle(
   async (_event, recordingId: string) => {
     const recording = requireActiveRecording(recordingId)
     activeRecording = null
+    recordingFinalizing = true
 
     try {
       await closeRecordingFile(recording)
@@ -770,37 +850,68 @@ ipcMain.handle(
         throw new Error('The recorder produced an empty file.')
       }
 
-      console.log(
-        `[CaptureLink] ${recording.kind} recording finalized: ${recording.filePath}`
-      )
-
+      const createdAt = new Date(recording.startedAt).toISOString()
+      const durationMs = Math.max(0, Date.now() - recording.startedAt)
+      // Register the recoverable WebM *before* attempting the MP4 encode.
+      // If CaptureLink or FFmpeg fails, the user's captured video is retained.
       await upsertRecordingLibraryEntry({
         id: recording.id,
         kind: recording.kind,
         filePath: recording.filePath,
-        createdAt: new Date(recording.startedAt).toISOString(),
-        durationMs: Math.max(0, Date.now() - recording.startedAt),
+        createdAt,
+        durationMs,
         bytes: recording.bytesWritten
       })
 
-      const result = {
-        saved: true,
-        filePath: recording.filePath,
-        bytesWritten: recording.bytesWritten
+      let finalPath = recording.filePath
+      let finalBytes = recording.bytesWritten
+      let format: 'mp4' | 'webm' = 'webm'
+      let warning: string | undefined
+
+      if (recording.kind === 'video' && recording.targetFilePath) {
+        // Preserve any preexisting destination even if it was created while
+        // CaptureLink was recording. Never silently replace someone else's MP4.
+        const target = await availableRecordingPath(recording.targetFilePath)
+        mainWindow?.webContents.send('capturelink:recording-mp4-progress', 0)
+        try {
+          const support = await getFfmpegSupport()
+          if (!support.available) throw new Error(support.detail)
+          const source = {
+            id: recording.id, kind: recording.kind,
+            filePath: recording.filePath, durationMs
+          }
+          await exportRecordingWithFfmpeg({
+            source, format: 'mp4', outputPath: target,
+            onProgress: (percent) => mainWindow?.webContents.send(
+              'capturelink:recording-mp4-progress', percent
+            )
+          })
+          const output = await stat(target)
+          finalPath = target
+          finalBytes = output.size
+          format = 'mp4'
+          await upsertRecordingLibraryEntry({
+            id: recording.id, kind: recording.kind,
+            filePath: finalPath, sourceFilePath: recording.filePath,
+            createdAt, durationMs, bytes: finalBytes
+          })
+        } catch (error) {
+          console.error('[CaptureLink] MP4 finalization failed; WebM preserved:', error)
+          warning = error instanceof Error ? error.message : 'Unknown conversion error'
+        }
       }
 
-      if (closeAfterRecording) {
-        setTimeout(() => {
-          mainWindow?.destroy()
-        }, 150)
+      console.log(`[CaptureLink] ${recording.kind} saved: ${finalPath}`)
+      return {
+        saved: true, filePath: finalPath, bytesWritten: finalBytes,
+        format, warning
       }
-
-      return result
-    } catch (error) {
+    } finally {
+      recordingFinalizing = false
       if (closeAfterRecording) {
         closeAfterRecording = false
+        setTimeout(() => mainWindow?.destroy(), 150)
       }
-      throw error
     }
   }
 )
@@ -901,7 +1012,9 @@ ipcMain.handle(
           type: 'warning',
           title: 'Delete recording',
           message: `Delete ${basename(entry.filePath)}?`,
-          detail: 'This permanently deletes the recording file from disk.',
+          detail: entry.sourceFilePath
+            ? 'This deletes both the finished MP4 and its original WebM capture.'
+            : 'This permanently deletes the recording file from disk.',
           buttons: ['Cancel', 'Delete'],
           defaultId: 0,
           cancelId: 0,
@@ -911,7 +1024,9 @@ ipcMain.handle(
           type: 'warning',
           title: 'Delete recording',
           message: `Delete ${basename(entry.filePath)}?`,
-          detail: 'This permanently deletes the recording file from disk.',
+          detail: entry.sourceFilePath
+            ? 'This deletes both the finished MP4 and its original WebM capture.'
+            : 'This permanently deletes the recording file from disk.',
           buttons: ['Cancel', 'Delete'],
           defaultId: 0,
           cancelId: 0,
@@ -922,11 +1037,14 @@ ipcMain.handle(
       return { deleted: false }
     }
 
-    await unlink(entry.filePath).catch((error: NodeJS.ErrnoException) => {
-      if (error.code !== 'ENOENT') {
-        throw error
-      }
-    })
+    const paths = entry.sourceFilePath && entry.sourceFilePath !== entry.filePath
+      ? [entry.sourceFilePath, entry.filePath]
+      : [entry.filePath]
+    for (const path of paths) {
+      await unlink(path).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error
+      })
+    }
 
     entries.splice(index, 1)
     await writeRecordingLibrary(entries)
@@ -939,11 +1057,12 @@ ipcMain.handle(
   async (_event, id: string) => {
     const { entry } = await requireLibraryEntry(id)
 
-    if (!existsSync(entry.filePath)) {
-      throw new Error('Recording file is missing from disk.')
+    const originalPath = entry.sourceFilePath ?? entry.filePath
+    if (extname(originalPath).toLowerCase() !== '.webm' || !existsSync(originalPath)) {
+      throw new Error('The original WebM capture is unavailable.')
     }
 
-    const fileName = basename(entry.filePath)
+    const fileName = `${parse(entry.filePath).name}.webm`
     const options = {
       title: 'Export original CaptureLink recording',
       defaultPath: join(app.getPath('downloads'), fileName),
@@ -958,7 +1077,7 @@ ipcMain.handle(
       return { exported: false }
     }
 
-    await copyFile(entry.filePath, result.filePath)
+    await copyFile(originalPath, result.filePath)
     return { exported: true, filePath: result.filePath }
   }
 )
@@ -995,14 +1114,17 @@ ipcMain.handle(
       throw new Error('Audio recordings currently export to MP3, WAV, or original WebM.')
     }
 
-    if (activeRecordingExport) {
-      throw new Error('Another CaptureLink export is already running.')
+    if (activeRecordingExport || recordingFinalizing) {
+      throw new Error('Another CaptureLink recording operation is running.')
     }
 
-    const support = await getFfmpegSupport()
-
-    if (!support.available) {
-      throw new Error(support.detail)
+    // A finished MP4 only needs a byte-for-byte copy, not another lossy
+    // H.264 encode (and not another FFmpeg dependency).
+    const directMp4Copy = entry.kind === 'video' && format === 'mp4' &&
+      extname(entry.filePath).toLowerCase() === '.mp4'
+    if (!directMp4Copy) {
+      const support = await getFfmpegSupport()
+      if (!support.available) throw new Error(support.detail)
     }
 
     const extension = extname(entry.filePath)
@@ -1033,26 +1155,40 @@ ipcMain.handle(
     }
 
     try {
-      await exportRecordingWithFfmpeg({
-        source: entry,
-        format,
-        outputPath: result.filePath,
-        onProgress: (percent) => {
-          mainWindow?.webContents.send(
-            'capturelink:recordings-export-progress',
-            { id: entry.id, format, percent }
-          )
+      if (directMp4Copy) {
+        if (result.filePath === entry.filePath) {
+          throw new Error('Choose a different destination from the recording itself.')
         }
-      })
+        const temporary = join(
+          dirname(result.filePath),
+          `.${basename(result.filePath)}.${randomUUID()}.partial.mp4`
+        )
+        try {
+          await copyFile(entry.filePath, temporary)
+          await rename(temporary, result.filePath)
+        } catch (error) {
+          await unlink(temporary).catch(() => undefined)
+          throw error
+        }
+      } else {
+        await exportRecordingWithFfmpeg({
+          source: entry,
+          format,
+          outputPath: result.filePath,
+          onProgress: (percent) => {
+            mainWindow?.webContents.send(
+              'capturelink:recordings-export-progress',
+              { id: entry.id, format, percent }
+            )
+          }
+        })
+      }
 
       return {
         exported: true,
         filePath: result.filePath,
         format
       }
-    } catch (error) {
-      await unlink(result.filePath).catch(() => undefined)
-      throw error
     } finally {
       activeRecordingExport = null
     }
