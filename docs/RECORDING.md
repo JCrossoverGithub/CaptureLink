@@ -224,3 +224,40 @@ See:
 ```text
 docs/LEGAL_REVIEW.md
 ```
+
+## RQ1 MP4 export hardening (2026-10-25)
+
+Video capture continues to be WebM. **MP4 is not yet the automatic post-recording default**; this change prepares that feature without weakening capture recovery.
+
+- Windows release builds explicitly include a verified `ffmpeg.exe` at `resources/bin/ffmpeg.exe`.
+- `npm run dist:win` runs a preflight checking the binary and required H.264/AAC encoders. Run `npm run verify:ffmpeg` on Windows to check it independently.
+- Export requires true `libx264` H.264 and AAC; older MPEG-4 Part 2 is not silently substituted.
+- Conversion writes a unique temporary sibling file and moves it to the chosen destination only after successful encoding. Failed conversions remove only their temporary file, preserving both the WebM source and any existing destination.
+- `node scripts/recording-mp4-smoke.mjs` exercises the installed FFmpeg binary on synthetic five-second WebM with audio and verifies MP4 codecs, duration, seeking, and front-loaded `moov` metadata.
+
+**Before distributing installer builds:** examine the **exact** bundled FFmpeg binary's license, compilation options, corresponding-source/distribution obligations, and bundled license notices; H.264/AAC encoder inclusion can have additional obligations. Verify an installed CaptureLink copy on a clean Windows machine with no FFmpeg on `PATH`.
+
+The next milestone will implement automatic post-recording MP4 finalization with WebM master retention and recording-library lifecycle support. It must handle shutdown, rename/delete, retry after failure, and interrupted conversions.
+
+
+## Automatic MP4 finalization (RQ2)
+
+Video recording now chooses the finished `.mp4` destination before capture. The
+live MediaRecorder still writes a unique original WebM file to the adjacent
+`.capturelink-sources/` folder. After the recorder stops, CaptureLink registers
+that source in the library, runs FFmpeg H.264/AAC conversion, and updates the
+same library entry to the playable, seekable MP4 on success. If FFmpeg fails,
+the library retains the WebM source and displays the conversion warning. No
+user recording is discarded because conversion fails.
+
+The original WebM remains available through **Export WebM source**. Deleting an
+MP4 recording in the library deletes its companion source after confirmation;
+renaming changes only the primary MP4 name, since the master filename uses the
+stable recording ID. For an older WebM recording, the original action continues
+to export the source itself. Existing recording library records are supported.
+
+Closing CaptureLink while MP4 finalization is in progress defers closing until
+conversion finishes. This version does not attempt background conversion on
+next launch after a power outage or process crash; the original WebM remains on
+disk in that case and can be recovered manually. Installed application FFmpeg
+verification and licensing review remain release requirements.

@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { unlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { rename, stat, unlink } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { basename, dirname, join } from 'node:path'
+import { app } from 'electron'
 
 export type RecordingExportFormat = 'mp4' | 'mp3' | 'wav'
 
@@ -26,83 +28,78 @@ export interface FfmpegExportOptions {
 
 function getFfmpegCommand(): string {
   const configured = process.env.CAPTURELINK_FFMPEG?.trim()
-
   if (configured) {
     return configured
   }
 
-  const executable =
-    process.platform === 'win32'
-      ? 'ffmpeg.exe'
-      : 'ffmpeg'
+  const executable = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
 
-  // Development installs use the binary provided by ffmpeg-static.
-  const development = join(
-    process.cwd(),
-    'node_modules',
-    'ffmpeg-static',
-    executable
-  )
+  // Installer releases must use the binary we ship, not an arbitrary PATH
+  // entry. Avoid inadvertently changing codecs or output across machines.
+  if (app.isPackaged && process.platform === 'win32') {
+    return join(process.resourcesPath, 'bin', 'ffmpeg.exe')
+  }
 
+  const development = join(process.cwd(), 'node_modules', 'ffmpeg-static', executable)
   if (existsSync(development)) {
     return development
   }
 
-  // Packaged builds and developer machines can use FFmpeg from PATH.
+  // Non-packaged development fallback only.
   return executable
 }
 
 export async function getFfmpegSupport(): Promise<FfmpegSupport> {
   const command = getFfmpegCommand()
 
+  if (app.isPackaged && process.platform === 'win32' && !existsSync(command)) {
+    return {
+      available: false,
+      detail: 'Bundled FFmpeg is missing from CaptureLink. Reinstall the application.'
+    }
+  }
+
   return await new Promise((resolve) => {
-    const child = spawn(command, ['-version'], {
+    const child = spawn(command, ['-hide_banner', '-encoders'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
 
     let output = ''
     let settled = false
-
     const finish = (available: boolean, detail: string): void => {
-      if (settled) {
-        return
-      }
-
+      if (settled) return
       settled = true
       resolve({ available, detail })
     }
 
-    child.stdout.on('data', (chunk: Buffer) => {
-      if (output.length < 4096) {
-        output += chunk.toString()
-      }
-    })
-
-    child.stderr.on('data', (chunk: Buffer) => {
-      if (output.length < 4096) {
-        output += chunk.toString()
-      }
-    })
-
+    const collect = (chunk: Buffer): void => {
+      if (output.length < 1_000_000) output += chunk.toString()
+    }
+    child.stdout.on('data', collect)
+    child.stderr.on('data', collect)
     child.on('error', (error: NodeJS.ErrnoException) => {
-      const detail = error.code === 'ENOENT'
-        ? 'CaptureLink could not find FFmpeg. Install FFmpeg and make it available on PATH, or set CAPTURELINK_FFMPEG to a valid executable.'
-        : `FFmpeg could not start: ${error.message}`
-
-      finish(false, detail)
+      finish(false, error.code === 'ENOENT'
+        ? 'FFmpeg is unavailable. Reinstall CaptureLink or configure CAPTURELINK_FFMPEG for development.'
+        : `FFmpeg could not start: ${error.message}`)
     })
-
     child.on('close', (code) => {
-      if (code === 0) {
-        const firstLine = output.split(/\r?\n/, 1)[0]?.trim()
-        finish(true, firstLine || `FFmpeg is available through ${command}.`)
-      } else {
-        finish(
-          false,
-          `FFmpeg availability check exited with code ${code ?? 'unknown'}.`
-        )
+      if (code !== 0) {
+        finish(false, `FFmpeg encoder check failed (exit ${code ?? 'unknown'}).`)
+        return
       }
+
+      // MPEG-4 Part 2 is not an acceptable silent substitute for H.264.
+      // Check the actual encoder set, not merely that FFmpeg can launch.
+      const missing = [
+        !/\blibx264\b/.test(output) ? 'libx264 (H.264)' : null,
+        !/\baac\b/.test(output) ? 'aac' : null
+      ].filter((name): name is string => name !== null)
+      if (missing.length) {
+        finish(false, `FFmpeg is missing MP4 encoders: ${missing.join(', ')}.`)
+        return
+      }
+      finish(true, 'MP4 export ready: H.264 (libx264) and AAC are available.')
     })
   })
 }
@@ -110,8 +107,7 @@ export async function getFfmpegSupport(): Promise<FfmpegSupport> {
 function getRecordingExportArgs(
   source: RecordingExportSource,
   format: RecordingExportFormat,
-  outputPath: string,
-  fallbackVideoEncoder = false
+  outputPath: string
 ): string[] {
   const common = [
     '-hide_banner',
@@ -126,20 +122,14 @@ function getRecordingExportArgs(
   ]
 
   if (format === 'mp4') {
-    const videoArgs = fallbackVideoEncoder
-      ? ['-c:v', 'mpeg4', '-q:v', '3']
-      : [
-          '-c:v', 'libx264',
-          '-preset', 'medium',
-          '-crf', '20',
-          '-pix_fmt', 'yuv420p'
-        ]
-
     return [
       ...common,
       '-map', '0:v:0',
       '-map', '0:a:0?',
-      ...videoArgs,
+      '-c:v', 'libx264',
+      '-preset', 'medium',
+      '-crf', '20',
+      '-pix_fmt', 'yuv420p',
       // Chrome/Electron MediaRecorder WebM can advertise a nominal 1000 fps
       // time base even though real frames arrive at normal gameplay cadence.
       // Preserve the captured frame timestamps instead of letting FFmpeg's
@@ -188,17 +178,11 @@ function parseFfmpegProgressTime(line: string): number | null {
 }
 
 async function runFfmpegExport(
-  options: FfmpegExportOptions,
-  fallbackVideoEncoder = false
+  options: FfmpegExportOptions
 ): Promise<void> {
   const { source, format, outputPath, onProgress } = options
   const command = getFfmpegCommand()
-  const args = getRecordingExportArgs(
-    source,
-    format,
-    outputPath,
-    fallbackVideoEncoder
-  )
+  const args = getRecordingExportArgs(source, format, outputPath)
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
@@ -262,7 +246,6 @@ async function runFfmpegExport(
       settled = true
 
       if (code === 0) {
-        onProgress?.(100)
         resolve()
         return
       }
@@ -281,24 +264,35 @@ async function runFfmpegExport(
   })
 }
 
+/**
+ * Encode to a sibling temporary file and publish only after successful exit.
+ * The requested destination is never a partially encoded "finished" video.
+ * The WebM master always stays untouched.
+ */
 export async function exportRecordingWithFfmpeg(
   options: FfmpegExportOptions
 ): Promise<void> {
+  if (join(dirname(options.source.filePath), basename(options.source.filePath)) ===
+      join(dirname(options.outputPath), basename(options.outputPath))) {
+    throw new Error('Export destination cannot overwrite the recording source.')
+  }
+
+  const extension = options.format
+  const temporary = join(
+    dirname(options.outputPath),
+    `.${basename(options.outputPath)}.${randomUUID()}.partial.${extension}`
+  )
+
   try {
-    await runFfmpegExport(options)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const canFallback = options.format === 'mp4' &&
-      /Unknown encoder ['"]?libx264|Encoder \(codec h264\) not found/i.test(message)
-
-    if (!canFallback) {
-      throw error
+    await runFfmpegExport({ ...options, outputPath: temporary })
+    const result = await stat(temporary)
+    if (!result.isFile() || result.size < 1024) {
+      throw new Error('FFmpeg produced an empty or incomplete output.')
     }
-
-    await unlink(options.outputPath).catch(() => undefined)
-    console.warn(
-      '[CaptureLink] libx264 unavailable; retrying MP4 export with FFmpeg MPEG-4 encoder.'
-    )
-    await runFfmpegExport(options, true)
+    await rename(temporary, options.outputPath)
+    options.onProgress?.(100)
+  } catch (error) {
+    await unlink(temporary).catch(() => undefined)
+    throw error
   }
 }

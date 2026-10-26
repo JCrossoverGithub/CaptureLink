@@ -14,9 +14,13 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "dist:win": "npm run build && electron-builder --win nsis",
+    "predist:win": "node scripts/verify-ffmpeg-release.mjs",
+    "verify:ffmpeg": "node scripts/verify-ffmpeg-release.mjs",
+    "test:recording-mp4": "node scripts/recording-mp4-smoke.mjs",
     "vendor:xbox-player": "node scripts/vendor-xbox-player.mjs",
     "predev": "npm run vendor:xbox-player",
-    "prebuild": "npm run vendor:xbox-player"
+    "prebuild": "npm run vendor:xbox-player",
+    "test:recording-finalization": "node scripts/recording-finalization-smoke.mjs"
   },
   "devDependencies": {
     "electron": "44.2.0",
@@ -56,6 +60,10 @@
       "installerHeaderIcon": "build/CaptureLink.ico"
     },
     "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "bin/ffmpeg.exe"
+      },
       {
         "from": "build/CaptureLink.ico",
         "to": "CaptureLink.ico"

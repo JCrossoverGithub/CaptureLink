@@ -3352,6 +3352,7 @@ function renderRecordingLibrary(): void {
       : 'Export MP3'
     const exportDisabled =
       recording.exists && commonExportAvailable ? '' : ' disabled'
+    const originalDisabled = recording.originalExists ? '' : ' disabled'
 
     return `
       <article class="recording-library-item recording-library-item--minimal" data-recording-id="${escapeHtml(recording.id)}">
@@ -3407,7 +3408,7 @@ function renderRecordingLibrary(): void {
               ${recording.kind === 'audio'
                 ? `<button type="button" data-action="export-wav"${exportDisabled}>Export WAV</button>`
                 : ''}
-              <button type="button" data-action="export-original"${disabled}>Export original</button>
+              <button type="button" data-action="export-original"${originalDisabled}>Export WebM source</button>
               <button class="recording-more__danger" type="button" data-action="delete">Delete</button>
             </div>
           </details>
@@ -3878,6 +3879,11 @@ function setRecordingUi(
   }
 }
 
+window.captureLink.onRecordingMp4Progress((percent) => {
+  if (!recordingSaving || recordingKind !== 'video') return
+  recordingStatus.textContent = `Finalizing MP4… ${Math.round(percent)}%`
+})
+
 function finishRecordingStop(): void {
   const resolve = recordingStopResolve
   recordingStopResolve = null
@@ -3947,10 +3953,17 @@ async function finalizeRecording(
         `${recordingWriteError.message}. Partial file preserved: ${result.filePath}`
       )
     } else {
-      setRecordingUi('saved', kind)
-      setStreamStatus(
-        `${kind === 'video' ? 'Video' : 'Audio'} recording saved: ${result.filePath}`
-      )
+      if (kind === 'video' && result.warning) {
+        setRecordingUi('saved', kind)
+        setStreamStatus(
+          `MP4 conversion failed (${result.warning}). Original WebM is safe: ${result.filePath}`
+        )
+      } else {
+        setRecordingUi('saved', kind)
+        setStreamStatus(
+          `${kind === 'video' ? 'Video' : 'Audio'} recording saved: ${result.filePath}`
+        )
+      }
       void refreshRecordingLibrary()
     }
   } catch (error) {
