@@ -4501,3 +4501,84 @@ body {
   outline-offset: 2px;
 }
 .recording-quality-settings__choice select:disabled { opacity: .55; }
+
+
+/* CaptureLink fullscreen shell correction.
+ * Reflow the existing player to the viewport instead of trying to layer a
+ * position:fixed descendant over animated/scrolling shell ancestors.
+ * The video element stays mounted: no interruption to Remote Play or recording.
+ */
+body.capturelink-native-fullscreen .app-shell {
+  width: 100%;
+  height: 100vh;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+body.capturelink-native-fullscreen .app-topbar,
+body.capturelink-native-fullscreen .sidebar-nav,
+body.capturelink-native-fullscreen .stream-meta,
+body.capturelink-native-fullscreen .control-dock,
+body.capturelink-native-fullscreen .context-rail {
+  display: none !important;
+}
+
+body.capturelink-native-fullscreen .app-frame {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.capturelink-native-fullscreen .workspace {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body.capturelink-native-fullscreen .view-panel.is-active {
+  height: 100%;
+  min-height: 0;
+  animation: none !important;
+  transform: none !important;
+}
+
+body.capturelink-native-fullscreen .stream-workspace {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+body.capturelink-native-fullscreen .stream-primary {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
+body.capturelink-native-fullscreen .stream-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+body.capturelink-native-fullscreen .stream-holder.capturelink-video-fullscreen {
+  position: relative !important;
+  inset: auto !important;
+  z-index: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+}
+
+/* Never hide the pointer outside the fullscreen video. */
+body.capturelink-native-fullscreen.capturelink-fullscreen-cursor-idle,
+body.capturelink-native-fullscreen.capturelink-fullscreen-cursor-idle * {
+  cursor: none !important;
+}
