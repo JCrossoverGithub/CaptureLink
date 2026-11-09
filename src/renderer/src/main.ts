@@ -8178,6 +8178,38 @@ function getStreamVideoElement(): HTMLVideoElement | null {
 
 let nativeVideoFullscreen = false
 
+// Only hide the pointer when the user stops moving it in video fullscreen.
+// Keep one timer and remove its state on every exit, including native Escape.
+const FULLSCREEN_CURSOR_IDLE_MS = 1500
+let fullscreenCursorTimer: number | null = null
+
+function resetFullscreenCursorIdle(): void {
+  document.body.classList.remove('capturelink-fullscreen-cursor-idle')
+
+  if (fullscreenCursorTimer !== null) {
+    window.clearTimeout(fullscreenCursorTimer)
+    fullscreenCursorTimer = null
+  }
+
+  if (!nativeVideoFullscreen) {
+    return
+  }
+
+  fullscreenCursorTimer = window.setTimeout(() => {
+    fullscreenCursorTimer = null
+
+    if (nativeVideoFullscreen) {
+      document.body.classList.add('capturelink-fullscreen-cursor-idle')
+    }
+  }, FULLSCREEN_CURSOR_IDLE_MS)
+}
+
+window.addEventListener('pointermove', () => {
+  if (nativeVideoFullscreen) {
+    resetFullscreenCursorIdle()
+  }
+}, { passive: true })
+
 function applyVideoFullscreenState(fullscreen: boolean): void {
   nativeVideoFullscreen = fullscreen
 
@@ -8191,6 +8223,7 @@ function applyVideoFullscreenState(fullscreen: boolean): void {
     fullscreen
   )
 
+  resetFullscreenCursorIdle()
   syncVideoPresentationButtons()
 }
 
