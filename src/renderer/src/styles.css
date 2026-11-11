@@ -4582,3 +4582,97 @@ body.capturelink-native-fullscreen.capturelink-fullscreen-cursor-idle,
 body.capturelink-native-fullscreen.capturelink-fullscreen-cursor-idle * {
   cursor: none !important;
 }
+
+
+/* Shared Microphone V1 — voice only, isolated from Friend Controller. */
+.shared-voice-card { margin-top: 20px; padding: 24px; }
+.shared-voice-heading h3 { margin: 6px 0 8px; font-size: 20px; }
+.shared-voice-heading p, .shared-voice-role p { color: var(--cl-muted); font-size: 13px; line-height: 1.5; }
+.shared-voice-warning { padding: 12px 14px; border: 1px solid var(--cl-border); border-radius: 10px; background: var(--cl-panel-2); color: var(--cl-muted); font-size: 12px; line-height: 1.5; }
+.shared-voice-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; margin-top: 20px; }
+.shared-voice-role { display: flex; flex-direction: column; align-items: stretch; min-width: 0; gap: 10px; padding: 16px; border-radius: 14px; border: 1px solid var(--cl-border); background: var(--cl-panel-2); }
+.shared-voice-role h4 { margin: 0; font-size: 15px; }
+.shared-voice-role p { margin: 0 0 8px; }
+.shared-voice-role label { display: block; color: var(--cl-text); font-size: 12px; font-weight: 600; }
+.shared-voice-role textarea { width: 100%; min-width: 0; min-height: 66px; resize: vertical; overflow-wrap: anywhere; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--cl-border); background: var(--cl-bg); color: var(--cl-text); font: 11px/1.4 ui-monospace, Consolas, monospace; }
+.shared-voice-role textarea:focus-visible { outline: 2px solid var(--cl-accent); outline-offset: 2px; }
+.shared-voice-role button { min-height: 36px; border-radius: 8px; }
+.shared-voice-role input[type=range] { width: 100%; accent-color: var(--cl-accent); }
+.shared-voice-role .shared-voice-checkbox { display: flex; align-items: center; gap: 9px; }
+.shared-voice-role .shared-voice-checkbox input { accent-color: var(--cl-accent); }
+.shared-voice-role [role=status] { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--cl-border); }
+@media(max-width: 780px) { .shared-voice-columns { grid-template-columns: 1fr; } .shared-voice-card { padding: 16px; } }
+
+
+/* Shared Microphone V1.2: persistent participant/state surfaces. */
+.sv-session-overview, .sv-guest-overview { border: 1px solid var(--cl-border); border-radius: 12px; background: var(--cl-panel-2); padding: 15px; margin-top: 16px; }
+.sv-guest-overview { margin: 0 0 8px; background: var(--cl-bg); }
+.sv-session-overview h4 { margin: 14px 0 10px; font-size: 14px; }
+.sv-status-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.sv-diagnostics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.sv-diagnostics strong { font-weight: 600; font-size: 11px; }
+.sv-status-grid > div { background: var(--cl-bg); border: 1px solid var(--cl-border); border-radius: 9px; padding: 10px; min-width: 0; }
+.sv-status-grid small { display: block; color: var(--cl-muted); font-size: 11px; margin-bottom: 5px; }
+.sv-status-grid strong { display: block; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
+.sv-participant { display: grid; grid-template-columns: 130px minmax(0,1fr) 100px; align-items: center; gap: 12px; padding: 11px 10px; border-top: 1px solid var(--cl-border); font-size: 12px; }
+.sv-participant-name { font-weight: 700; }
+.sv-participant > span:nth-child(2) { color: var(--cl-muted); }
+.sv-participant progress { width: 100%; height: 9px; accent-color: var(--cl-accent); }
+.sv-section-heading { font-size: 13px; font-weight: 700; padding-top: 12px; border-top: 1px solid var(--cl-border); }
+.sv-section-heading span { font-weight: 400; font-size: 11px; color: var(--cl-muted); margin-left: 5px; }
+.shared-voice-role .sv-media-note { font-size: 11px; margin: 0 0 6px; }
+@media(max-width: 780px) { .sv-status-grid { grid-template-columns: 1fr; } .sv-participant { grid-template-columns: 1fr 1fr; } .sv-participant progress { grid-column: 1 / -1; } }
+
+.stream-holder .sv-live-pill { position: absolute; left: 14px; bottom: 14px; z-index: 12; max-width: calc(100% - 28px); border: 1px solid rgba(255,255,255,.2); border-radius: 10px; background: rgba(10,20,24,.85); color: #f0fff6; padding: 7px 11px; font-size: 12px; font-weight: 700; line-height: 1.35; pointer-events: none; }
+.stream-holder .sv-live-pill[hidden] { display: none !important; }
+body.capturelink-native-fullscreen .sv-live-pill { opacity: .7; }
+
+
+/* Shared Session V1.5 — one place for Controller + voice, no autoplay permission changes. */
+.capturelink-shared-session-hub { padding: 18px; margin-top: 14px; min-width: 0; }
+.session-hub-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+.session-hub-heading h2 { margin: 3px 0 6px; font-size: 22px; }
+.session-hub-heading p, .session-hub-note { margin: 0; max-width: 72ch; color: var(--cl-muted); font-size: 12px; line-height: 1.5; }
+.session-hub-end { padding: 10px 12px; min-height: 38px; border-radius: 8px; background: transparent; color: var(--cl-text); border: 1px solid var(--cl-border); }
+.session-hub-steps { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0 10px; }
+.session-hub-steps span { flex: 1 1 175px; padding: 9px 11px; background: var(--cl-panel-2); border-radius: 9px; color: var(--cl-muted); font-size: 11px; line-height: 1.5; }
+.session-hub-steps strong { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; color: var(--cl-text); border: 1px solid var(--cl-border); border-radius: 50%; }
+.session-hub-note { font-size: 11px; }
+.session-hub-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.session-hub-actions button { min-height: 39px; padding: 8px 14px; border: 1px solid var(--cl-border); background: var(--cl-panel-2); border-radius: 8px; color: var(--cl-text); }
+.session-hub-panels { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; margin-top: 14px; }
+.session-hub-panels > details { min-width: 0; border: 1px solid var(--cl-border); border-radius: 12px; overflow: hidden; }
+.session-hub-panels > details > summary { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:7px; cursor: pointer; padding: 13px 15px; font-size: 14px; font-weight: 700; }
+.session-hub-panels > details > summary span { color: var(--cl-muted); font-size: 11px; font-weight: 500; }
+.session-hub-panel-body { padding: 0 12px 12px; }
+.session-hub-panel-body > .friend-controller-card, .session-hub-panel-body > .shared-voice-card { margin: 0; width: 100%; box-sizing: border-box; }
+.session-hub-panel-body > .shared-voice-card { padding: 12px; }
+.session-hub-panels :focus-visible, .session-hub-end:focus-visible, .session-hub-actions button:focus-visible { outline: 2px solid var(--cl-accent); outline-offset: 3px; }
+body.capturelink-friend-session .stream-holder { min-height: 0 !important; max-width: 100%; max-height: 100%; align-self: center; justify-self: center; aspect-ratio: auto; }
+body.capturelink-friend-session .stream-holder > video { object-fit: contain; }
+.capturelink-friend-diagnostics-overlay { max-width: calc(100vw - 24px); }
+.capturelink-friend-diagnostics-header { display:flex; align-items:center; justify-content:space-between; gap: 8px; margin: 0 0 6px; font-family:inherit; font-size:11px; }
+.capturelink-friend-diagnostics-header button { padding:4px 9px; color:inherit; border:1px solid rgba(255,255,255,.25); border-radius:6px; background:transparent; cursor:pointer; }
+.capturelink-friend-diagnostics-readout { padding:0; margin:0; max-height: min(65vh,520px); overflow:auto; white-space: pre; color:inherit; font: inherit; }
+.friend-diagnostics-settings { grid-column: 1 / -1; margin-top: 12px; font-size: 12px; width:100%; }
+.friend-diagnostics-settings summary { cursor:pointer; }
+.friend-diagnostics-settings pre { overflow-x:auto; padding:12px; background:var(--cl-bg); color:var(--cl-text); border-radius:8px; font-size:11px; white-space:pre-wrap; }
+@media(max-width: 780px) { .capturelink-shared-session-hub{padding:12px;} .session-hub-panel-body{padding:0 4px 8px;} }
+
+/* Eliminate the stretched, fixed-height black bands in normal Friend sessions.
+   Card rows size to the media aspect; use available viewport height as a cap.
+   100% of source picture is retained (never cropped). */
+body.capturelink-friend-session .stream-primary { grid-template-rows: auto auto; align-content: start; }
+body.capturelink-friend-session .stream-card { grid-template-rows: auto auto; align-content: start; }
+body.capturelink-friend-session .stream-holder {
+  min-height: 0 !important;
+  max-width: 100%;
+  max-height: none;
+  height: auto !important;
+  width: min(100%, calc(max(220px, 100dvh - 250px) * var(--cl-friend-video-ratio-value, 1.7777778))) !important;
+  aspect-ratio: var(--cl-friend-video-ratio, 1.7777778);
+  justify-self: center;
+  align-self: center;
+  margin-inline: auto;
+}
+body.capturelink-friend-session .stream-holder > video { object-fit: contain; }
