@@ -7,6 +7,9 @@ import { installControllerResponsiveness } from './controller-responsiveness'
 import './controller-responsiveness.css'
 import { installFriendInviteGuide } from './friend-invite-guide'
 import { installFriendModeUx } from './friend-mode-ux'
+import { installSharedVoice, type SharedVoiceController } from './voice-sharing/voice-session'
+
+let sharedVoice: SharedVoiceController | null = null
 import {
   RemoteGamepadAdapter,
   capturePhysicalGamepad,
@@ -1962,7 +1965,8 @@ type CaptureLinkSessionSource =
   | 'friend-host'
   | 'friend-guest'
 
-let friendDiagnosticsVisible = true
+let friendDiagnosticsVisible =
+  window.localStorage.getItem('capturelink.friendDiagnosticsVisible') === 'true' 
 
 function friendGamepadStatesDiffer(
   first: FriendGamepadState,
@@ -2297,6 +2301,19 @@ function hasLiveFriendGuestVideo(): boolean {
 
 let microphoneActive = false
 let microphonePending = false
+// Independent session voice transport. This stream has no access to a physical mic.
+type GuestVoiceTransport = {
+  player: CaptureLinkPlayer
+  context: AudioContext
+  source: ConstantSourceNode
+  track: MediaStreamTrack
+  stream: MediaStream
+  sender: RTCRtpSender
+}
+let guestVoiceTransport: GuestVoiceTransport | null = null
+let guestVoicePending = false
+let hostCaptureStream: MediaStream | null = null
+let guestVoiceGeneration = 0
 let microphoneTimeout: ReturnType<typeof setTimeout> | null = null
 let audioMuted = false
 let audioVolumeLevel = 1
@@ -3041,6 +3058,18 @@ function detachController(): void {
 }
 
 function stopMicrophone(): void {
+  ++guestVoiceGeneration
+  guestVoicePending = false
+  const transport = guestVoiceTransport
+  guestVoiceTransport = null
+  const capture = hostCaptureStream
+  hostCaptureStream = null
+  capture?.getTracks().forEach(track => track.stop())
+  transport?.source.stop()
+  transport?.track.stop()
+  if (transport) void transport.context.close().catch(() => undefined)
+  sharedVoiceXboxUplink = null
+  sharedVoice?.onXboxMicrophoneStopped()
   clearMicrophoneTimeout()
   detachRecordingMicrophoneSource()
 
@@ -3232,7 +3261,7 @@ async function refreshDiagnostics(): Promise<void> {
     audioLateSampleCount = 0
   }
 
-  const outboundTrack = activePlayer?._channels.chat._micStream?.getAudioTracks()[0]
+  const outboundTrack = microphoneActive ? (hostCaptureStream ?? activePlayer?._channels.chat._micStream)?.getAudioTracks()[0] : guestVoiceTransport?.track
   diagMicDevice.textContent = outboundTrack?.label ||
     microphoneDeviceSelect.selectedOptions[0]?.textContent?.trim() ||
     '—'
@@ -3710,7 +3739,7 @@ function syncRecordingMicrophoneSource(): void {
     return
   }
 
-  const microphoneStream = activePlayer?._channels.chat._micStream
+  const microphoneStream = hostCaptureStream ?? activePlayer?._channels.chat._micStream
   const track = microphoneActive
     ? microphoneStream
         ?.getAudioTracks()
@@ -4432,6 +4461,9 @@ function updateInteractiveState(): void {
   const friendHostActive =
     sessionSource === 'friend-host'
 
+  // Layout measurement happens after session classes/view state are updated.
+  window.requestAnimationFrame(fitFriendStreamStage)
+
   const xboxSessionActive =
     sessionSource === 'xbox' ||
     friendHostActive
@@ -4613,11 +4645,12 @@ function updateInteractiveState(): void {
   diagnosticsButton.disabled =
     !mediaReady
 
-  if (friendGuestActive) {
-    diagnosticsButton.setAttribute(
-      'aria-pressed',
-      String(friendDiagnosticsVisible)
-    )
+  if (friendGuestActive || friendHostActive) {
+    diagnosticsButton.setAttribute('aria-pressed', String(friendDiagnosticsVisible))
+    setButtonLabel(diagnosticsButton, friendDiagnosticsVisible
+      ? 'Hide Friend Diagnostics' : 'Friend Diagnostics')
+  } else {
+    setButtonLabel(diagnosticsButton, diagnosticsVisible ? 'Hide Diagnostics' : 'Diagnostics')
   }
 
   settingsDiagnosticsButton.disabled =
@@ -5126,7 +5159,8 @@ async function connectToConsole(serverId: string): Promise<void> {
           player.setRemoteOffer(answer.sdp)
           clearMicrophoneTimeout()
           microphonePending = false
-          microphoneActive = player._channels.chat._micStream?.active === true
+          // Synthetic guest-only uplink is NOT host microphone consent.
+          microphoneActive = hostCaptureStream?.active === true
           updateMicrophoneButton()
           setStreamStatus(
             microphoneActive
@@ -5195,6 +5229,7 @@ async function connectToConsole(serverId: string): Promise<void> {
         railConsoleStatus.textContent = 'Online'
         setRailSession('Connected', 'Connected')
         scheduleAudioControlSync()
+        sharedVoice?.onXboxSessionConnected()
         startDiagnosticsPolling()
         updateInteractiveState()
       }
@@ -5349,11 +5384,34 @@ function toggleController(): void {
 }
 
 async function toggleMicrophone(): Promise<void> {
-  if (!activePlayer || !webRtcConnected || microphonePending) {
+  if (!activePlayer || !webRtcConnected || microphonePending || guestVoicePending) {
     return
   }
 
   if (microphoneActive) {
+    if (sharedVoice?.hasActiveGuestMix() || guestVoiceTransport !== null) {
+      hostCaptureStream?.getTracks().forEach(track => track.stop())
+      hostCaptureStream = null
+      microphoneActive = false
+      sharedVoice?.onHostMicrophoneChanged(null)
+      if (guestVoiceTransport && sharedVoice?.hasActiveGuestMix()) {
+        guestVoiceTransport.player._channels.chat._micStream = guestVoiceTransport.stream
+        sharedVoiceXboxUplink = { player: guestVoiceTransport.player, sender: guestVoiceTransport.sender, track: guestVoiceTransport.track }
+      }
+      if (guestVoiceTransport && !sharedVoice?.hasActiveGuestMix()) {
+        await guestVoiceTransport.sender.replaceTrack(guestVoiceTransport.track)
+        guestVoiceTransport.player._channels.chat._micStream = guestVoiceTransport.stream
+        sharedVoiceXboxUplink = null
+      }
+      detachRecordingMicrophoneSource()
+      stopMicrophoneMeter()
+      microphoneDeviceState.textContent = 'Off'
+      microphoneDeviceMessage.textContent = 'Your microphone is off; authorized guest voice can continue.'
+      updateMicrophoneButton()
+      updateInteractiveState()
+      setStreamStatus('Your microphone disabled; guest voice may remain active')
+      return
+    }
     stopMicrophone()
     setStreamStatus('Microphone stopped')
     updateInteractiveState()
@@ -5387,8 +5445,32 @@ async function toggleMicrophone(): Promise<void> {
       throw new Error('The selected microphone did not provide an audio track.')
     }
 
+    // If a guest-only Xbox uplink already exists, add physical audio to the
+    // current mixer without adding a second Xbox sender or renegotiating SDP.
+    if (guestVoiceTransport?.player === activePlayer || sharedVoice?.hasActiveGuestMix()) {
+      hostCaptureStream = stream
+      if (guestVoiceTransport && !sharedVoice?.hasActiveGuestMix()) {
+        await guestVoiceTransport.sender.replaceTrack(track)
+        activePlayer._channels.chat._micStream = stream
+        sharedVoiceXboxUplink = null
+      }
+      if (!activePlayer || !webRtcConnected) throw new Error('Xbox disconnected before microphone started.')
+      microphoneActive = true
+      sharedVoice?.onHostMicrophoneChanged(track)
+      await startMicrophoneMeter(stream, 'outbound')
+      syncRecordingMicrophoneSource()
+      microphonePending = false
+      microphoneDeviceState.textContent = 'Live'
+      microphoneDeviceMessage.textContent = 'Your microphone is enabled in the shared Xbox mix.'
+      updateMicrophoneButton()
+      updateInteractiveState()
+      setStreamStatus('Your microphone added to shared Xbox voice')
+      return
+    }
+
     activePlayer._channels.chat._micStream = stream
     activePlayer._peerConnection.addTrack(track, stream)
+    hostCaptureStream = stream
     await startMicrophoneMeter(stream, 'outbound')
 
     const offer = await activePlayer.createOffer()
@@ -5404,6 +5486,7 @@ async function toggleMicrophone(): Promise<void> {
     microphonePending = false
     microphoneActive = true
     syncRecordingMicrophoneSource()
+    sharedVoice?.onXboxMicrophoneStarted()
     microphoneDeviceState.textContent = 'Live'
     microphoneDeviceMessage.textContent =
       `Sending ${track.label || 'selected microphone'} to Xbox game chat.`
@@ -5414,7 +5497,15 @@ async function toggleMicrophone(): Promise<void> {
     await refreshAudioDevices()
   } catch (error) {
     console.error('[CaptureLink] Selected microphone start failed:', error)
-    stopMicrophone()
+    if (guestVoiceTransport) {
+      hostCaptureStream?.getTracks().forEach(track => track.stop())
+      hostCaptureStream = null
+      microphoneActive = false
+      microphonePending = false
+      sharedVoice?.onHostMicrophoneChanged(null)
+      stopMicrophoneMeter()
+      updateMicrophoneButton()
+    } else stopMicrophone()
     microphoneDeviceState.textContent = 'Failed'
     microphoneDeviceMessage.textContent = error instanceof Error
       ? `Microphone failed: ${error.message}`
@@ -5808,14 +5899,18 @@ function clearFriendDiagnosticsPanel(): void {
   friendDiagnosticsPanel = null
 }
 
+function setFriendDiagnosticsVisible(visible: boolean): void {
+  friendDiagnosticsVisible = visible
+  window.localStorage.setItem('capturelink.friendDiagnosticsVisible', String(visible))
+  diagnosticsButton.setAttribute('aria-pressed', String(visible))
+  setButtonLabel(diagnosticsButton, visible ? 'Hide Friend Diagnostics' : 'Friend Diagnostics')
+  if (!visible) clearFriendDiagnosticsPanel()
+}
+
 function updateFriendDiagnosticsPanel(
   diagnostics: FriendMediaDiagnostics
 ): void {
-  if (!friendDiagnosticsVisible) {
-    return
-  }
-
-  if (!friendDiagnosticsPanel) {
+  if (friendDiagnosticsVisible && !friendDiagnosticsPanel) {
     const panel =
       document.createElement('div')
 
@@ -5858,7 +5953,25 @@ function updateFriendDiagnosticsPanel(
     panel.style.whiteSpace = 'pre'
 
     panel.style.pointerEvents =
-      'none'
+      'auto'
+
+    panel.className = 'capturelink-friend-diagnostics-overlay'
+    const header = document.createElement('div')
+    header.className = 'capturelink-friend-diagnostics-header'
+    const title = document.createElement('strong')
+    title.textContent = 'Friend connection stats'
+    const closeButton = document.createElement('button')
+    closeButton.type = 'button'
+    closeButton.textContent = 'Hide'
+    closeButton.setAttribute('aria-label', 'Hide Friend diagnostics')
+    closeButton.addEventListener('click', () => {
+      setFriendDiagnosticsVisible(false)
+    })
+    header.append(title, closeButton)
+    panel.append(header)
+    const readout = document.createElement('pre')
+    readout.className = 'capturelink-friend-diagnostics-readout'
+    panel.append(readout)
 
     document.body.appendChild(
       panel
@@ -6023,8 +6136,12 @@ function updateFriendDiagnosticsPanel(
     }`
   )
 
-  friendDiagnosticsPanel.textContent =
-    lines.join('\n')
+  const report = lines.join('\n')
+  const settingsReadout = document.querySelector<HTMLElement>('#friend-diagnostics-settings-readout')
+  if (settingsReadout) settingsReadout.textContent = report
+  friendDiagnosticsPanel
+    ?.querySelector<HTMLElement>('.capturelink-friend-diagnostics-readout')
+    ?.replaceChildren(document.createTextNode(report))
 }
 
 function closeFriendControllerPeer(): void {
@@ -6049,8 +6166,7 @@ function closeFriendControllerPeer(): void {
   clearFriendGuestMedia()
   clearFriendDiagnosticsPanel()
 
-  friendDiagnosticsVisible = true
-
+  // Preserve the viewer's diagnostics preference across Friend sessions.
   updateInteractiveState()
 }
 
@@ -7933,25 +8049,11 @@ autoAudioResync.addEventListener('change', () => {
 })
 
 diagnosticsButton.addEventListener('click', () => {
-  if (friendPeerRole === 'guest') {
-    friendDiagnosticsVisible =
-      !friendDiagnosticsVisible
-
-    if (!friendDiagnosticsVisible) {
-      clearFriendDiagnosticsPanel()
-    }
-
-    diagnosticsButton.setAttribute(
-      'aria-pressed',
-      String(friendDiagnosticsVisible)
-    )
-
-    setStreamStatus(
-      friendDiagnosticsVisible
-        ? 'Friend diagnostics shown'
-        : 'Friend diagnostics hidden'
-    )
-
+  if (friendPeerRole !== null) {
+    setFriendDiagnosticsVisible(!friendDiagnosticsVisible)
+    setStreamStatus(friendDiagnosticsVisible
+      ? 'Friend diagnostics shown · hide any time'
+      : 'Friend diagnostics hidden · available in Settings')
     return
   }
 
@@ -8225,6 +8327,7 @@ function applyVideoFullscreenState(fullscreen: boolean): void {
 
   resetFullscreenCursorIdle()
   syncVideoPresentationButtons()
+  window.requestAnimationFrame(fitFriendStreamStage)
 }
 
 function syncVideoPresentationButtons(): void {
@@ -8485,6 +8588,7 @@ window.captureLink.onXboxStreamStatus((status) => {
 })
 
 window.addEventListener('beforeunload', () => {
+  sharedVoice?.dispose()
   destroyPlayer()
   void window.captureLink.stopXboxStream()
 })
@@ -8549,7 +8653,352 @@ const savedAutoAudioResync = window.localStorage.getItem('capturelink.autoAudioR
 autoAudioResyncEnabled = savedAutoAudioResync !== 'false'
 autoAudioResync.checked = autoAudioResyncEnabled
 
+// Voice sharing V1.2: guest media is independent of Xbox auth and controller access.
+let sharedGuestVideo: HTMLVideoElement | null = null
+let sharedGuestAudio: HTMLAudioElement | null = null
+function showSharedVoiceGuestMedia(stream: MediaStream, playAudio: boolean): void {
+  if (activePlayer || webRtcConnected || friendPeerRole !== null) return
+  const audioTrack = stream.getAudioTracks().find(t => t.readyState === 'live' && !t.muted)
+  const videoTrack = stream.getVideoTracks().find(t => t.readyState === 'live' && !t.muted)
+  if (audioTrack) {
+    if (!sharedGuestAudio) {
+      sharedGuestAudio = document.createElement('audio')
+      sharedGuestAudio.autoplay = true
+      sharedGuestAudio.dataset.capturelinkSource = 'shared-voice'
+      streamHolder.appendChild(sharedGuestAudio)
+    }
+    if (!(sharedGuestAudio.srcObject instanceof MediaStream) ||
+        sharedGuestAudio.srcObject.getAudioTracks()[0] !== audioTrack) {
+      sharedGuestAudio.srcObject = new MediaStream([audioTrack])
+    }
+    sharedGuestAudio.muted = !playAudio
+    sharedGuestAudio.volume = audioVolumeLevel
+    if (playAudio) {
+      void applySelectedSpeaker(sharedGuestAudio)
+      void sharedGuestAudio.play().catch(error => console.warn('[CaptureLink:Voice] Guest audio playback was blocked:', error))
+    }
+  } else if (sharedGuestAudio) {
+    sharedGuestAudio.pause()
+    sharedGuestAudio.srcObject = null
+    sharedGuestAudio.remove()
+    sharedGuestAudio = null
+  }
+  if (videoTrack) {
+    if (!sharedGuestVideo) {
+      sharedGuestVideo = document.createElement('video')
+      sharedGuestVideo.autoplay = true
+      sharedGuestVideo.playsInline = true
+      sharedGuestVideo.muted = true
+      sharedGuestVideo.dataset.capturelinkSource = 'shared-voice'
+      streamHolder.appendChild(sharedGuestVideo)
+    }
+    if (!(sharedGuestVideo.srcObject instanceof MediaStream) ||
+        sharedGuestVideo.srcObject.getVideoTracks()[0] !== videoTrack) {
+      sharedGuestVideo.srcObject = new MediaStream([videoTrack])
+    }
+    hideStreamPlaceholder()
+    setActiveView('stream')
+    void sharedGuestVideo.play().catch(error => console.warn('[CaptureLink:Voice] Guest video playback was blocked:', error))
+  } else if (sharedGuestVideo) {
+    sharedGuestVideo.pause()
+    sharedGuestVideo.srcObject = null
+    sharedGuestVideo.remove()
+    sharedGuestVideo = null
+    showStreamPlaceholder('Waiting for the host to share Xbox gameplay video.')
+  }
+}
+function clearSharedVoiceGuestMedia(): void {
+  sharedGuestAudio?.pause()
+  if (sharedGuestAudio) { sharedGuestAudio.srcObject = null; sharedGuestAudio.remove(); sharedGuestAudio = null }
+  sharedGuestVideo?.pause()
+  if (sharedGuestVideo) { sharedGuestVideo.srcObject = null; sharedGuestVideo.remove(); sharedGuestVideo = null }
+  if (!activePlayer && !webRtcConnected && friendPeerRole === null) showStreamPlaceholder('Choose an Xbox or join a Friend stream.')
+}
+
+// Guest-only transport uses an intentional zero-valued audio source, never a
+// physical microphone. The Xbox still requires its normal chat SDP negotiation.
+async function ensureGuestXboxUplink(): Promise<boolean> {
+  const player = activePlayer
+  if (!player || !webRtcConnected) return false
+  if (microphoneActive && player._channels.chat._micStream?.active && !guestVoiceTransport) return true
+  const existingGuestTransport = guestVoiceTransport
+  if (existingGuestTransport && existingGuestTransport.player === player && existingGuestTransport.track.readyState === 'live') return true
+  if (microphonePending || guestVoicePending) return false
+
+  guestVoicePending = true
+  const generation = ++guestVoiceGeneration
+  let context: AudioContext | null = null
+  let source: ConstantSourceNode | null = null
+  let stream: MediaStream | null = null
+  let sender: RTCRtpSender | null = null
+  try {
+    context = new AudioContext({ latencyHint: 'interactive' })
+    const destination = context.createMediaStreamDestination()
+    const silentGain = context.createGain()
+    silentGain.gain.value = 0
+    source = context.createConstantSource()
+    source.offset.value = 0
+    source.connect(silentGain).connect(destination)
+    source.start()
+    stream = destination.stream
+    const track = stream.getAudioTracks()[0]
+    if (!track) throw new Error('Could not create silent Xbox microphone source.')
+
+    // Bound resume to avoid waiting forever in a suspended renderer context.
+    let deadline: ReturnType<typeof setTimeout> | null = null
+    try {
+      await Promise.race([
+        context.resume(),
+        new Promise<never>((_, reject) => {
+          deadline = setTimeout(() => reject(new Error('Silent audio source could not start. Use Retry after interacting with the app.')), 2500)
+        })
+      ])
+    } finally {
+      if (deadline !== null) clearTimeout(deadline)
+    }
+    if (context.state !== 'running') throw new Error('Silent Xbox microphone source remains suspended.')
+    if (generation !== guestVoiceGeneration || activePlayer !== player || !webRtcConnected) return false
+
+    player._channels.chat._micStream = stream
+    sender = player._peerConnection.addTrack(track, stream)
+    const offer = await player.createOffer()
+    if (!offer.sdp) throw new Error('Xbox returned an empty guest microphone SDP offer.')
+    const answer = await window.captureLink.exchangeXboxChatSdp(offer.sdp)
+    if (generation !== guestVoiceGeneration || activePlayer !== player || !webRtcConnected) return false
+    player.setRemoteOffer(answer.sdp)
+    // Do not mark the host's physical microphone as enabled.
+    if (!sender) throw new Error('Xbox microphone RTP sender was not created.')
+    guestVoiceTransport = { player, context, source, track, stream, sender }
+    context = null
+    source = null
+    stream = null
+    sharedVoiceXboxUplink = null
+    sharedVoice?.onXboxMicrophoneStarted()
+    return true
+  } catch (error) {
+    console.warn('[CaptureLink:SharedVoice] Guest-only Xbox uplink failed:', error)
+    if (activePlayer === player && stream && player._channels.chat._micStream === stream && !microphoneActive) {
+      try { player._channels.chat.stopMicrophone() } catch { /* best effort */ }
+    }
+    throw error
+  } finally {
+    if (stream && activePlayer === player && player._channels.chat._micStream === stream) {
+      try { player._channels.chat.stopMicrophone() } catch { /* best effort */ }
+    }
+    if (sender && stream) void sender.replaceTrack(null).catch(() => undefined)
+    source?.stop()
+    stream?.getTracks().forEach(track => track.stop())
+    if (context) void context.close().catch(() => undefined)
+    if (generation === guestVoiceGeneration) guestVoicePending = false
+  }
+}
+
+async function releaseGuestXboxUplink(): Promise<void> {
+  ++guestVoiceGeneration
+  const transport = guestVoiceTransport
+  const oldUplinkBinding = sharedVoiceXboxUplink
+  guestVoiceTransport = null
+  sharedVoiceXboxUplink = null
+  if (!transport) {
+    const physical = microphoneActive ? hostCaptureStream?.getAudioTracks().find(t => t.readyState === 'live') : null
+    const binding = oldUplinkBinding
+    if (physical && hostCaptureStream && activePlayer && binding?.player === activePlayer) {
+      await binding.sender.replaceTrack(physical)
+      activePlayer._channels.chat._micStream = hostCaptureStream
+      sharedVoiceXboxUplink = { player: activePlayer, sender: binding.sender, track: physical }
+    } else if (!microphoneActive && activePlayer && activePlayer._channels.chat._micStream) {
+      stopMicrophone()
+    }
+    return
+  }
+  if (activePlayer !== transport.player) {
+    transport.source.stop()
+    transport.track.stop()
+    await transport.context.close().catch(() => undefined)
+    return
+  }
+  const current = transport.player
+  if (microphoneActive && hostCaptureStream) {
+    const physical = hostCaptureStream.getAudioTracks().find(t => t.readyState === 'live')
+    if (physical) {
+      await transport.sender.replaceTrack(physical)
+      current._channels.chat._micStream = hostCaptureStream
+    }
+  } else {
+    try { current._channels.chat.stopMicrophone() } catch (error) {
+      console.warn('[CaptureLink:SharedVoice] Guest-only mic stop failed:', error)
+    }
+  }
+  transport.source.stop()
+  transport.track.stop()
+  await transport.context.close().catch(() => undefined)
+}
+
+// Voice sharing uses the already-negotiated Xbox sender. Once a mixed track is
+// attached, sender.track no longer equals the original mic; retain its identity
+// across that replacement. Invalidate this binding when player or mic changes.
+let sharedVoiceXboxUplink: {
+  player: CaptureLinkPlayer
+  sender: RTCRtpSender
+  track: MediaStreamTrack
+} | null = null
+sharedVoice = installSharedVoice({
+  audioPanel: requireElement<HTMLElement>('.view-panel[data-panel="audio"]'),
+  statusContainer: streamHolder,
+  getXboxUplink: () => {
+    const player = activePlayer
+    if (!player || !webRtcConnected || (!microphoneActive && !guestVoiceTransport)) {
+      sharedVoiceXboxUplink = null
+      return null
+    }
+    const track = player._channels.chat._micStream
+      ?.getAudioTracks().find(candidate => candidate.readyState === 'live')
+    if (!track) { sharedVoiceXboxUplink = null; return null }
+    const senders = player._peerConnection.getSenders()
+    const cached = sharedVoiceXboxUplink
+    if (cached && cached.player === player && cached.track === track &&
+        senders.includes(cached.sender)) {
+      return { sender: cached.sender, track }
+    }
+    const sender = senders.find(candidate => candidate.track === track)
+    if (!sender) { sharedVoiceXboxUplink = null; return null }
+    sharedVoiceXboxUplink = { player, sender, track }
+    return { sender, track }
+  },
+  ensureGuestXboxUplink,
+  onHostSessionEnded: releaseGuestXboxUplink,
+  getGuestFallbackTrack: () => guestVoiceTransport?.track ?? null,
+  getGuestMicrophoneConstraints: () => getSelectedMicrophoneConstraints(),
+  getHostMicrophoneTrack: () => microphoneActive ? (hostCaptureStream ?? activePlayer?._channels.chat._micStream)?.getAudioTracks().find(t => t.readyState === 'live') ?? null : null,
+  getHostGameMediaStream: () => {
+    if (!activePlayer || !webRtcConnected) return null
+    const videoSource = streamHolder.querySelector<HTMLVideoElement>('video')?.srcObject
+    const audioSource = getAudioElement()?.srcObject
+    const video = videoSource instanceof MediaStream
+      ? videoSource.getVideoTracks().find(t => t.readyState === 'live') : null
+    const audio = audioSource instanceof MediaStream
+      ? audioSource.getAudioTracks().find(t => t.readyState === 'live') : null
+    return video || audio ? new MediaStream([...(video ? [video] : []), ...(audio ? [audio] : [])]) : null
+  },
+  // The friend-controller guest can also join the voice-only peer.
+  // Playback remains owned by the controller stream while it is active.
+  canJoinAsGuest: () => !activePlayer && !webRtcConnected && friendPeerRole !== 'host',
+  onGuestMediaStream: (stream, playAudio) => showSharedVoiceGuestMedia(stream, playAudio),
+  onGuestMediaStopped: () => clearSharedVoiceGuestMedia()
+})
+
+installSharedSessionHub()
+
 void refreshAudioDevices()
 void refreshRecordingLibrary()
 void refreshRecordingExportSupport()
 void refreshAuthStatus()
+
+
+// V1.5 Shared Session surface: presentation/orchestration only.
+// Controller and microphone retain independent, permissioned WebRTC lifecycles.
+// Moving existing DOM nodes preserves their listeners and existing implementations.
+function installSharedSessionHub(): void {
+  const streamWorkspace = document.querySelector<HTMLElement>('.stream-workspace')
+  const friendCard = document.querySelector<HTMLElement>('.friend-controller-card')
+  const voiceCard = document.querySelector<HTMLElement>('.shared-voice-card')
+  const settingsCard = settingsDiagnosticsButton.closest<HTMLElement>('.settings-card')
+  if (!streamWorkspace || !friendCard || !voiceCard) {
+    console.warn('[CaptureLink:Session] Shared Session panel could not be mounted.')
+    return
+  }
+
+  const hub = document.createElement('section')
+  hub.id = 'capturelink-shared-session-hub'
+  hub.className = 'surface capturelink-shared-session-hub'
+  hub.setAttribute('aria-label', 'Shared Session')
+  hub.innerHTML = `
+    <div class="session-hub-heading">
+      <div><div class="eyebrow">SHARE WITH A FRIEND</div>
+        <h2>Shared Session</h2>
+        <p>Watch, play together, and speak in Xbox chat. Choose what to share; your friend never needs your Xbox credentials.</p>
+      </div>
+      <button id="session-hub-end-all" type="button" class="session-hub-end">End shared access</button>
+    </div>
+    <div class="session-hub-steps" aria-label="How invitations work">
+      <span><strong>1</strong> Host selects controller mode and creates an invite</span>
+      <span><strong>2</strong> Friend joins using clipboard and sends their response</span>
+      <span><strong>3</strong> Host copies the response to connect; Xbox voice is separately authorized</span>
+    </div>
+    <p class="session-hub-note">Controller and microphone currently use separate private invitations. You can use both at once; a single combined code will require a new, independently tested signaling protocol.</p>
+    <div class="session-hub-actions">
+      <button id="session-hub-open-controller" type="button">Controller + gameplay</button>
+      <button id="session-hub-open-voice" type="button">Microphone + Xbox chat</button>
+    </div>
+    <div class="session-hub-panels">
+      <details id="session-hub-controller" open>
+        <summary>Controller and gameplay video <span>Shared Controller / Player 2</span></summary>
+        <div id="session-hub-controller-body" class="session-hub-panel-body"></div>
+      </details>
+      <details id="session-hub-voice">
+        <summary>Microphone and voice permissions <span>Guest self-mute / Xbox chat</span></summary>
+        <div id="session-hub-voice-body" class="session-hub-panel-body"></div>
+      </details>
+    </div>`
+  streamWorkspace.after(hub)
+  hub.querySelector('#session-hub-controller-body')?.append(friendCard)
+  hub.querySelector('#session-hub-voice-body')?.append(voiceCard)
+  const controllerDetails = hub.querySelector<HTMLDetailsElement>('#session-hub-controller')!
+  const voiceDetails = hub.querySelector<HTMLDetailsElement>('#session-hub-voice')!
+  const expand = (details: HTMLDetailsElement): void => {
+    details.open = true
+    details.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+  hub.querySelector('#session-hub-open-controller')?.addEventListener('click', () => expand(controllerDetails))
+  hub.querySelector('#session-hub-open-voice')?.addEventListener('click', () => expand(voiceDetails))
+  hub.querySelector('#session-hub-end-all')?.addEventListener('click', () => {
+    let ended = false
+    for (const selector of ['#sv-host-stop', '#sv-guest-leave']) {
+      const button = voiceCard.querySelector<HTMLButtonElement>(selector)
+      if (button && !button.disabled) {
+        button.click()
+        ended = true
+      }
+    }
+    if (friendPeerRole !== null) {
+      cancelDirectFriendSession()
+      ended = true
+    }
+    setStreamStatus(ended ? 'Shared access ended' : 'No friend sharing is active')
+  })
+
+  if (settingsCard) {
+    const details = document.createElement('details')
+    details.id = 'friend-diagnostics-settings'
+    details.className = 'friend-diagnostics-settings'
+    details.innerHTML = '<summary>Friend P2P diagnostics (live)</summary><pre id="friend-diagnostics-settings-readout">No friend stream measured yet.</pre>'
+    settingsCard.append(details)
+  }
+
+  // Media metadata/resize changes the stage aspect ratio. CSS fits the
+  // stream card itself, removing its previously stretched black bands.
+  streamHolder.addEventListener('loadedmetadata', fitFriendStreamStage, true)
+  streamHolder.addEventListener('resize', fitFriendStreamStage, true)
+  window.addEventListener('resize', fitFriendStreamStage)
+  fitFriendStreamStage()
+}
+
+// Fit the entire gameplay card to the incoming picture, not to an
+// arbitrarily tall grid row. Retain object-fit:contain to preserve the HUD.
+function fitFriendStreamStage(): void {
+  const active = friendPeerRole !== null &&
+    !document.body.classList.contains('capturelink-native-fullscreen')
+  document.body.classList.toggle('capturelink-friend-session', active)
+  if (!active) {
+    streamHolder.style.removeProperty('--cl-friend-video-ratio')
+    streamHolder.style.removeProperty('--cl-friend-video-ratio-value')
+    return
+  }
+  const video = streamHolder.querySelector<HTMLVideoElement>('video')
+  const width = video?.videoWidth ?? 0
+  const height = video?.videoHeight ?? 0
+  const ratio = width > 0 && height > 0 ? width / height : 16 / 9
+  if (!Number.isFinite(ratio) || ratio <= 0) return
+  streamHolder.style.setProperty('--cl-friend-video-ratio', `${ratio}`)
+  streamHolder.style.setProperty('--cl-friend-video-ratio-value', `${ratio}`)
+}
