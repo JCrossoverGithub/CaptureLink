@@ -67,3 +67,17 @@ jobs:
             node "scripts/$test"
             if ($LASTEXITCODE -ne 0) { throw "Regression failed: $test" }
           }
+
+  private-pilot-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Local operator runtime and permissions tests
+        run: node --test services/signaling/test/pilot-runtime.test.mjs
+      - name: Local deployment boundary smoke
+        run: node scripts/ux3c3a-deploy-source-smoke.mjs

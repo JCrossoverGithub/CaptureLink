@@ -1,0 +1,19 @@
+# REVIEW-ONLY EXAMPLE. DO NOT DEPLOY. Replace .invalid only after explicit approval.
+# TLS termination and public ingress are OUT OF SCOPE for UX3c-3a.
+# Caddy's reverse_proxy normally adds X-Forwarded-*; the pilot rejects these.
+pilot.example.invalid {
+    @health path /healthz
+    respond @health 404
+
+    request_body {
+        max_size 1200KB
+    }
+
+    reverse_proxy 127.0.0.1:8788 {
+        header_up -Forwarded
+        header_up -X-Forwarded-*
+        header_up -X-Real-IP
+        header_up -CF-Connecting-IP
+        header_up -True-Client-IP
+    }
+}
