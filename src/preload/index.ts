@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('captureLink', {
   platform: process.platform,
   version: '0.2.0',
 
+  // Only an unprivileged mode status crosses IPC, never admission credentials.
+  hostedMode: () => ipcRenderer.invoke('capturelink:hosted-mode'),
   // Main-process-only tokens: only code, sanitized status, and UX2 wire cross IPC.
   hostedCreate: (permissions: { watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2' }) =>
     ipcRenderer.invoke('capturelink:hosted-create', permissions),

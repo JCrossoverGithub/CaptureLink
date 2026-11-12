@@ -34,11 +34,11 @@ export function installHostedSessionUx(
   const hosted = document.createElement('section')
   hosted.id = 'clux3-hosted'
   hosted.className = 'clux3-hosted'
-  hosted.setAttribute('aria-label', 'Local hosted invitation')
+  hosted.setAttribute('aria-label', 'Hosted invitation')
   hosted.innerHTML = `
-    <p class="clux3-note">Local prototype: both CaptureLink clients must use the signaling service on this same computer. Remote joining is not available yet.</p>
+    <p class="clux3-note" id="clux3-mode-note">Local invitation: both clients must use the signaling service on the same computer.</p>
     <div id="clux3-host" hidden>
-      <button id="clux3-create" class="clux2-primary" type="button">Create local invitation</button>
+      <button id="clux3-create" class="clux2-primary" type="button">Create invitation</button>
       <div id="clux3-code-group" hidden>
         <label for="clux3-code">Private, one-use invitation code</label>
         <textarea id="clux3-code" rows="2" readonly spellcheck="false"></textarea>
@@ -81,6 +81,18 @@ export function installHostedSessionUx(
   const hostArea = el<HTMLElement>('clux3-host')
   const guestArea = el<HTMLElement>('clux3-guest')
   const status = el<HTMLElement>('clux3-status')
+  const modeNote = el<HTMLElement>('clux3-mode-note')
+  // Read-only main status. Neither renderer nor preload can supply the origin
+  // or admission token; an unavailable enrollment must never appear local.
+  if (typeof window.captureLink.hostedMode === 'function') {
+    void window.captureLink.hostedMode().then(result => {
+      modeNote.textContent = result.mode === 'remote'
+        ? 'Private HTTPS pilot selected. Only join with a trusted, enrolled CaptureLink installation; remote connectivity is not guaranteed.'
+        : result.mode === 'unavailable'
+          ? 'Private pilot enrollment is unreadable. Hosted invitations are unavailable; use the manual fallback or repair enrollment.'
+          : 'Local invitation: both clients must use the signaling service on the same computer.'
+    }).catch(() => { modeNote.textContent = 'Signaling mode could not be confirmed. Use the manual fallback.' })
+  }
   const approval = el<HTMLElement>('clux3-approval')
   const createButton = el<HTMLButtonElement>('clux3-create')
   const joinButton = el<HTMLButtonElement>('clux3-join')

@@ -125,6 +125,7 @@ declare global {
       platform: string
       version: string
 
+      hostedMode(): Promise<{mode: 'local' | 'remote' | 'unavailable'}>
       hostedCreate(permissions: {
         watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
       }): Promise<{ inviteCode: string; inviteExpiresAt: number }>
