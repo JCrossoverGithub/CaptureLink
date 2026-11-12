@@ -1,7 +1,8 @@
 /**
- * CaptureLink UX3b0: main-process candidate signaling adapter.
- * Localhost-only prototype. No persistent tokens, telemetry, CORS workarounds,
- * automatic approval, or transport-level connection assertions.
+ * CaptureLink UX3b0/UX3c-1: signaling clients for the trusted Electron main process.
+ * Local transport is pinned to HTTP loopback. Remote transport requires an explicit
+ * exact HTTPS origin approval and a separate installation admission credential.
+ * Neither transport stores bearer tokens on disk or reports P2P connectivity.
  */
 import { canonicalGuestName } from './protocol.mjs'
 
@@ -34,6 +35,38 @@ function assertPermissions(value) {
     throw new SignalingClientError('invalid_permissions')
   }
 }
+// Enforce the remote response limit while streaming, not after text() has
+// already allocated an arbitrarily large payload. The local client retains
+// its accepted UX3b1 reading behavior.
+async function boundedRemoteJsonText(response) {
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    const text = await response.text()
+    if (Buffer.byteLength(text, 'utf8') > MAX_JSON) throw new SignalingClientError('response_too_large')
+    return text
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8', { fatal: true })
+  let length = 0
+  let content = ''
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (!(value instanceof Uint8Array)) throw new SignalingClientError('invalid_server_response')
+      length += value.byteLength
+      if (length > MAX_JSON) throw new SignalingClientError('response_too_large')
+      content += decoder.decode(value, { stream: true })
+    }
+    return content + decoder.decode()
+  } catch (error) {
+    void reader.cancel().catch(() => {})
+    if (error instanceof SignalingClientError) throw error
+    throw new SignalingClientError('invalid_server_response')
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 function abortCheck(signal) {
   if (signal?.aborted) throw new SignalingClientError('cancelled')
 }
@@ -49,7 +82,7 @@ function sleep(ms, signal) {
   })
 }
 
-export class LocalSignalingClient {
+class SignalingSessionClient {
   #root
   #fetch
   #token = null
@@ -57,20 +90,17 @@ export class LocalSignalingClient {
   #sessionId = null
   #cursor = 0
   #requestTimeoutMs
-  constructor({ endpoint = 'http://127.0.0.1:8787', fetchImpl = fetch, requestTimeoutMs = 10_000 } = {}) {
-    let url
-    try { url = new URL(endpoint) } catch { throw new SignalingClientError('invalid_endpoint') }
-    // Never silently send bearer tokens to a LAN endpoint or an arbitrary origin.
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !/^\d+$/.test(url.port) ||
-        url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
-      throw new SignalingClientError('endpoint_not_loopback')
-    }
+  #admissionToken
+  #remote
+  constructor({ root, fetchImpl, requestTimeoutMs, admissionToken = null, remote = false }) {
     if (typeof fetchImpl !== 'function' || !Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 100 || requestTimeoutMs > 60_000) {
       throw new SignalingClientError('invalid_client_configuration')
     }
-    this.#root = url.origin
+    this.#root = root
     this.#fetch = fetchImpl
     this.#requestTimeoutMs = requestTimeoutMs
+    this.#admissionToken = admissionToken
+    this.#remote = remote
   }
   get role() { return this.#role }
   get sessionId() { return this.#sessionId }
@@ -90,15 +120,25 @@ export class LocalSignalingClient {
         headers: {
           ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
           ...(authorized ? { Authorization: `Bearer ${this.#requireToken()}` } : {}),
+          ...(this.#remote ? { 'X-CaptureLink-Admission': `Bearer ${this.#admissionToken}` } : {}),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
       if (!response || !Number.isInteger(response.status) || !response.headers || typeof response.text !== 'function') {
         throw new SignalingClientError('invalid_server_response')
       }
+      // A remote response must be from the exact originally approved origin.
+      // Real Fetch enforces redirect:'error'; this also rejects wrong-origin
+      // responses supplied by a custom transport in hermetic tests.
+      if (this.#remote && (response.redirected === true ||
+          (response.url && response.url !== this.#root + path) ||
+          !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? ''))) {
+        throw new SignalingClientError('invalid_server_response')
+      }
       const len = Number(response.headers.get('content-length') ?? '0')
+      if (!Number.isFinite(len) || len < 0) throw new SignalingClientError('invalid_server_response')
       if (len > MAX_JSON) throw new SignalingClientError('response_too_large')
-      const text = await response.text()
+      const text = this.#remote ? await boundedRemoteJsonText(response) : await response.text()
       if (text.length > MAX_JSON) throw new SignalingClientError('response_too_large')
       let data
       try { data = JSON.parse(text) } catch { throw new SignalingClientError('invalid_server_response') }
@@ -271,5 +311,59 @@ export async function guestSession(client, coordinator, inviteCode, microphoneCo
     if (touchedTransport) { try { coordinator.reset() } catch { /* caller still owns cleanup */ } }
     try { await client.end() } catch { /* best effort */ }
     throw err
+  }
+}
+
+/** Existing localhost-only API. Its pinned endpoint contract is unchanged. */
+export class LocalSignalingClient extends SignalingSessionClient {
+  constructor({ endpoint = 'http://127.0.0.1:8787', fetchImpl = fetch, requestTimeoutMs = 10_000 } = {}) {
+    let url
+    try { url = new URL(endpoint) } catch { throw new SignalingClientError('invalid_endpoint') }
+    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !/^\d+$/.test(url.port) ||
+        url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+      throw new SignalingClientError('endpoint_not_loopback')
+    }
+    super({ root: url.origin, fetchImpl, requestTimeoutMs })
+  }
+}
+
+/** Reject hostname aliases, LAN IPs, userinfo, URL paths, and non-canonical origins. */
+function exactHttpsOrigin(endpoint) {
+  if (typeof endpoint !== 'string') throw new SignalingClientError('invalid_remote_endpoint')
+  let url
+  try { url = new URL(endpoint) } catch { throw new SignalingClientError('invalid_remote_endpoint') }
+  const hostname = url.hostname
+  const dnsName = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' ||
+      url.search || url.hash || !dnsName.test(hostname) ||
+      /\.(?:local|localhost|internal|onion)$/.test(hostname) ||
+      (endpoint !== url.origin && endpoint !== `${url.origin}/`)) {
+    throw new SignalingClientError('invalid_remote_endpoint')
+  }
+  return url.origin
+}
+
+/**
+ * UX3c-1 remote candidate: impossible to construct without a separately
+ * approved exact origin, explicit enable bit and per-install admission token.
+ * Only trusted main-process code may select this transport, never renderer IPC.
+ * TLS validation is owned by the standard Fetch implementation; no insecure
+ * dispatcher, redirect following, certificate override or fallback exists here.
+ */
+export class RemoteSignalingClient extends SignalingSessionClient {
+  constructor({ endpoint, approvedOrigin, admissionToken, enabled = false,
+    fetchImpl = fetch, requestTimeoutMs = 10_000 } = {}) {
+    if (enabled !== true) throw new SignalingClientError('remote_disabled')
+    const origin = exactHttpsOrigin(endpoint)
+    if (exactHttpsOrigin(approvedOrigin) !== origin) throw new SignalingClientError('remote_origin_not_approved')
+    if (typeof admissionToken !== 'string' || !SECRET.test(admissionToken)) {
+      throw new SignalingClientError('remote_admission_required')
+    }
+    // Environment variables that bypass Node TLS verification are never valid
+    // remote-client configurations. Do not expose equivalent Electron flags.
+    if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
+      throw new SignalingClientError('insecure_tls_configuration')
+    }
+    super({ root: origin, fetchImpl, requestTimeoutMs, admissionToken, remote: true })
   }
 }

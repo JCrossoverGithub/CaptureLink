@@ -1,0 +1,22 @@
+// UX3c-1 contract: remote transport is main-only and cannot be selected from IPC.
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const r = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const main = r('src/main/index.ts')
+const client = r('services/signaling/src/client.mjs')
+const selector = r('src/main/ux3c-signaling-client.mjs')
+const hosted = r('src/renderer/src/hosted-session-ux.ts')
+assert.match(main, /clientFactory: \(\) => createSignalingClientForMain\(\)/)
+assert.doesNotMatch(main, /CAPTURELINK_UX3C_REMOTE_ORIGIN|CAPTURELINK_UX3C_REMOTE_ENABLE/)
+assert.match(selector, /mode = 'local'/)
+assert.match(selector, /if \(!remote \|\| remote.enabled !== true\)/)
+assert.match(client, /export class LocalSignalingClient/)
+assert.match(client, /export class RemoteSignalingClient/)
+assert.match(client, /url.protocol !== 'http:' \|\| url.hostname !== '127.0.0.1'/)
+assert.match(client, /url.protocol !== 'https:'/)
+assert.match(client, /redirect: 'error'/)
+assert.match(client, /X-CaptureLink-Admission/)
+assert.match(hosted, /clux3-manual-fallback/)
+assert.doesNotMatch(r('src/preload/index.ts'), /remoteOrigin|remoteAdmission|setSignalingEndpoint/)
+assert.doesNotMatch(r('src/renderer/src/env.d.ts'), /remoteOrigin|remoteAdmission|setSignalingEndpoint/)
+console.log('PASS: remote HTTPS selection is trusted-main-only, gated off by default; local and manual fallback preserved')
