@@ -8,6 +8,7 @@ import { basename, dirname, extname, join, parse } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
 import { HostedSignalingBridge } from './hosted-signaling-bridge.mjs'
+import { createSignalingClientForMain } from './ux3c-signaling-client.mjs'
 import {
   type LocalIceCandidate,
   XboxHomeManager
@@ -20,7 +21,9 @@ import {
 } from './recording/export'
 
 let mainWindow: BrowserWindow | null = null
-const hostedSignaling = new HostedSignalingBridge()
+// UX3c-1: trusted main-process selector defaults to UX3b1 localhost.
+// Remote HTTPS is NOT enabled in this build; no remote origin or admission exists.
+const hostedSignaling = new HostedSignalingBridge({ clientFactory: () => createSignalingClientForMain() })
 
 
 // UX3b1 local acceptance only: a second Electron process must not inherit the

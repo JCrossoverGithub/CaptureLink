@@ -32,6 +32,12 @@ jobs:
       - name: Signaling integration tests
         run: node --test services/signaling/test/signaling.test.mjs services/signaling/test/client.test.mjs services/signaling/test/desktop-bridge.test.mjs services/signaling/test/guest-name.test.mjs
 
+      - name: UX3c-1 remote client security tests
+        run: node --test services/signaling/test/remote-client.test.mjs
+
+      - name: UX3c-1 main-process boundary smoke
+        run: node scripts/ux3c1-remote-source-smoke.mjs
+
       - name: UX and voice regression tests
         shell: pwsh
         run: |
