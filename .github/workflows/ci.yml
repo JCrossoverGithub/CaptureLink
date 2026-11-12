@@ -28,3 +28,30 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Signaling integration tests
+        run: node --test services/signaling/test/signaling.test.mjs services/signaling/test/client.test.mjs services/signaling/test/desktop-bridge.test.mjs services/signaling/test/guest-name.test.mjs
+
+      - name: UX and voice regression tests
+        shell: pwsh
+        run: |
+          $tests = @(
+            'ux3b1-electron-source-smoke.mjs',
+            'ux3b1-end-session-smoke.mjs',
+            'ux3b1-local-guest-smoke.mjs',
+            'ux3b1-guest-name-smoke.mjs',
+            'ux3b1-recovery-smoke.mjs',
+            'unified-session-ux1-smoke.mjs',
+            'unified-session-ux1b-smoke.mjs',
+            'unified-session-ux2-smoke.mjs',
+            'shared-session-hub-smoke.mjs',
+            'shared-voice-signaling-smoke.mjs',
+            'shared-voice-ice-smoke.mjs',
+            'shared-voice-host-flow-smoke.mjs',
+            'shared-voice-audio-path-smoke.mjs',
+            'shared-voice-guest-uplink-smoke.mjs'
+          )
+          foreach ($test in $tests) {
+            node "scripts/$test"
+            if ($LASTEXITCODE -ne 0) { throw "Regression failed: $test" }
+          }

@@ -124,10 +124,11 @@ const ux = read('src/renderer/src/unified-session-ux.ts')
 const main = read('src/renderer/src/main.ts')
 const voice = read('src/renderer/src/voice-sharing/voice-session.ts')
 const css = read('src/renderer/src/styles.css')
+const hostedUx = read('src/renderer/src/hosted-session-ux.ts')
 for (const needle of [
   'coordinator: UnifiedSessionCoordinator', 'createInvitation(caps)', 'joinInvitation(', 'acceptResponse(',
   'clux2-unified-flow', 'clux2-unified-host', 'clux2-unified-guest',
-  'clux2-legacy-details', 'clux2-guest-mic-consent', 'One private invitation and one response'
+  'clux2-legacy-details', 'clux2-guest-mic-consent', 'Manual fallback: exchange one private invitation and one response'
 ]) assert.ok(ux.includes(needle), `Unified UX missing ${needle}`)
 for (const needle of ['new UnifiedSessionCoordinator(', 'createUnifiedControllerHostOffer', 'acceptUnifiedControllerGuestAnswer',
   'joinUnifiedControllerHostOffer', 'coordinator: unifiedSessionCoordinator']) assert.ok(main.includes(needle), `Main bridge missing ${needle}`)
@@ -137,4 +138,6 @@ for (const needle of ['createUnifiedHostOffer()', 'joinUnifiedHostOffer(', 'setU
 }
 assert.ok(!ux.includes('new RTCPeerConnection(') && !ux.includes('getUserMedia('), 'UI must not own the media transport')
 assert.ok(css.includes('#clux2-unified-flow[hidden]'), 'Unified status hidden rules missing')
+assert.ok(hostedUx.includes('manual.append(manualFlow)'), 'Manual UX2 flow must retain original DOM and listeners')
+assert.ok(hostedUx.includes('Use manual invitation instead (fallback)'), 'Manual fallback must remain discoverable')
 console.log('PASS: UX2 one-envelope flow, separate transport permissions, watch-only silent guest, reply binding, rollback and UI contracts')

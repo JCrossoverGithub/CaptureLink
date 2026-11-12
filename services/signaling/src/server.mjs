@@ -8,7 +8,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { pathToFileURL } from 'node:url'
 import {
   MAX_BODY, INVITE_TTL_MS, SESSION_TTL_MS, inspectEnvelope,
-  isPlainObject, hasExactKeys, validPermissions, validUuid
+  isPlainObject, hasExactKeys, validPermissions, validUuid, canonicalGuestName
 } from './protocol.mjs'
 
 const MAX_SESSIONS = 100
@@ -119,6 +119,7 @@ export function createSignalingServer({ now = Date.now, allowedOrigins = [], max
       status: session.guest?.status || 'open',
       pendingGuestId: role === 'host' && session.guest?.status === 'pending' ? session.guest.id : null,
       guestId: role === 'host' && session.guest?.status === 'approved' ? session.guest.id : null,
+      guestDisplayName: role === 'host' && session.guest && session.guest.status !== 'rejected' ? session.guest.displayName : null,
     }
   }
 
@@ -155,8 +156,13 @@ export function createSignalingServer({ now = Date.now, allowedOrigins = [], max
 
       if (pathname === '/v1/join' && req.method === 'POST') {
         const input = await readJson(req)
-        if (!hasExactKeys(input, ['inviteCode']) || typeof input.inviteCode !== 'string' ||
-            !/^[A-Za-z0-9_-]{43}$/.test(input.inviteCode)) throw new HttpError(400, 'invalid_invitation')
+        if ((!hasExactKeys(input, ['inviteCode']) && !hasExactKeys(input, ['inviteCode', 'displayName'])) ||
+            typeof input.inviteCode !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(input.inviteCode)) {
+          throw new HttpError(400, 'invalid_invitation')
+        }
+        // Legacy clients without names remain compatible; new desktop UI requires a name.
+        const guestDisplayName = Object.hasOwn(input, 'displayName') ? canonicalGuestName(input.displayName) : null
+        if (Object.hasOwn(input, 'displayName') && !guestDisplayName) throw new HttpError(400, 'invalid_display_name')
         // Cap both source IP and code guesses. Code digest is not logged or returned.
         limit(byIp, `${ip}:join`, 12, 60_000, MAX_IP_TRACKERS)
         limit(byCode, fingerprint(input.inviteCode), 3, 60_000, MAX_CODE_TRACKERS)
@@ -168,7 +174,7 @@ export function createSignalingServer({ now = Date.now, allowedOrigins = [], max
         }
         const guestToken = secret()
         const guestId = randomUUID()
-        session.guest = { id: guestId, hash: digest(guestToken), status: 'pending' }
+        session.guest = { id: guestId, hash: digest(guestToken), status: 'pending', displayName: guestDisplayName }
         inviteIndex.delete(fingerprint(input.inviteCode))  // One-use invitation.
         return reply(res, 202, { version: 1, sessionId, guestId, guestToken, status: 'pending' })
       }

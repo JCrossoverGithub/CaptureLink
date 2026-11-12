@@ -1,7 +1,10 @@
 // Static, dependency-free source-contract check. Not a replacement for runtime tests.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-const main = readFileSync(new URL('../src/renderer/src/main.ts', import.meta.url), 'utf8')
+const main = readFileSync(
+  new URL('../src/renderer/src/main.ts', import.meta.url),
+  'utf8'
+).replace(/\r\n/g, '\n')
 const css = readFileSync(new URL('../src/renderer/src/styles.css', import.meta.url), 'utf8')
 const must = (source, snippet, name) => assert.ok(source.includes(snippet), name)
 for (const [snippet, label] of [

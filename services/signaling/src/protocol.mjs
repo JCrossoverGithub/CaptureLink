@@ -74,4 +74,16 @@ export function inspectEnvelope(wire, expectedKind, expectedPermissions = null) 
   return { sessionId: obj.sessionId, createdAt: obj.kind === 'invite' ? obj.createdAt : null }
 }
 
+/** Unverified, guest-chosen label. Normalize, then strictly limit visible characters.
+ * Excludes HTML metacharacters, emoji, bidi controls, line breaks and invisible formatting.
+ * Never use this as a verified identity or authorization credential.
+ */
+export function canonicalGuestName(value) {
+  if (typeof value !== 'string') return null
+  const name = value.normalize('NFKC').trim().replace(/ +/g, ' ')
+  if ([...name].length < 1 || [...name].length > 32 ||
+      !/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} ._'-]*$/u.test(name)) return null
+  return name
+}
+
 export function validUuid(value) { return typeof value === 'string' && UID.test(value) }
