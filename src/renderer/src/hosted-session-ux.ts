@@ -107,20 +107,21 @@ export function installHostedSessionUx(
   let guestJoinPending = false
   let hostCapabilities: SessionCapabilities | null = null
   let timer: number | undefined
+  let closing: Promise<void> | null = null
 
   const say = (text: string): void => { status.textContent = text }
   const stopTimer = (): void => {
     if (timer !== undefined) { window.clearInterval(timer); timer = undefined }
   }
-  const resetTransports = (): void => {
-    try { coordinator.reset() } catch { /* pending negotiation will reset after returning */ }
+  const resetTransports = (): boolean => {
+    try { coordinator.reset(); return true } catch { return false }
   }
   const displayError = (error: unknown): string => {
     const msg = error instanceof Error ? error.message : 'hosted_signaling_unavailable'
     const match = /(?:Error invoking remote method.*?: )?([a-z_]{3,64})$/.exec(msg)
     const code = match?.[1]
     const descriptions: Record<string, string> = {
-      network_unavailable: 'Local signaling server unavailable. Start UX3a on this computer or use manual invitation.',
+      network_unavailable: 'Signaling connection lost. Friend sharing stopped locally; broker revocation is unconfirmed.',
       hosted_signaling_unavailable: 'Local signaling is unavailable. Try the manual invitation.',
       not_found: 'Session ended or expired. Request a new code.',
       invitation_unavailable: 'Invitation expired or was already used.',
@@ -132,12 +133,13 @@ export function installHostedSessionUx(
       session_already_started: 'End the existing session before starting another.',
       invalid_invitation: 'Invitation not recognized. Ask the host for a fresh code and check that both apps use this signaling server.',
       invalid_display_name: 'Enter a valid display name before requesting access.',
-      request_timeout: 'The local signaling server did not respond.',
+      request_timeout: 'Signaling timed out. Friend sharing stopped locally; broker revocation is unconfirmed.',
     }
     return (code && descriptions[code]) || 'Local session setup failed. Use the manual invitation if needed.'
   }
 
-  const end = async (): Promise<void> => {
+  const end = (): Promise<void> => {
+    if (closing) return closing
     ++epoch
     active = false
     stopTimer()
@@ -156,20 +158,32 @@ export function installHostedSessionUx(
     joinButton.disabled = false
     hostOfferStarted = false; hostOfferSent = false; guestReplyStarted = false
     hostAnswerAccepted = false; hostApproved = false; hostCapabilities = null
-    let remoteRevoked = true
-    try { await window.captureLink.hostedEnd() } catch { remoteRevoked = false }
-    resetTransports()
+    // This must precede any network await. Even an unreachable or revoked
+    // broker cannot be allowed to keep controller/voice/media running locally.
+    const stoppedLocally = resetTransports()
     onActiveChange(false)
-    say(remoteRevoked
-      ? 'Local session ended. Your guest access has been revoked.'
-      : 'Local sharing stopped. The broker could not confirm revocation; avoid reusing this invitation.')
+    say(stoppedLocally
+      ? 'Friend sharing stopped locally. Closing broker session…'
+      : 'WARNING: friend transport shutdown could not be confirmed. Close CaptureLink to disconnect.')
+    closing = (async () => {
+      let brokerRequestCompleted = true
+      try { await window.captureLink.hostedEnd() } catch { brokerRequestCompleted = false }
+      // The main-process bridge currently swallows failed remote revocation;
+      // a successful IPC response is NOT proof the remote peer lost access.
+      say(!stoppedLocally
+        ? 'WARNING: friend transport shutdown could not be confirmed. Close CaptureLink to disconnect.'
+        : brokerRequestCompleted
+          ? 'Friend sharing stopped locally. Broker session close requested; remote revocation not independently confirmed.'
+          : 'Friend sharing stopped locally. Broker unavailable; remote revocation could not be confirmed.')
+    })().finally(() => { closing = null })
+    return closing
   }
   const fail = async (error: unknown): Promise<void> => {
     const message = displayError(error)
     await end()
     say(message)
   }
-  const current = (generation: number): boolean => active && generation === epoch
+  const current = (generation: number): boolean => active && !closing && generation === epoch
 
   const beginHostOffer = async (generation: number): Promise<void> => {
     hostOfferStarted = true
@@ -177,24 +191,24 @@ export function installHostedSessionUx(
       say('Guest approved. Preparing authorized controller / voice connections…')
       if (!hostCapabilities) throw new Error('invalid_permissions')
       const wire = await coordinator.createInvitation(hostCapabilities)
-      if (!current(generation)) { resetTransports(); return }
+      if (!current(generation)) return
       await window.captureLink.hostedSend('invite', wire)
-      if (!current(generation)) { resetTransports(); return }
+      if (!current(generation)) return
       hostOfferSent = true
       say('Invitation delivered. Waiting for the guest response…')
-    } catch (error) { if (current(generation)) await fail(error); else resetTransports() }
+    } catch (error) { if (current(generation)) await fail(error); /* stale generation already cleaned by end() */ }
   }
   const beginGuestReply = async (wire: string, generation: number): Promise<void> => {
     guestReplyStarted = true
     try {
       say('Host approved. Negotiating the permitted connections…')
       const response = await coordinator.joinInvitation(wire, guestMicConsent)
-      if (!current(generation)) { resetTransports(); return }
+      if (!current(generation)) return
       await window.captureLink.hostedSend('response', response)
-      if (!current(generation)) { resetTransports(); return }
+      if (!current(generation)) return
       say('Response delivered. Verify controller, gameplay video, and Xbox chat separately.')
       onNegotiated()
-    } catch (error) { if (current(generation)) await fail(error); else resetTransports() }
+    } catch (error) { if (current(generation)) await fail(error); /* stale generation already cleaned by end() */ }
   }
 
   const poll = async (): Promise<void> => {
@@ -222,10 +236,10 @@ export function installHostedSessionUx(
             hostAnswerAccepted = true
             try {
               await coordinator.acceptResponse(answer.payload)
-              if (!current(generation)) { resetTransports(); return }
+              if (!current(generation)) return
               say('Response accepted. Verify actual P2P and Xbox chat connections.')
               onNegotiated()
-            } catch (error) { await fail(error) }
+            } catch (error) { if (current(generation)) await fail(error) }
           }
         }
       } else if (snap.status === 'approved' && !guestReplyStarted) {
@@ -244,6 +258,7 @@ export function installHostedSessionUx(
   }
 
   const open = (nextRole: HostedRole): void => {
+    if (closing) { say('Finishing previous session cleanup…'); return }
     if (active && role !== nextRole) {
       say('End the existing local session before switching roles.')
       return
@@ -256,7 +271,7 @@ export function installHostedSessionUx(
     // Never silently revoke a session just because the Friend drawer was closed.
   }
   createButton.addEventListener('click', () => {
-    if (active) return
+    if (active || closing) return
     if (coordinator.snapshot().phase !== 'idle' && coordinator.snapshot().phase !== 'failed') {
       say('End the existing manual session before creating a hosted invitation.'); return
     }
@@ -278,7 +293,7 @@ export function installHostedSessionUx(
     })()
   })
   joinButton.addEventListener('click', () => {
-    if (active || nameDialog.open || guestJoinPending) return
+    if (active || closing || nameDialog.open || guestJoinPending) return
     if (coordinator.snapshot().phase !== 'idle' && coordinator.snapshot().phase !== 'failed') {
       say('End the existing manual session before joining a hosted one.'); return
     }
@@ -300,7 +315,7 @@ export function installHostedSessionUx(
   })
   el<HTMLFormElement>('clux3-name-form').addEventListener('submit', event => {
     event.preventDefault()
-    if (active || guestJoinPending) return
+    if (active || closing || guestJoinPending) return
     const name = nameInput.value.normalize('NFKC').trim().replace(/ +/g, ' ')
     if ([...name].length < 1 || [...name].length > 32 ||
         !/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} ._'-]*$/u.test(name)) {
@@ -370,14 +385,16 @@ export function installHostedSessionUx(
         hostApproved = true
         approval.hidden = true
         say('Guest approved. Preparing the invitation…')
-      } catch (error) { await fail(error) }
+      } catch (error) { if (current(generation)) await fail(error) }
       finally { approveButton.disabled = false }
     })()
   })
   rejectButton.addEventListener('click', () => {
     if (!active || role !== 'host') return
+    const generation = epoch
     void (async () => {
       try { await window.captureLink.hostedApprove(false) } catch { /* local cleanup still required */ }
+      if (!current(generation)) return
       await end()
       say('Join request rejected. No controller, voice, or video was shared.')
     })()

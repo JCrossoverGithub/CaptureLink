@@ -135,8 +135,45 @@ export class UnifiedSessionCoordinator {
     for (const fn of this.subscribers) fn(this.snapshot())
   }
   private rollback(): void {
-    if (this.ownedController) { this.ownedController = false; this.transport.stopController() }
-    if (this.ownedVoice) { this.ownedVoice = false; this.transport.stopVoice() }
+    // Both transports must be attempted even if one stop routine fails.
+    let failure = false
+    if (this.ownedController) {
+      this.ownedController = false
+      try { this.transport.stopController() } catch { failure = true }
+    }
+    if (this.ownedVoice) {
+      this.ownedVoice = false
+      try { this.transport.stopVoice() } catch { failure = true }
+    }
+    if (failure) throw new Error('Local friend transport shutdown could not be confirmed.')
+  }
+  private async awaitTransport<T>(start: () => Promise<T>, epoch: number,
+    kind: 'controller' | 'voice', acquiring = false): Promise<T> {
+    let succeeded = false
+    try {
+      if (epoch !== this.operation) throw new Error('Session setup cancelled.')
+      // Start inside try: even a synchronous failure must not claim ownership.
+      const result = await start()
+      succeeded = true
+      if (epoch !== this.operation) throw new Error('Session setup cancelled.')
+      return result
+    } catch (error) {
+      // Setup failures before successful acquisition leave nothing owned.
+      // A reset during setup is different: reset already attempted an
+      // immediate stop and any late success requires another stop below.
+      if (acquiring && !succeeded && epoch === this.operation) {
+        if (kind === 'controller') this.ownedController = false
+        else this.ownedVoice = false
+      }
+      throw error
+    } finally {
+      // Busy remains set until the old async operation finishes, so a late
+      // cleanup cannot terminate an unrelated replacement session.
+      if (epoch !== this.operation && (succeeded || !acquiring)) {
+        if (kind === 'controller') this.transport.stopController()
+        else this.transport.stopVoice()
+      }
+    }
   }
   private async execute<T>(phase: SessionPhase, role: SessionRole, caps: SessionCapabilities | null, fn: (epoch: number) => Promise<T>): Promise<T> {
     if (this.busy || (this.state.phase !== 'idle' && this.state.phase !== 'failed')) {
@@ -147,9 +184,14 @@ export class UnifiedSessionCoordinator {
     this.update(phase, role, caps)
     try { return await fn(epoch) }
     catch (error) {
-      this.pending = null
-      this.rollback()
-      this.update('failed', role, caps, error instanceof Error ? error.message : 'Session setup failed.')
+      // reset() may have cancelled an in-flight operation. Never resurrect
+      // its old role or overwrite the new idle state with a late failure.
+      if (epoch === this.operation) {
+        this.pending = null
+        try { this.rollback() } finally {
+          this.update('failed', role, caps, error instanceof Error ? error.message : 'Session setup failed.')
+        }
+      }
       throw error
     } finally { this.busy = false }
   }
@@ -160,12 +202,12 @@ export class UnifiedSessionCoordinator {
     return this.execute('creating', 'host', caps, async epoch => {
       const transports: Invite['transports'] = {}
       if (caps.controller) {
-        transports.controller = await this.transport.hostController(caps.controllerMode)
-        this.ownedController = true
+        this.ownedController = true // Own even the in-flight peer, so reset can close it.
+        transports.controller = await this.awaitTransport(() => this.transport.hostController(caps.controllerMode), epoch, 'controller', true)
       }
       if (caps.voice || (caps.watch && !caps.controller)) {
-        transports.voice = await this.transport.hostVoice()
         this.ownedVoice = true
+        transports.voice = await this.awaitTransport(() => this.transport.hostVoice(), epoch, 'voice', true)
       }
       if (epoch !== this.operation) throw new Error('Session setup cancelled.')
       const invite: Invite = { kind: 'invite', version: 1, sessionId: crypto.randomUUID(), createdAt: Date.now(), permissions: { ...caps }, transports }
@@ -183,13 +225,15 @@ export class UnifiedSessionCoordinator {
     if (invite.permissions.voice && !microphoneConsent) throw new Error('Enable microphone sharing explicitly, or ask the host for a watch-only invitation.')
     return this.execute('joining', 'guest', invite.permissions, async epoch => {
       const transports: Response['transports'] = {}
-      if (invite.transports.controller) {
-        transports.controller = await this.transport.guestController(invite.transports.controller)
+      const controllerOffer = invite.transports.controller
+      if (controllerOffer) {
         this.ownedController = true
+        transports.controller = await this.awaitTransport(() => this.transport.guestController(controllerOffer), epoch, 'controller', true)
       }
-      if (invite.transports.voice) {
-        transports.voice = await this.transport.guestVoice(invite.transports.voice, microphoneConsent && invite.permissions.voice, invite.permissions.watch && !invite.permissions.controller)
+      const voiceOffer = invite.transports.voice
+      if (voiceOffer) {
         this.ownedVoice = true
+        transports.voice = await this.awaitTransport(() => this.transport.guestVoice(voiceOffer, microphoneConsent && invite.permissions.voice, invite.permissions.watch && !invite.permissions.controller), epoch, 'voice', true)
       }
       if (epoch !== this.operation) throw new Error('Session setup cancelled.')
       this.pending = invite
@@ -214,23 +258,35 @@ export class UnifiedSessionCoordinator {
       throw new Error('Invitation expired. Create a new invitation.')
     }
     this.busy = true
-    this.update('accepting', 'host', this.pending.permissions)
+    const epoch = ++this.operation
+    const caps = this.pending.permissions
+    this.update('accepting', 'host', caps)
     try {
-      if (response.transports.controller) await this.transport.acceptController(response.transports.controller)
-      if (response.transports.voice) await this.transport.acceptVoice(response.transports.voice)
-      this.update('negotiated', 'host', this.pending.permissions, 'Responses accepted. Wait for transport connection and verify audio/video independently.')
+      const controllerAnswer = response.transports.controller
+      if (controllerAnswer) {
+        await this.awaitTransport(() => this.transport.acceptController(controllerAnswer), epoch, 'controller')
+      }
+      const voiceAnswer = response.transports.voice
+      if (voiceAnswer) {
+        await this.awaitTransport(() => this.transport.acceptVoice(voiceAnswer), epoch, 'voice')
+      }
+      if (epoch !== this.operation) throw new Error('Session setup cancelled.')
+      this.update('negotiated', 'host', caps, 'Responses accepted. Wait for transport connection and verify audio/video independently.')
     } catch (error) {
-      this.rollback()
-      this.pending = null
-      this.update('failed', 'host', this.state.capabilities, error instanceof Error ? error.message : 'Could not accept response.')
+      if (epoch === this.operation) {
+        this.pending = null
+        try { this.rollback() } finally {
+          this.update('failed', 'host', caps, error instanceof Error ? error.message : 'Could not accept response.')
+        }
+      }
       throw error
     } finally { this.busy = false }
   }
   reset(): void {
-    if (this.busy) throw new Error('Cannot end a session during a connection operation.')
+    // Fail closed immediately, including during WebRTC negotiation. Any late
+    // resolution must be rejected and cleaned by awaitTransport().
     ++this.operation
     this.pending = null
-    this.rollback()
-    this.update('idle', null, null)
+    try { this.rollback() } finally { this.update('idle', null, null) }
   }
 }

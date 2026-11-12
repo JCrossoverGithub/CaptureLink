@@ -44,6 +44,12 @@ jobs:
       - name: UX3c-2 localhost/pilot boundary smoke
         run: node scripts/ux3c2-broker-source-smoke.mjs
 
+      - name: UX3c-3b asynchronous cancellation and teardown tests
+        run: node --test scripts/ux3c3b-session-cancellation.test.mjs
+
+      - name: UX3c-3b signaling lifecycle boundary smoke
+        run: node scripts/ux3c3b-session-lifecycle-source-smoke.mjs
+
       - name: UX and voice regression tests
         shell: pwsh
         run: |
