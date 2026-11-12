@@ -1,0 +1,12 @@
+{
+  "name": "@capturelink/signaling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "UX3a localhost-only experimental session signaling service",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "start": "node src/server.mjs"
+  }
+}
