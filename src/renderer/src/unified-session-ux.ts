@@ -1,4 +1,5 @@
 import type { UnifiedSessionCoordinator, SessionCapabilities } from './unified-session-core'
+import { installHostedSessionUx } from './hosted-session-ux'
 /**
  * CaptureLink UX1b — guided Friend panel on top of proven V1.5 transports.
  * This module owns navigation only. All actual P2P, mic permissions, Xbox
@@ -54,6 +55,7 @@ export function installUnifiedSessionUx(
       <button id="clux1-join" type="button" class="clux1-action">Join a friend</button>
       <button id="clux1-invite" type="button" class="clux1-action clux1-action-primary" hidden>Invite friend</button>
       <button id="clux1-participants" type="button" class="clux1-action" hidden>Play together</button>
+      <button id="clux1-end-hosted" type="button" class="clux1-action clux3-end-action" hidden>End friend session</button>
       <button id="clux1-details" type="button" class="clux1-action clux1-action-quiet" aria-expanded="false" aria-controls="clux1-console-details">Details</button>
     </div>`
   panel.prepend(header)
@@ -140,7 +142,7 @@ export function installUnifiedSessionUx(
               <textarea id="clux2-guest-answer" rows="4" readonly spellcheck="false"></textarea>
               <button id="clux2-copy-answer" type="button" class="clux2-subtle">Copy response</button>
             </div>
-            <p class="clux2-muted">One private invitation and one response. No hosted session codes yet; the host must receive your response before the transports negotiate. Do not share the code publicly.</p>
+            <p class="clux2-muted">Manual fallback: exchange one private invitation and one response. Avoid sharing signaling data publicly.</p>
             <p id="clux2-unified-status" role="status" aria-live="polite"></p>
             <button id="clux2-unified-end" type="button" class="clux2-subtle">Cancel / end setup</button>
           </div>
@@ -163,12 +165,30 @@ export function installUnifiedSessionUx(
           <div class="clux2-status-row"><span>Controller</span><strong id="clux2-controller-status">Not started</strong></div>
           <div class="clux2-status-row"><span>Xbox voice mixer</span><strong id="clux2-voice-status">Not attached</strong></div>
           <p class="clux2-muted">An active mixer does not prove that players in Xbox chat can hear the guest.</p>
+          <button id="clux3-session-end" class="clux2-subtle" type="button" hidden>End hosted session</button>
           <button id="clux2-manage-controller" class="clux2-choice clux2-choice-compact" type="button">Manage controller connection <span aria-hidden="true">›</span></button>
           <button id="clux2-manage-voice" class="clux2-choice clux2-choice-compact" type="button">Manage microphone and media <span aria-hidden="true">›</span></button>
         </section>
       </div>
+      <div id="clux3-active-bar" class="clux3-active-bar" hidden>
+        <div class="clux3-active-label"><span class="clux3-live-dot" aria-hidden="true"></span><span>Friend invitation or sharing active</span></div>
+        <button id="clux3-end-footer" class="clux3-end-action" type="button">End session</button>
+      </div>
     </aside>`
   document.body.append(overlay)
+  const confirmDialog = document.createElement('dialog')
+  confirmDialog.id = 'clux3-end-confirm'
+  confirmDialog.className = 'clux3-end-confirm'
+  confirmDialog.setAttribute('aria-labelledby', 'clux3-confirm-heading')
+  confirmDialog.setAttribute('aria-describedby', 'clux3-confirm-description')
+  confirmDialog.innerHTML = `
+    <h2 id="clux3-confirm-heading">End this friend session?</h2>
+    <p id="clux3-confirm-description">This stops your hosted invitation and locally releases the friend controller, microphone and media connections. Your Xbox Remote Play connection stays open.</p>
+    <div class="clux3-confirm-actions">
+      <button id="clux3-confirm-keep" type="button">Keep session</button>
+      <button id="clux3-confirm-end" class="clux3-end-action" type="button">End session</button>
+    </div>`
+  document.body.append(confirmDialog)
   const legacySlot = overlay.querySelector<HTMLElement>('#clux1-legacy-slot')!
   legacySlot.append(hub)
   const legacyDetails = overlay.querySelector<HTMLDetailsElement>('#clux2-legacy-details')!
@@ -180,6 +200,11 @@ export function installUnifiedSessionUx(
   const joinButton = header.querySelector<HTMLButtonElement>('#clux1-join')!
   const inviteButton = header.querySelector<HTMLButtonElement>('#clux1-invite')!
   const participantsButton = header.querySelector<HTMLButtonElement>('#clux1-participants')!
+  const headerEndButton = header.querySelector<HTMLButtonElement>('#clux1-end-hosted')!
+  const activeBar = overlay.querySelector<HTMLElement>('#clux3-active-bar')!
+  const footerEndButton = overlay.querySelector<HTMLButtonElement>('#clux3-end-footer')!
+  const keepButton = confirmDialog.querySelector<HTMLButtonElement>('#clux3-confirm-keep')!
+  const confirmEndButton = confirmDialog.querySelector<HTMLButtonElement>('#clux3-confirm-end')!
   const detailsButton = header.querySelector<HTMLButtonElement>('#clux1-details')!
   const heading = header.querySelector<HTMLElement>('#clux1-stream-heading')!
   const summary = header.querySelector<HTMLElement>('#clux1-stream-summary')!
@@ -242,7 +267,7 @@ export function installUnifiedSessionUx(
     const titles: Record<Page, [string, string]> = {
       home: ['Play together', 'Invite a friend or join their session.'],
       options: [flowRole === 'invite' ? 'Invite a friend' : 'Join a friend', 'Choose how you want to connect.'],
-      setup: [flowRole === 'invite' ? 'Send an invitation' : 'Join a session', 'One invitation. One private response.'],
+      setup: [flowRole === 'invite' ? 'Invite a friend' : 'Join a session', 'Local host approval and automatic exchange. Manual fallback available.'],
       session: ['Your session', 'Manage the connections you have started.']
     }
     title.textContent = titles[next][0]
@@ -256,9 +281,21 @@ export function installUnifiedSessionUx(
     }
   }
 
+  const hostedUx = installHostedSessionUx(overlay, options.coordinator, () => {
+    const controller = optionControls.controller.checked
+    return {
+      controller, watch: optionControls.watch.checked || controller,
+      voice: optionControls.voice.checked,
+      controllerMode: overlay.querySelector<HTMLInputElement>('input[name="clux2-mode"]:checked')?.value === 'player2' ? 'player2' : 'shared'
+    }
+  }, () => { refresh(); showPage('session') }, () => refresh())
+
   const refresh = (): void => {
     const state = options.getState()
     const unified = options.coordinator.snapshot()
+    const hostedActive = hostedUx.isActive()
+    headerEndButton.hidden = !hostedActive
+    activeBar.hidden = !hostedActive
     const host = state.role === 'host' || unified.role === 'host'
     const guest = state.role === 'guest' || unified.role === 'guest'
     playButton.hidden = host || guest
@@ -284,11 +321,12 @@ export function installUnifiedSessionUx(
     const controllerStatus = state.controllerPeer ? 'Started — check transport details' : 'Not started'
     const voiceStatus = state.guestVoiceForwarding ? 'Mixer attached (audibility unverified)' : 'Not attached'
     overlay.querySelector<HTMLElement>('#clux2-home-status')!.textContent =
-      state.controllerPeer || state.guestVoiceForwarding ? 'Sharing activity detected' : unified.phase !== 'idle' && unified.phase !== 'failed' ? 'Invite in progress' : 'No guests connected'
+      state.controllerPeer || state.guestVoiceForwarding ? 'Sharing activity detected' : hostedActive ? 'Invitation active' : unified.phase !== 'idle' && unified.phase !== 'failed' ? 'Invite in progress' : 'No guests connected'
     overlay.querySelector<HTMLElement>('#clux2-controller-status')!.textContent = controllerStatus
     overlay.querySelector<HTMLElement>('#clux2-voice-status')!.textContent = voiceStatus
+    overlay.querySelector<HTMLButtonElement>('#clux3-session-end')!.hidden = !hostedActive
     const session = overlay.querySelector<HTMLButtonElement>('#clux2-home-session')!
-    session.hidden = !state.controllerPeer && !state.guestVoiceForwarding && (unified.phase === 'idle' || unified.phase === 'failed')
+    session.hidden = !hostedActive && !state.controllerPeer && !state.guestVoiceForwarding && (unified.phase === 'idle' || unified.phase === 'failed')
     participantsButton.textContent = state.controllerPeer || state.guestVoiceForwarding ? 'Manage sharing' : 'Play together'
   }
 
@@ -318,9 +356,10 @@ export function installUnifiedSessionUx(
     overlay.querySelector<HTMLElement>('#clux2-step-count')!.hidden = true
     overlay.querySelector<HTMLElement>('#clux2-setup-title')!.textContent = role === 'invite' ? 'Create invitation' : 'Join a friend'
     overlay.querySelector<HTMLElement>('#clux2-setup-description')!.textContent = role === 'invite'
-      ? 'Send one invitation, then paste one response from your friend.'
-      : 'Paste the host invitation and decide whether to share your microphone.'
+      ? 'Create one local invitation. Your friend requests to join, and you decide whether to approve. Manual exchange is optional below.'
+      : 'Enter the local invitation code and request access. Your microphone stays off unless you enable it.'
     for (const id of ['clux2-previous-step','clux2-next-step','clux2-done']) overlay.querySelector<HTMLElement>(`#${id}`)!.hidden = true
+    hostedUx.open(role === 'invite' ? 'host' : 'guest')
     say('')
     showPage('setup')
   }
@@ -456,16 +495,51 @@ export function installUnifiedSessionUx(
 
   playButton.addEventListener('click', options.startXbox)
   joinButton.addEventListener('click', () => openDrawer(joinButton))
-  inviteButton.addEventListener('click', () => openDrawer(inviteButton))
+  inviteButton.addEventListener('click', () => openDrawer(inviteButton, hostedUx.isActive() ? 'setup' : 'home'))
   participantsButton.addEventListener('click', () => openDrawer(participantsButton, 'session'))
   closeButton.addEventListener('click', close)
-  overlay.addEventListener('click', event => { if (event.target === overlay) close() })
+  // The drawer closes only via the explicit Close button or Escape.
+  // Backdrop clicks can be retargeted during native dialog transitions and
+  // must never dismiss the active invitation while selecting a code.
   overlay.querySelector('#clux2-invite-choice')?.addEventListener('click', () => startOptions('invite'))
   overlay.querySelector('#clux2-join-choice')?.addEventListener('click', () => startOptions('join'))
   overlay.querySelector('#clux2-options-back')?.addEventListener('click', () => showPage('home'))
   overlay.querySelector('#clux2-setup-back')?.addEventListener('click', () => showPage('options'))
   overlay.querySelector('#clux2-session-back')?.addEventListener('click', () => showPage('home'))
   overlay.querySelector('#clux2-home-session')?.addEventListener('click', () => showPage('session'))
+  // A single confirmation governs every hosted-session exit surface.
+  let endRequestedFrom: HTMLElement | null = null
+  const requestEnd = (source: HTMLElement): void => {
+    if (!hostedUx.isActive() || confirmDialog.open) return
+    endRequestedFrom = source
+    confirmDialog.showModal()
+    keepButton.focus()
+  }
+  const dismissEndDialog = (): void => {
+    if (confirmDialog.open) confirmDialog.close()
+    if (endRequestedFrom?.isConnected && !endRequestedFrom.hidden) endRequestedFrom.focus()
+    endRequestedFrom = null
+  }
+  const confirmEnd = async (): Promise<void> => {
+    if (!hostedUx.isActive()) { dismissEndDialog(); return }
+    confirmEndButton.disabled = true
+    keepButton.disabled = true
+    try {
+      await hostedUx.end()
+      refresh()
+      showPage('home', !overlay.hidden)
+      dismissEndDialog()
+    } finally {
+      confirmEndButton.disabled = false
+      keepButton.disabled = false
+    }
+  }
+  headerEndButton.addEventListener('click', () => requestEnd(headerEndButton))
+  footerEndButton.addEventListener('click', () => requestEnd(footerEndButton))
+  overlay.querySelector<HTMLButtonElement>('#clux3-session-end')!.addEventListener('click', event => requestEnd(event.currentTarget as HTMLElement))
+  keepButton.addEventListener('click', dismissEndDialog)
+  confirmEndButton.addEventListener('click', () => void confirmEnd())
+  confirmDialog.addEventListener('cancel', event => { event.preventDefault(); dismissEndDialog() })
   overlay.querySelector('#clux2-continue')?.addEventListener('click', beginSetup)
   overlay.querySelector('#clux2-controller')?.addEventListener('change', () => {
     if (optionControls.controller.checked) optionControls.watch.checked = true
@@ -500,7 +574,7 @@ export function installUnifiedSessionUx(
     .forEach(item => item.addEventListener('click', close))
 
   document.addEventListener('keydown', event => {
-    if (overlay.hidden) return
+    if (confirmDialog.open || overlay.hidden) return
     if (event.key === 'Escape') { event.preventDefault(); close(); return }
     if (event.key !== 'Tab') return
     const focusable = Array.from(overlay.querySelectorAll<HTMLElement>(

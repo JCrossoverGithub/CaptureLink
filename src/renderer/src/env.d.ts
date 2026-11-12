@@ -125,6 +125,16 @@ declare global {
       platform: string
       version: string
 
+      hostedCreate(permissions: {
+        watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
+      }): Promise<{ inviteCode: string; inviteExpiresAt: number }>
+      hostedJoin(code: string, displayName: string): Promise<{ status: 'pending' }>
+      hostedSnapshot(): Promise<{ role: 'host' | 'guest'; status: string; hasPendingGuest: boolean; guestDisplayName: string | null }>
+      hostedApprove(allowed: boolean): Promise<{ status: 'approved' | 'rejected' }>
+      hostedSend(kind: 'invite' | 'response', wire: string): Promise<{ sent: boolean }>
+      hostedMessages(): Promise<Array<{ kind: 'invite' | 'response'; payload: string }>>
+      hostedEnd(): Promise<{ ended: boolean }>
+
       writeFriendClipboard(
         value: string
       ): Promise<{ written: boolean }>

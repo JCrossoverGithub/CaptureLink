@@ -1,12 +1,13 @@
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron'
 import { Msal, TokenStore } from 'xal-node'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
 import { copyFile, open, readFile, rename, stat, statfs, unlink, writeFile, type FileHandle } from 'node:fs/promises'
 import { basename, dirname, extname, join, parse } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
+import { HostedSignalingBridge } from './hosted-signaling-bridge.mjs'
 import {
   type LocalIceCandidate,
   XboxHomeManager
@@ -19,6 +20,22 @@ import {
 } from './recording/export'
 
 let mainWindow: BrowserWindow | null = null
+const hostedSignaling = new HostedSignalingBridge()
+
+
+// UX3b1 local acceptance only: a second Electron process must not inherit the
+// host's Xbox account tokens, cookies, localStorage, or Chromium profile.
+// Explicit opt-in flag; intentionally unavailable in packaged applications.
+const localGuestTest = !app.isPackaged && process.argv.includes('--capturelink-ux3-local-guest')
+if (localGuestTest) {
+  const guestProfile = join(app.getPath('temp'), `CaptureLink-UX3-Guest-Test-${randomUUID()}`)
+  const guestSessionData = join(guestProfile, 'chromium')
+  mkdirSync(guestSessionData, { recursive: true })
+  // Must happen before app.whenReady() and before any BrowserWindow or Session.
+  app.setPath('userData', guestProfile)
+  app.setPath('sessionData', guestSessionData)
+  console.log('[CaptureLink UX3b1] Isolated local guest test profile active (no host Xbox tokens copied).')
+}
 let authProcessRunning = false
 let activeXboxVerificationUri: string | null = null
 const xboxHome = new XboxHomeManager()
@@ -334,6 +351,12 @@ function createMainWindow(): void {
   })
 
   mainWindow = window
+  if (localGuestTest) {
+    window.webContents.on('page-title-updated', (event) => {
+      event.preventDefault()
+      window.setTitle('CaptureLink — ISOLATED LOCAL GUEST TEST')
+    })
+  }
   window.on('enter-full-screen', () => {
     window.webContents.send(
       'capturelink:window-fullscreen-changed',
@@ -466,10 +489,51 @@ function createMainWindow(): void {
 
   window.on('closed', () => {
     if (mainWindow === window) {
+      void hostedSignaling.end()
       mainWindow = null
     }
   })
 }
+
+// UX3b1 experimental loopback-only hosted signaling. Credentials never leave main.
+// Trust only the top-level CaptureLink renderer, never a child frame or an
+// arbitrary web navigation inheriting a preload script.
+function authorizedHostedFrame(event: IpcMainInvokeEvent): void {
+  if (!mainWindow || !event.senderFrame || event.sender !== mainWindow.webContents ||
+      event.senderFrame !== mainWindow.webContents.mainFrame) {
+    throw new Error('Unauthorized CaptureLink signaling caller.')
+  }
+  const pageUrl = event.senderFrame.url
+  if (process.env.ELECTRON_RENDERER_URL) {
+    if (new URL(pageUrl).origin !== new URL(process.env.ELECTRON_RENDERER_URL).origin) {
+      throw new Error('Unauthorized CaptureLink signaling origin.')
+    }
+  } else if (pageUrl !== pathToFileURL(join(__dirname, '../renderer/index.html')).href) {
+    throw new Error('Unauthorized CaptureLink signaling page.')
+  }
+}
+
+ipcMain.handle('capturelink:hosted-create', (event, permissions: {
+  watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
+}) => { authorizedHostedFrame(event); return hostedSignaling.create(permissions) })
+ipcMain.handle('capturelink:hosted-join', (event, code: string, displayName: string) => {
+  authorizedHostedFrame(event); return hostedSignaling.join(code, displayName)
+})
+ipcMain.handle('capturelink:hosted-snapshot', event => {
+  authorizedHostedFrame(event); return hostedSignaling.snapshot()
+})
+ipcMain.handle('capturelink:hosted-approve', (event, allow: boolean) => {
+  authorizedHostedFrame(event); return hostedSignaling.approve(allow)
+})
+ipcMain.handle('capturelink:hosted-send', (event, kind: 'invite' | 'response', wire: string) => {
+  authorizedHostedFrame(event); return hostedSignaling.send(kind, wire)
+})
+ipcMain.handle('capturelink:hosted-messages', event => {
+  authorizedHostedFrame(event); return hostedSignaling.messages()
+})
+ipcMain.handle('capturelink:hosted-end', event => {
+  authorizedHostedFrame(event); return hostedSignaling.end()
+})
 
 ipcMain.handle(
   'capturelink:window-set-fullscreen',
@@ -1219,6 +1283,7 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  void hostedSignaling.end()
   void preserveActiveRecording('application shutdown')
   void xboxHome.stop()
 })

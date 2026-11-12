@@ -5,6 +5,7 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'
 const ux = read('src/renderer/src/unified-session-ux.ts')
 const css = read('src/renderer/src/styles.css')
 const main = read('src/renderer/src/main.ts')
+const hostedUx = read('src/renderer/src/hosted-session-ux.ts')
 
 for (const needle of [
   'Invite a friend', 'Join a friend', 'Your session',
@@ -12,7 +13,7 @@ for (const needle of [
   'id="clux2-watch"', 'id="clux2-voice"', 'id="clux2-controller"',
   'id="clux2-continue"', 'id="clux2-next-step"', 'id="clux2-done"',
   'id="clux1-legacy-slot"', 'role="dialog"', 'aria-modal="true"',
-  'One private invitation and one response',
+  'Manual fallback: exchange one private invitation and one response',
   "details.className = 'clux2-advanced'", 'moveIntoAdvanced(',
   "const flowRole", // or flow-role field declaration below
 ]) {
@@ -34,4 +35,6 @@ assert.ok(main.includes('installSharedSessionHub()') && main.includes('installUn
 for (const forbidden of ['new RTCPeerConnection', '.replaceTrack(', 'getUserMedia(', 'sendXboxControllerState(', '.getXboxStreamToken(']) {
   assert.ok(!ux.includes(forbidden), `UX layer must not take ownership of transport: ${forbidden}`)
 }
+assert.ok(hostedUx.includes('manual.append(manualFlow)'), 'Manual UX2 flow must retain original DOM and listeners')
+assert.ok(hostedUx.includes('Use manual invitation instead (fallback)'), 'Manual fallback must remain discoverable')
 console.log('PASS: UX1b Friend shell retained with UX2 unified flow, role isolation, legacy recovery, and preserved V1.5 transports')

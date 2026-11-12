@@ -4891,3 +4891,82 @@ body.capturelink-native-fullscreen .clux1-console-details { display: none; }
 .clux2-unified-flow .clux2-subtle { justify-self: start; }
 .clux2-advanced > summary { cursor: pointer; padding: 9px 0; color: var(--cl-muted); font-size: 12px; }
 .clux2-advanced[open] { border-top: 1px solid var(--cl-border); margin-top: 10px; }
+
+/* UX3b1 optional localhost signaling; manual UX2 retains its own DOM and handlers. */
+#clux3-hosted { display: grid; gap: 12px; min-width: 0; }
+#clux3-hosted [hidden], #clux3-code-group[hidden], #clux3-approval[hidden] { display: none !important; }
+#clux3-hosted > div:not([hidden]), #clux3-code-group:not([hidden]), #clux3-approval:not([hidden]) { display: grid; gap: 10px; }
+#clux3-hosted label { font-size: 12px; font-weight: 600; }
+#clux3-hosted textarea { display: block; width: 100%; box-sizing: border-box; min-width: 0; resize: vertical;
+  border: 1px solid var(--cl-border); border-radius: 9px; background: var(--cl-panel); color: var(--cl-text);
+  padding: 12px; font: 12px/1.5 ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+#clux3-hosted .clux3-note { color: var(--cl-muted); font-size: 11px; line-height: 1.5; margin: 0; }
+#clux3-hosted #clux3-status { color: var(--cl-muted); font-size: 12px; line-height: 1.5; min-height: 18px; margin: 0; }
+#clux3-hosted .clux3-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+#clux3-hosted #clux3-approval { border: 1px solid var(--cl-border); padding: 12px; border-radius: 11px; }
+#clux3-hosted #clux3-approval p { font-size: 12px; line-height: 1.5; margin: 0; }
+#clux3-manual-fallback > #clux2-unified-flow { margin: 7px 0 10px; }
+#clux3-manual-fallback[open] { display: grid; gap: 9px; }
+#clux3-hosted button:focus-visible { outline: 2px solid var(--cl-accent); outline-offset: 2px; }
+
+
+/* UX3b1.1: discoverable, confirmed exit from any active hosted invitation. */
+.clux3-end-action {
+  border: 1px solid #d67d7d;
+  background: #743333;
+  color: #fff;
+  border-radius: 9px;
+  padding: 10px 15px;
+  min-height: 42px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.clux3-end-action:hover:not(:disabled) { background: #923c3c; }
+.clux3-end-action:focus-visible,
+.clux3-confirm-actions button:focus-visible { outline: 3px solid var(--cl-accent); outline-offset: 3px; }
+#clux1-end-hosted[hidden], #clux3-active-bar[hidden] { display: none !important; }
+.clux3-active-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; flex: 0 0 auto;
+  padding: 14px 22px; background: var(--cl-panel);
+  border-top: 1px solid var(--cl-border);
+}
+.clux3-active-label { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 650; }
+.clux3-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cl-accent); flex: none; }
+.clux3-end-hint { margin: 0; font-size: 11px; color: var(--cl-muted); line-height: 1.5; }
+.clux3-end-confirm {
+  width: min(440px, calc(100vw - 32px)); box-sizing: border-box;
+  border: 1px solid var(--cl-border); border-radius: 15px;
+  padding: 22px; background: var(--cl-bg); color: var(--cl-text);
+  box-shadow: 0 24px 60px rgba(0,0,0,.45);
+}
+.clux3-end-confirm::backdrop { background: rgba(0,0,0,.72); }
+.clux3-end-confirm h2 { margin: 0 0 12px; font-size: 19px; }
+.clux3-end-confirm p { color: var(--cl-muted); font-size: 13px; line-height: 1.6; margin: 0 0 22px; }
+.clux3-confirm-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.clux3-confirm-actions button:not(.clux3-end-action) {
+  min-height: 42px; border: 1px solid var(--cl-border); border-radius: 9px;
+  padding: 10px 16px; background: var(--cl-panel); color: var(--cl-text);
+  font: inherit; font-weight: 650; font-size: 12px; cursor: pointer;
+}
+@media (max-width: 480px) {
+  .clux3-active-bar { padding: 12px 16px; }
+  .clux3-active-bar .clux3-end-action { width: 100%; }
+  .clux3-confirm-actions { flex-direction: column-reverse; }
+  .clux3-confirm-actions button { width: 100%; }
+}
+
+/* UX3b1 guest-selected display name: accessible, focused confirmation before join. */
+.clux3-name-dialog { width: min(390px, calc(100vw - 32px)); max-width: 95vw; border: 1px solid #405362; border-radius: 14px; padding: 22px; color: #eaf4f7; background: #19252f; box-shadow: 0 18px 55px #000b; }
+.clux3-name-dialog::backdrop { background: #0009; }
+.clux3-name-dialog form { display: grid; gap: 13px; }
+.clux3-name-dialog h3 { margin: 0; font-size: 19px; }
+.clux3-name-dialog p { margin: 0; line-height: 1.5; font-size: 13px; color: #a7bac6; }
+.clux3-name-dialog label { font-weight: 600; font-size: 13px; }
+.clux3-name-dialog input { box-sizing: border-box; width: 100%; border: 1px solid #55707d; border-radius: 8px; padding: 10px 12px; font: inherit; color: #fff; background: #111c25; }
+.clux3-name-dialog input:focus-visible { outline: 2px solid #16d779; outline-offset: 2px; }
+.clux3-name-dialog .clux3-name-error { color: #ffb9b9; }
+.clux3-name-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.clux3-name-actions button { min-height: 38px; }

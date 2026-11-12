@@ -11,6 +11,16 @@ contextBridge.exposeInMainWorld('captureLink', {
   platform: process.platform,
   version: '0.2.0',
 
+  // Main-process-only tokens: only code, sanitized status, and UX2 wire cross IPC.
+  hostedCreate: (permissions: { watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2' }) =>
+    ipcRenderer.invoke('capturelink:hosted-create', permissions),
+  hostedJoin: (code: string, displayName: string) => ipcRenderer.invoke('capturelink:hosted-join', code, displayName),
+  hostedSnapshot: () => ipcRenderer.invoke('capturelink:hosted-snapshot'),
+  hostedApprove: (allowed: boolean) => ipcRenderer.invoke('capturelink:hosted-approve', allowed),
+  hostedSend: (kind: 'invite' | 'response', wire: string) => ipcRenderer.invoke('capturelink:hosted-send', kind, wire),
+  hostedMessages: () => ipcRenderer.invoke('capturelink:hosted-messages'),
+  hostedEnd: () => ipcRenderer.invoke('capturelink:hosted-end'),
+
   writeFriendClipboard: (value: string) =>
     ipcRenderer.invoke(
       'capturelink:friend-clipboard-write',

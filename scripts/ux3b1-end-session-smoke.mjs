@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+const ux = read('src/renderer/src/unified-session-ux.ts')
+const hosted = read('src/renderer/src/hosted-session-ux.ts')
+const css = read('src/renderer/src/styles.css')
+
+for (const id of ['clux1-end-hosted', 'clux3-active-bar', 'clux3-end-footer', 'clux3-end-confirm', 'clux3-confirm-keep', 'clux3-confirm-end']) {
+  assert.ok(ux.includes(id), `${id} is missing`)
+}
+assert.match(ux, /headerEndButton\.hidden = !hostedActive/)
+assert.match(ux, /activeBar\.hidden = !hostedActive/)
+assert.match(ux, /confirmDialog\.showModal\(\)/)
+assert.match(ux, /keepButton\.addEventListener\('click', dismissEndDialog\)/)
+assert.match(ux, /confirmEndButton\.addEventListener\('click', \(\) => void confirmEnd\(\)\)/)
+assert.match(ux, /headerEndButton\.addEventListener\('click', \(\) => requestEnd\(headerEndButton\)\)/)
+assert.match(ux, /footerEndButton\.addEventListener\('click', \(\) => requestEnd\(footerEndButton\)\)/)
+assert.match(ux, /await hostedUx\.end\(\)/)
+assert.match(ux, /showPage\('home', !overlay\.hidden\)/)
+assert.match(ux, /if \(confirmDialog\.open \|\| overlay\.hidden\) return/)
+assert.match(hosted, /onActiveChange\(true\)/)
+assert.match(hosted, /onActiveChange\(false\)/)
+assert.match(hosted, /await window\.captureLink\.hostedEnd\(\)/)
+assert.match(hosted, /resetTransports\(\)/)
+assert.match(hosted, /clux3-code-group'\)\.hidden = true/)
+assert.match(hosted, /manual\.append\(manualFlow\)/)
+assert.match(ux, /Create one local invitation\. Your friend requests to join/)
+assert.match(css, /\.clux3-active-bar\s*\{/)
+assert.match(css, /\.clux3-end-confirm::backdrop/)
+assert.match(css, /#clux1-end-hosted\[hidden\]/)
+console.log('PASS: UX3b1 confirmed session exit: header, sticky footer, cancellation, focus, broker revoke, local teardown, invitation clearing, fallback')

@@ -3,6 +3,8 @@
  * Localhost-only prototype. No persistent tokens, telemetry, CORS workarounds,
  * automatic approval, or transport-level connection assertions.
  */
+import { canonicalGuestName } from './protocol.mjs'
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SECRET = /^[A-Za-z0-9_-]{43}$/
 const MAX_JSON = 1_200_000
@@ -141,10 +143,13 @@ export class LocalSignalingClient {
     this.#cursor = 0
     return { sessionId: result.sessionId, inviteCode: result.inviteCode, inviteExpiresAt: result.inviteExpiresAt }
   }
-  async join(inviteCode, { signal } = {}) {
+  async join(inviteCode, { signal, displayName } = {}) {
     if (this.#role) throw new SignalingClientError('session_already_started')
     assertSecret(inviteCode, 'invalid_invitation')
-    const result = await this.#request('POST', '/v1/join', { inviteCode }, { signal })
+    const normalizedName = displayName === undefined ? undefined : canonicalGuestName(displayName)
+    if (displayName !== undefined && !normalizedName) throw new SignalingClientError('invalid_display_name')
+    const result = await this.#request('POST', '/v1/join',
+      normalizedName === undefined ? { inviteCode } : { inviteCode, displayName: normalizedName }, { signal })
     assertUuid(result.sessionId)
     assertUuid(result.guestId)
     assertSecret(result.guestToken, 'invalid_server_response')
