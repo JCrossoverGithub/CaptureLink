@@ -50,6 +50,12 @@ jobs:
       - name: UX3c-3b signaling lifecycle boundary smoke
         run: node scripts/ux3c3b-session-lifecycle-source-smoke.mjs
 
+      - name: UX3c-3d offline encrypted enrollment and rotation tests
+        run: node --test services/signaling/test/ux3c3d-enrollment.test.mjs
+
+      - name: UX3c-3d main-process and renderer boundary smoke
+        run: node scripts/ux3c3d-enrollment-source-smoke.mjs
+
       - name: UX and voice regression tests
         shell: pwsh
         run: |

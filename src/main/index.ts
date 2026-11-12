@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
 import { Msal, TokenStore } from 'xal-node'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
 import { HostedSignalingBridge } from './hosted-signaling-bridge.mjs'
 import { createSignalingClientForMain } from './ux3c-signaling-client.mjs'
+import { PILOT_ORIGIN, loadPilotEnrollment, importPilotEnrollment, disablePilotEnrollment, type PilotSelection } from './ux3c3d-pilot-enrollment.mjs'
 import {
   type LocalIceCandidate,
   XboxHomeManager
@@ -21,9 +22,21 @@ import {
 } from './recording/export'
 
 let mainWindow: BrowserWindow | null = null
-// UX3c-1: trusted main-process selector defaults to UX3b1 localhost.
-// Remote HTTPS is NOT enabled in this build; no remote origin or admission exists.
-const hostedSignaling = new HostedSignalingBridge({ clientFactory: () => createSignalingClientForMain() })
+// UX3c-3d: secure enrollment is absent by default. The only remote selection
+// comes from a validated, DPAPI-backed file loaded by trusted Electron main.
+// Malformed enrollment fails closed; no implicit HTTP/local downgrade.
+let pilotSelection: PilotSelection | { mode: 'unavailable' } = { mode: 'local' }
+function createTrustedHostedClient() {
+  if (pilotSelection.mode === 'unavailable') throw new Error('pilot_enrollment_invalid')
+  if (pilotSelection.mode === 'local') return createSignalingClientForMain()
+  return createSignalingClientForMain({
+    mode: 'remote', remote: {
+      enabled: true, endpoint: PILOT_ORIGIN, approvedOrigin: PILOT_ORIGIN,
+      admissionToken: pilotSelection.admissionToken,
+    }
+  })
+}
+const hostedSignaling = new HostedSignalingBridge({ clientFactory: createTrustedHostedClient })
 
 
 // UX3b1 local acceptance only: a second Electron process must not inherit the
@@ -515,6 +528,11 @@ function authorizedHostedFrame(event: IpcMainInvokeEvent): void {
     throw new Error('Unauthorized CaptureLink signaling page.')
   }
 }
+
+ipcMain.handle('capturelink:hosted-mode', event => {
+  authorizedHostedFrame(event)
+  return { mode: pilotSelection.mode } // No credential or provisioning IPC exists.
+})
 
 ipcMain.handle('capturelink:hosted-create', (event, permissions: {
   watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
@@ -1270,7 +1288,55 @@ ipcMain.handle(
 
 
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const flags = [
+    '--capturelink-ux3d-enroll',
+    '--capturelink-ux3d-rotate',
+    '--capturelink-ux3d-disable',
+  ]
+  const actions = flags.filter(flag => process.argv.includes(flag))
+  if (actions.length > 1) {
+    dialog.showErrorBox('CaptureLink pilot enrollment', 'Choose only one enrollment action.')
+    app.quit(); return
+  }
+  if (actions.length && localGuestTest) {
+    dialog.showErrorBox('CaptureLink pilot enrollment',
+      'The disposable localhost guest test profile cannot retain enrollment. Use a normal Windows installation.')
+    app.quit(); return
+  }
+  const userData = app.getPath('userData')
+  if (actions.length) {
+    // Operator-only native dialog, never IPC or renderer text input.
+    // Disposable local guest test profiles are explicitly refused above.
+    try {
+      if (actions[0] === '--capturelink-ux3d-disable') {
+        await disablePilotEnrollment({ userData })
+      } else {
+        if (process.platform !== 'win32' || !safeStorage.isEncryptionAvailable()) {
+          throw new Error('pilot_enrollment_unavailable')
+        }
+        const choice = await dialog.showOpenDialog({
+          title: 'Select a private CaptureLink installation admission token',
+          properties: ['openFile'],
+        })
+        // Array length alone does not narrow an indexed value to string.
+        const importPath = choice.filePaths[0]
+        if (choice.canceled || choice.filePaths.length !== 1 || !importPath) { app.quit(); return }
+        await importPilotEnrollment({
+          userData, importPath, safeStorage,
+          rotate: actions[0] === '--capturelink-ux3d-rotate',
+        })
+      }
+      dialog.showMessageBoxSync({ type: 'info', title: 'CaptureLink pilot enrollment',
+        message: 'Local pilot setting updated. Restart CaptureLink normally.' })
+    } catch {
+      dialog.showErrorBox('CaptureLink pilot enrollment',
+        'Enrollment refused. Check the Windows protection service, selected token file, and existing enrollment.')
+    }
+    app.quit(); return
+  }
+  try { pilotSelection = await loadPilotEnrollment({ userData, safeStorage }) }
+  catch { pilotSelection = { mode: 'unavailable' } }
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.capturelink.desktop')
   }
