@@ -38,6 +38,12 @@ jobs:
       - name: UX3c-1 main-process boundary smoke
         run: node scripts/ux3c1-remote-source-smoke.mjs
 
+      - name: UX3c-2 pilot broker admission and abuse tests
+        run: node --test services/signaling/test/pilot-server.test.mjs
+
+      - name: UX3c-2 localhost/pilot boundary smoke
+        run: node scripts/ux3c2-broker-source-smoke.mjs
+
       - name: UX and voice regression tests
         shell: pwsh
         run: |
