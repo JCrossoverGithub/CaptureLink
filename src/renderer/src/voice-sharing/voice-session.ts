@@ -29,6 +29,11 @@ export type SharedVoiceController = {
   onXboxSessionConnected(): void
   hasActiveGuestMix(): boolean
   dispose(): void
+  createUnifiedHostOffer(): Promise<string>
+  acceptUnifiedGuestAnswer(answer: string): Promise<void>
+  joinUnifiedHostOffer(offer: string, allowMicrophone: boolean, playGameAudio?: boolean): Promise<string>
+  setUnifiedHostPermissions(permissions: { voice: boolean; watch: boolean }): void
+  stopUnified(): void
 }
 
 type RoleSession = {
@@ -48,6 +53,7 @@ type RoleSession = {
   gameMediaBusy?: boolean
   lastHostStatusPayload?: string
   receiving?: MediaStream
+  silentGuestContext?: AudioContext
 }
 
 const iceServers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -656,6 +662,7 @@ export function installSharedVoice(options: SharedVoiceOptions): SharedVoiceCont
     guestHostState = null
     gPlayAudio.checked = false
     gMute.checked = false
+    if (old?.silentGuestContext) void old.silentGuestContext.close().catch(() => undefined)
     options.onGuestMediaStopped?.()
     if (old) {
       old.peer.onconnectionstatechange = null
@@ -769,90 +776,82 @@ export function installSharedVoice(options: SharedVoiceOptions): SharedVoiceCont
     }
   }
 
-  hStart.addEventListener('click', () => {
-    if (hostBusy || host || disposed) return
+  // UX2 exposes the same underlying peer operations to the unified coordinator.
+  // The legacy buttons call these functions too, so there is only one transport implementation.
+  async function createUnifiedHostOffer(): Promise<string> {
+    if (hostBusy || host || disposed) throw new Error('A voice invitation is already active.')
     const currentEpoch = ++epoch
     hostBusy = true
-    hostMessage('Discovering network candidates for your private invite (Xbox microphone not required)…')
+    hostMessage('Discovering network candidates for your private invite…')
     redraw()
-    // Creating an invite is not permission to use the Xbox microphone.
     hAllowGuest.checked = false
     const session: RoleSession = {
-      id: crypto.randomUUID(), peer: newVoicePeer(), media: null, mixed: null, remoteAudio: null, mixBusy: false, mixEpoch: 0, restoreOnStop: true, control: null
+      id: crypto.randomUUID(), peer: newVoicePeer(), media: null, mixed: null,
+      remoteAudio: null, mixBusy: false, mixEpoch: 0, restoreOnStop: true, control: null
     }
     session.control = session.peer.createDataChannel('voice-lifecycle', { ordered: true })
     session.control.onopen = () => sendHostState()
     host = session
     monitorHost(session)
-    // One sendrecv audio m-line carries guest voice inbound and optional Xbox
-    // audio outbound; a separate sendonly video m-line is reserved for Xbox video.
     session.gameAudioSender = session.peer.addTransceiver('audio', { direction: 'sendrecv' }).sender
     session.gameVideoSender = session.peer.addTransceiver('video', { direction: 'sendonly' }).sender
-    void (async () => {
-      try {
-        await session.peer.setLocalDescription(await session.peer.createOffer())
-        const ice = await gatherVoiceIceSnapshot(session.peer)
-        if (host !== session || currentEpoch !== epoch) return
-        hOffer.value = encodeVoiceSignal({ version: 1, type: 'offer', id: session.id, sdp: ice.sdp })
-        const localOnly = !ice.candidateTypes.includes('srflx') && !ice.candidateTypes.includes('relay')
-        hostMessage(localOnly
-          ? 'Invite ready with local-network candidates only. It may fail across different networks without a TURN relay. Xbox mic is optional.'
-          : 'Invite ready. Send it privately and paste the friend response. You can enable Xbox mic later.')
-      } catch (error) {
-        if (host !== session) return
-        stopHost()
-        hostMessage(`Could not create voice invite: ${String(error)}`)
-      } finally {
-        if (currentEpoch === epoch) hostBusy = false
-        redraw()
-      }
-    })()
-  })
+    try {
+      await session.peer.setLocalDescription(await session.peer.createOffer())
+      const ice = await gatherVoiceIceSnapshot(session.peer)
+      if (host !== session || currentEpoch !== epoch) throw new Error('Voice invitation cancelled.')
+      const result = encodeVoiceSignal({ version: 1, type: 'offer', id: session.id, sdp: ice.sdp })
+      hOffer.value = result
+      const localOnly = !ice.candidateTypes.includes('srflx') && !ice.candidateTypes.includes('relay')
+      hostMessage(localOnly
+        ? 'Invite ready with local-network candidates only. It may fail across different networks without a TURN relay. Xbox mic is optional.'
+        : 'Invite ready. Send it privately and paste the friend response. You can enable Xbox mic later.')
+      return result
+    } catch (error) {
+      if (host === session) stopHost()
+      hostMessage(`Could not create voice invite: ${String(error)}`)
+      throw error
+    } finally {
+      if (currentEpoch === epoch) hostBusy = false
+      redraw()
+    }
+  }
 
-  hAccept.addEventListener('click', () => {
-    if (hostBusy || !host || disposed) return
+  async function acceptUnifiedGuestAnswer(wire: string): Promise<void> {
+    if (hostBusy || !host || disposed) throw new Error('Create a voice invitation first.')
     const session = host
     hostBusy = true
     redraw()
-    void (async () => {
-      try {
-        const response = decodeVoiceSignal(hResponse.value)
-        if (response.type !== 'answer' || response.id !== session.id) {
-          throw new Error('Response does not belong to this voice invitation.')
-        }
-        await session.peer.setRemoteDescription({ type: 'answer', sdp: response.sdp })
-        hostMessage('Response accepted. Connecting to friend; the guest microphone meter appears when media arrives.')
-        updateDashboard()
-      } catch (error) {
-        hostMessage(`Could not accept response: ${String(error)}`)
-      } finally {
-        if (host === session) hostBusy = false
-        redraw()
-      }
-    })()
-  })
-
-  gJoin.addEventListener('click', () => {
-    if (guestBusy || guest || disposed) return
-    let invite
     try {
-      invite = decodeVoiceSignal(gOffer.value)
-      if (invite.type !== 'offer') throw new Error('Expected a host invitation, not a response.')
+      const response = decodeVoiceSignal(wire)
+      if (response.type !== 'answer' || response.id !== session.id) {
+        throw new Error('Response does not belong to this voice invitation.')
+      }
+      await session.peer.setRemoteDescription({ type: 'answer', sdp: response.sdp })
+      hostMessage('Voice response accepted. Waiting for peer connection and Xbox forwarding diagnostics.')
+      updateDashboard()
     } catch (error) {
-      guestMessage(String(error))
-      return
+      hostMessage(`Could not accept voice response: ${String(error)}`)
+      throw error
+    } finally {
+      if (host === session) hostBusy = false
+      redraw()
     }
-    if (options.canJoinAsGuest && !options.canJoinAsGuest()) {
-      guestMessage('Stop your own Xbox or Friend stream before joining another host as a voice guest.')
-      return
-    }
+  }
+
+  async function joinUnifiedHostOffer(wire: string, allowMicrophone: boolean, playGameAudio = false): Promise<string> {
+    if (guestBusy || guest || disposed) throw new Error('A guest voice connection already exists.')
+    const invite = decodeVoiceSignal(wire)
+    if (invite.type !== 'offer') throw new Error('Expected a host voice invitation.')
+    if (options.canJoinAsGuest && !options.canJoinAsGuest()) throw new Error('Disconnect your own Xbox session before joining a host.')
     guestBusy = true
     guestHostState = null
+    gPlayAudio.checked = playGameAudio
     const currentEpoch = ++guestEpoch
-    guestMessage('Requesting your microphone. Your voice is shared only after the host accepts your response.')
+    guestMessage(allowMicrophone ? 'Requesting your microphone…' : 'Joining as a watch-only guest without opening your microphone…')
     redraw()
     const session: RoleSession = {
-      id: invite.id, peer: newVoicePeer(), media: null, mixed: null, remoteAudio: null, mixBusy: false, mixEpoch: 0, restoreOnStop: true, control: null
+      id: invite.id, peer: newVoicePeer(), media: null, mixed: null,
+      remoteAudio: null, mixBusy: false, mixEpoch: 0, restoreOnStop: true, control: null
     }
     guest = session
     session.peer.ondatachannel = event => {
@@ -920,39 +919,63 @@ export function installSharedVoice(options: SharedVoiceOptions): SharedVoiceCont
         }, 10_000)
       }
     }
-    void (async () => {
-      try {
-        await session.peer.setRemoteDescription({ type: 'offer', sdp: invite.sdp })
-        const media = await navigator.mediaDevices.getUserMedia({
+    try {
+      await session.peer.setRemoteDescription({ type: 'offer', sdp: invite.sdp })
+      let media: MediaStream
+      if (allowMicrophone) {
+        media = await navigator.mediaDevices.getUserMedia({
           audio: options.getGuestMicrophoneConstraints(), video: false
         })
-        if (guest !== session || currentEpoch !== guestEpoch || disposed) {
-          media.getTracks().forEach(t => t.stop())
-          return
-        }
-        session.media = media
-        const track = media.getAudioTracks()[0]
-        if (!track) throw new Error('No audio track returned by the selected microphone.')
-        track.enabled = !gMute.checked
-        session.peer.addTrack(track, media)
-        await session.peer.setLocalDescription(await session.peer.createAnswer())
-        const ice = await gatherVoiceIceSnapshot(session.peer)
-        if (guest !== session || currentEpoch !== guestEpoch) return
-        gAnswer.value = encodeVoiceSignal({ version: 1, type: 'answer', id: session.id, sdp: ice.sdp })
-        const localOnly = !ice.candidateTypes.includes('srflx') && !ice.candidateTypes.includes('relay')
-        guestMessage(localOnly
-          ? 'Response ready with local-only candidates. Send privately; a different network may need a TURN relay.'
-          : 'Response ready. Copy privately to host. Host controls Xbox broadcasting.')
-      } catch (error) {
-        if (guest !== session) return
-        stopGuest()
-        guestMessage(`Could not join voice: ${String(error)}`)
-      } finally {
-        if (currentEpoch === guestEpoch) guestBusy = false
-        redraw()
+      } else {
+        // Watch-only sessions negotiate a silent sender; never open the user's microphone.
+        const context = new AudioContext({ latencyHint: 'interactive' })
+        session.silentGuestContext = context
+        const track = context.createMediaStreamDestination().stream.getAudioTracks()[0]
+        if (!track) throw new Error('Could not initialize watch-only audio transport.')
+        media = new MediaStream([track])
       }
-    })()
-  })
+      if (guest !== session || currentEpoch !== guestEpoch || disposed) {
+        media.getTracks().forEach(track => track.stop())
+        throw new Error('Guest invitation cancelled.')
+      }
+      session.media = media
+      const track = media.getAudioTracks()[0]
+      if (!track) throw new Error('No audio track available for signaling.')
+      track.enabled = allowMicrophone && !gMute.checked
+      session.peer.addTrack(track, media)
+      await session.peer.setLocalDescription(await session.peer.createAnswer())
+      const ice = await gatherVoiceIceSnapshot(session.peer)
+      if (guest !== session || currentEpoch !== guestEpoch) throw new Error('Guest invitation cancelled.')
+      const result = encodeVoiceSignal({ version: 1, type: 'answer', id: session.id, sdp: ice.sdp })
+      gAnswer.value = result
+      const localOnly = !ice.candidateTypes.includes('srflx') && !ice.candidateTypes.includes('relay')
+      guestMessage(localOnly
+        ? 'Response ready with local-only candidates. Send privately; a different network may need a TURN relay.'
+        : 'Response ready. Copy privately to host. Host controls Xbox broadcasting.')
+      return result
+    } catch (error) {
+      if (guest === session) stopGuest()
+      guestMessage(`Could not join voice/media: ${String(error)}`)
+      throw error
+    } finally {
+      if (currentEpoch === guestEpoch) guestBusy = false
+      redraw()
+    }
+  }
+
+  function setUnifiedHostPermissions(permissions: { voice: boolean; watch: boolean }): void {
+    if (!host) throw new Error('No host voice session is active.')
+    hAllowGuest.checked = permissions.voice
+    hShareAudio.checked = permissions.watch
+    hShareVideo.checked = permissions.watch
+    hAllowGuest.dispatchEvent(new Event('change', { bubbles: true }))
+    hShareAudio.dispatchEvent(new Event('change', { bubbles: true }))
+    hShareVideo.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+
+  hStart.addEventListener('click', () => { void createUnifiedHostOffer().catch(() => undefined) })
+  hAccept.addEventListener('click', () => { void acceptUnifiedGuestAnswer(hResponse.value).catch(() => undefined) })
+  gJoin.addEventListener('click', () => { void joinUnifiedHostOffer(gOffer.value, true).catch(() => undefined) })
 
   hCopy.addEventListener('click', () => {
     void navigator.clipboard.writeText(hOffer.value).catch(err => hostMessage(`Clipboard unavailable: ${String(err)}`))
@@ -1069,6 +1092,11 @@ export function installSharedVoice(options: SharedVoiceOptions): SharedVoiceCont
 
   redraw()
   return {
+    createUnifiedHostOffer,
+    acceptUnifiedGuestAnswer,
+    joinUnifiedHostOffer,
+    setUnifiedHostPermissions,
+    stopUnified() { stopHost(); stopGuest() },
     onXboxMicrophoneStopped() {
       if (!host) return
       host.restoreOnStop = false

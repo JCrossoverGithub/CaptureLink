@@ -7,9 +7,12 @@ import { installControllerResponsiveness } from './controller-responsiveness'
 import './controller-responsiveness.css'
 import { installFriendInviteGuide } from './friend-invite-guide'
 import { installFriendModeUx } from './friend-mode-ux'
+import { UnifiedSessionCoordinator } from './unified-session-core'
+import { installUnifiedSessionUx, type UnifiedSessionUx } from './unified-session-ux'
 import { installSharedVoice, type SharedVoiceController } from './voice-sharing/voice-session'
 
 let sharedVoice: SharedVoiceController | null = null
+let unifiedSessionUx: UnifiedSessionUx | null = null
 import {
   RemoteGamepadAdapter,
   capturePhysicalGamepad,
@@ -4691,6 +4694,7 @@ function updateInteractiveState(): void {
         locked
     })
   updateXboxQuickConnect()
+  unifiedSessionUx?.refresh()
 }
 
 function resetConsoleButtonLabels(): void {
@@ -8888,6 +8892,105 @@ sharedVoice = installSharedVoice({
 })
 
 installSharedSessionHub()
+
+// UX2: explicit adapters for the known-good direct controller and voice peers.
+// No simulated legacy button clicks, clipboard scraping, or new Xbox authentication.
+async function createUnifiedControllerHostOffer(mode: 'shared' | 'player2'): Promise<string> {
+  if (friendPeerRole !== null) throw new Error('End the existing Friend Controller connection before creating a unified invitation.')
+  if (!activePlayer || !webRtcConnected) throw new Error('Connect to your Xbox before inviting a controller guest.')
+  if (controllerAttached) throw new Error('Disable the local CaptureLink controller before sharing controller control.')
+  const hostMedia = getFriendHostMediaStream()
+  if (!hostMedia) throw new Error('Live Xbox video must be available to host a friend.')
+  closeFriendControllerPeer()
+  friendControllerMode = mode
+  activeFriendControllerMode = mode
+  friendHostControllerReady = false
+  friendRemoteControllerReady = false
+  friendPeerRole = 'host'
+  updateFriendControllerModeUi()
+  friendControllerPeer = makeFriendControllerPeer()
+  startSharedHostControllerPump()
+  updateInteractiveState()
+  try {
+    const offer = await friendControllerPeer.createHostOffer(hostMedia)
+    friendDirectCancelButton.hidden = false
+    friendDirectStatus.textContent = 'Controller invite ready in unified session.'
+    return encodeDirectFriendEnvelope({ version: 1, type: 'invite', controllerMode: mode, offer })
+  } catch (error) {
+    closeFriendControllerPeer()
+    throw error
+  }
+}
+
+async function joinUnifiedControllerHostOffer(wire: string): Promise<string> {
+  if (friendPeerRole !== null) throw new Error('End the existing Friend Controller connection before joining a unified invitation.')
+  if (activePlayer || webRtcConnected) throw new Error('Disconnect your own Xbox before joining a friend.')
+  const envelope = decodeDirectFriendEnvelope(wire)
+  if (envelope.type !== 'invite') throw new Error('Expected a controller invitation.')
+  closeFriendControllerPeer()
+  activeFriendControllerMode = envelope.controllerMode
+  friendPeerRole = 'guest'
+  updateFriendControllerModeUi()
+  friendControllerPeer = makeFriendControllerPeer()
+  updateInteractiveState()
+  try {
+    const answer = await friendControllerPeer.acceptHostOfferAndCreateAnswer(envelope.offer)
+    friendDirectCancelButton.hidden = false
+    friendDirectStatus.textContent = 'Controller response ready in unified session.'
+    return encodeDirectFriendEnvelope({ version: 1, type: 'response', answer })
+  } catch (error) {
+    closeFriendControllerPeer()
+    throw error
+  }
+}
+
+async function acceptUnifiedControllerGuestAnswer(wire: string): Promise<void> {
+  if (friendPeerRole !== 'host' || !friendControllerPeer) throw new Error('Create a controller invite first.')
+  const envelope = decodeDirectFriendEnvelope(wire)
+  if (envelope.type !== 'response') throw new Error('Expected a controller response.')
+  await friendControllerPeer.acceptGuestAnswer(envelope.answer)
+  friendDirectStatus.textContent = 'Controller response accepted; waiting for P2P connection.'
+}
+
+const unifiedSessionCoordinator = new UnifiedSessionCoordinator({
+  hostController: createUnifiedControllerHostOffer,
+  guestController: joinUnifiedControllerHostOffer,
+  acceptController: acceptUnifiedControllerGuestAnswer,
+  stopController: () => { if (friendPeerRole !== null) cancelDirectFriendSession() },
+  hostVoice: () => {
+    if (!sharedVoice) throw new Error('Shared microphone feature is unavailable.')
+    return sharedVoice.createUnifiedHostOffer()
+  },
+  guestVoice: (invite, microphoneConsent, playGameAudio) => {
+    if (!sharedVoice) throw new Error('Shared microphone feature is unavailable.')
+    return sharedVoice.joinUnifiedHostOffer(invite, microphoneConsent, playGameAudio)
+  },
+  acceptVoice: response => {
+    if (!sharedVoice) throw new Error('Shared microphone feature is unavailable.')
+    return sharedVoice.acceptUnifiedGuestAnswer(response)
+  },
+  setHostVoicePermissions: permissions => {
+    if (!sharedVoice) throw new Error('Shared microphone feature is unavailable.')
+    sharedVoice.setUnifiedHostPermissions(permissions)
+  },
+  stopVoice: () => { sharedVoice?.stopUnified() }
+})
+
+// V1.6 UX1a: presentation only. Retain the independent, authorized
+// V1.5 controller and voice protocols and the Xbox connection lifecycle.
+unifiedSessionUx = installUnifiedSessionUx({
+  startXbox: startXboxFromQuickConnect,
+  coordinator: unifiedSessionCoordinator,
+  getState: () => ({
+    role: friendPeerRole === 'guest' ? 'guest'
+      : activeServerId !== null || friendPeerRole === 'host' ? 'host' : 'idle',
+    consoleName: getSelectedXbox()?.deviceName ?? null,
+    connecting: streamBusy,
+    xboxConnected: webRtcConnected,
+    controllerPeer: friendPeerRole,
+    guestVoiceForwarding: sharedVoice?.hasActiveGuestMix() ?? false
+  })
+})
 
 void refreshAudioDevices()
 void refreshRecordingLibrary()
