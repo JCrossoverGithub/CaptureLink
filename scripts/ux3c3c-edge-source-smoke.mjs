@@ -1,0 +1,28 @@
+// UX3c-3c offline edge: CI guard against accidentally publishing the broker
+// or enabling client remote mode before a separate deployment approval.
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const text = name => readFileSync(new URL('../' + name, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const runtime = text('services/signaling/src/pilot-runtime.mjs')
+const server = text('services/signaling/src/server.mjs')
+const main = text('src/main/index.ts')
+const client = text('src/main/ux3c-signaling-client.mjs')
+const edge = text('ops/Caddyfile.private-pilot.example')
+const tests = text('services/signaling/test/ux3c3c-https-edge.test.mjs')
+const ci = text('.github/workflows/ci.yml')
+assert.match(server, /server\.listen\(port, '127\.0\.0\.1'/)
+assert.match(runtime, /createPilotSignalingServer/)
+assert.match(main, /clientFactory: \(\) => createSignalingClientForMain\(\)/)
+assert.match(client, /mode = 'local'/)
+assert.match(client, /if \(!remote \|\| remote\.enabled !== true\)/)
+assert.match(edge, /\.invalid/)
+assert.match(edge, /header_up -X-Forwarded-\*/)
+assert.match(edge, /header_up -Forwarded/)
+assert.match(tests, /createHttpsServer/)
+assert.match(tests, /rejectUnauthorized: true/)
+assert.match(tests, /'127\.0\.0\.1'/)
+assert.match(ci, /ux3c3c-https-edge\.test\.mjs/)
+assert.match(ci, /ux3c3c-edge-source-smoke\.mjs/)
+assert.doesNotMatch(main, /CAPTURELINK_UX3C_REMOTE_ENABLE/)
+assert.doesNotMatch(server, /server\.listen\(port, ['"]0\.0\.0\.0['"]/)
+console.log('PASS: private localhost broker, disabled desktop remote, placeholder ingress, and offline TLS integration CI')
