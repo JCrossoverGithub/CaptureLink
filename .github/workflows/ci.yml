@@ -87,3 +87,7 @@ jobs:
         run: node --test services/signaling/test/pilot-runtime.test.mjs
       - name: Local deployment boundary smoke
         run: node scripts/ux3c3a-deploy-source-smoke.mjs
+      - name: UX3c-3c offline HTTPS edge integration
+        run: node --test services/signaling/test/ux3c3c-https-edge.test.mjs
+      - name: UX3c-3c no-public-exposure source boundary
+        run: node scripts/ux3c3c-edge-source-smoke.mjs
