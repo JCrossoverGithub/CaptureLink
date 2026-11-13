@@ -1,0 +1,47 @@
+name: CaptureLink UX3F-3B3A offline host candidate
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ux3f3b3a-offline.yml'
+      - 'src/main/capturelink-online-https-host-candidate.mjs'
+      - 'services/signaling/test/ux3f3b3a-https-host-candidate.test.mjs'
+      - 'services/signaling/src/public-v2-server.mjs'
+      - 'services/signaling/src/public-authorization-policy.mjs'
+      - 'services/signaling/src/protocol.mjs'
+      - 'src/main/capturelink-auth0-provider.mjs'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ux3f3b3a-offline.yml'
+      - 'src/main/capturelink-online-https-host-candidate.mjs'
+      - 'services/signaling/test/ux3f3b3a-https-host-candidate.test.mjs'
+      - 'services/signaling/src/public-v2-server.mjs'
+      - 'services/signaling/src/public-authorization-policy.mjs'
+      - 'services/signaling/src/protocol.mjs'
+      - 'src/main/capturelink-auth0-provider.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-host-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check syntax
+        run: |
+          node --check src/main/capturelink-online-https-host-candidate.mjs
+          node --check services/signaling/test/ux3f3b3a-https-host-candidate.test.mjs
+      - name: Offline v2 authorization, broker and TLS host tests
+        run: |
+          node --test \
+            services/signaling/test/public-authorization-policy.test.mjs \
+            services/signaling/test/public-v2-server.test.mjs \
+            services/signaling/test/ux3f3b3a-https-host-candidate.test.mjs
