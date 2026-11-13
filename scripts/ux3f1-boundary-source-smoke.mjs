@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sha256 = text => createHash('sha256').update(text).digest('hex')
 
-// From verified UX3F-0 SOURCE_MANIFEST.json. Source must be byte-for-byte
-// identical to accepted pilot; this is deliberately stricter than a normal test.
+// From verified UX3F-0 SOURCE_MANIFEST.json. Sources must match the accepted pilot
+// after CRLF-to-LF checkout normalization; content changes remain prohibited.
 const unchanged = Object.freeze({
   'services/signaling/src/server.mjs': '1c85fdc44c1471d52247ea1f1aacf13da91fd9b2caa9155b4727198ad10b36a5',
   'services/signaling/src/pilot-admission.mjs': 'ceae7e86d90536802bbb698c8fc936f88e576a1df16577aea0d7fd685ff17b14',
@@ -23,7 +23,7 @@ const unchanged = Object.freeze({
 })
 
 for (const [path, expected] of Object.entries(unchanged)) {
-  const got = sha256(readFileSync(resolve(root, path)))
+  const got = sha256(readFileSync(resolve(root, path), 'utf8').replace(/\r\n/g, '\n'))
   if (got !== expected) throw new Error(`v1/manual boundary modified: ${path}`)
 }
 const source = readFileSync(resolve(root, 'services/signaling/src/public-authorization-policy.mjs'), 'utf8')
