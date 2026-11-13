@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
 import { HostedSignalingBridge } from './hosted-signaling-bridge.mjs'
 import { createCaptureLinkOnlineElectron } from './capturelink-online-electron.mjs'
+import { createCaptureLinkOnlineHttpsHostCandidate } from './capturelink-online-https-host-candidate.mjs'
 import { createCaptureLinkAuth0Provider } from './capturelink-auth0-provider.mjs'
 import { createWindowsOnlineVault } from './capturelink-online-vault.mjs'
 import { loadCaptureLinkOnlineDevConfig } from './capturelink-online-dev-config.mjs'
@@ -1381,7 +1382,10 @@ app.whenReady().then(async () => {
       const vault = createWindowsOnlineVault({ userData, safeStorage })
       onlineAuth = createCaptureLinkOnlineElectron({
         provider, vault, redirectPort: devConfig.redirectPort,
-        openBrowser: (url: string) => shell.openExternal(url)
+        openBrowser: (url: string) => shell.openExternal(url),
+        // UX3F-3B3B: trusted main-only, offline .test candidate. There are no
+        // online-hosting IPC handlers or active online create call sites.
+        hostFactory: ({ accessToken }) => createCaptureLinkOnlineHttpsHostCandidate({ accessToken })
       })
       await onlineAuth.initialize()
     } catch {

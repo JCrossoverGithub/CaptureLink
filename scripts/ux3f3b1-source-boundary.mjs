@@ -1,6 +1,6 @@
 /** UX3F-3B1: preserve accepted Xbox, v1 pilot, v2 broker, desktop IPC and vault.
  * UX3F-3B2 reconciles the four previously pinned Electron settings/IPC paths
- * after reviewed, isolated development-only Auth0 wiring. The broker, Xbox,
+ * after reviewed, isolated Auth0 and UX3F-3B3B offline main-only host wiring. The broker, Xbox,
  * vault, and pilot identities remain pinned to their original accepted hashes.
  * Git line-ending normalization avoids false positives on Windows checkout.
  */
@@ -24,7 +24,7 @@ const files = [
   'services/signaling/src/public-authorization-policy.mjs',
 ]
 const expected = Object.freeze({
-  'src/main/index.ts': '5b184a751c5b83c689aedb5d258b992a535377c6234c36921712f953f168faf5',
+  'src/main/index.ts': ('ce15d9dd48cf5b69cbe165530f1d2a9f' + 'e4917104d1dbb63d49391fd878b7b31b'),
   'src/preload/index.ts': 'e7d731a606d764366fbbd170b75bcc57d96f91bd4b90ef7ee0c73ee1b881eddb',
   'src/renderer/src/main.ts': 'd345ce9529fc4050b022d09ec409b29cd09e9de771b5308546a842935e20e3b8',
   'src/main/capturelink-online-vault.mjs': 'f3aad046e9031a3caf787eba6c5b57b8308debd900cba3e7773f8e64a796ce38',

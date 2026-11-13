@@ -1,7 +1,7 @@
 /** UX3F-3A: prove existing Xbox, private pilot, desktop and v2 remain untouched.
  * Hash canonical Git LF content: Windows checkout CRLF is not a source change.
  * UX3F-3B2 intentionally reconciled Electron main/preload/renderer/status declarations
- * for development-only Auth0 UI. Legacy broker and Xbox paths remain frozen.
+ * for development-only Auth0 UI and UX3F-3B3B offline main-only host factory. Legacy broker and Xbox paths remain frozen.
  */
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const expected = Object.freeze({
-  'src/main/index.ts': '5b184a751c5b83c689aedb5d258b992a535377c6234c36921712f953f168faf5',
+  'src/main/index.ts': ('ce15d9dd48cf5b69cbe165530f1d2a9f' + 'e4917104d1dbb63d49391fd878b7b31b'),
   'src/main/hosted-signaling-bridge.mjs': '7b1bafb049d69989553bebcc4b6f87b09624fe7ff469bd9fb5a05de4245d9374',
   'src/main/ux3c3d-pilot-enrollment.mjs': '760720d3e5d793c3403d0d1f7a993753b0d3d127697dbce5833d88ba39fbb37f',
   'src/main/ux3c-signaling-client.mjs': '77ce4f90cfe4c84757326b7f49c9d5ce963aa4f8f389db0e9439dc05c9e7ca5d',

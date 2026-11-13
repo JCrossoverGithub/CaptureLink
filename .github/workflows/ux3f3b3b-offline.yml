@@ -1,0 +1,43 @@
+name: CaptureLink UX3F-3B3B offline main host integration
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ux3f3b3b-offline.yml'
+      - 'src/main/capturelink-online-electron.mjs'
+      - 'src/main/capturelink-online-electron.d.mts'
+      - 'src/main/capturelink-online-https-host-candidate.mjs'
+      - 'src/main/capturelink-online-https-host-candidate.d.mts'
+      - 'src/main/index.ts'
+      - 'scripts/ux3f*-source-boundary.mjs'
+      - 'scripts/ux3f1-boundary-source-smoke.mjs'
+      - 'services/signaling/test/ux3f3b3b-electron-host-lifecycle.test.mjs'
+      - 'docs/CAPTURELINK_UX3F3B3B_ELECTRON_HOST_LIFECYCLE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-electron-host:
+    name: offline-electron-host
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Full Linux signaling regression (including signed Auth0 and race fixtures)
+        run: node --test services/signaling/test/*.test.mjs
+      - name: Historical boundary guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/ux3f1-boundary-source-smoke.mjs
+          node scripts/ux3f2-source-boundary.mjs
+          node scripts/ux3f3a-source-boundary.mjs
+          node scripts/ux3f3b1-source-boundary.mjs
+          node scripts/ux3f3b2-source-boundary.mjs
+      - name: Verify patch whitespace
+        run: git diff --check HEAD~1 HEAD
