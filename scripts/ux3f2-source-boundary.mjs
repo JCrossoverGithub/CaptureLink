@@ -20,7 +20,9 @@ const expected = Object.freeze({
   'src/renderer/src/unified-session-ux.ts': '129f765c65a7918a79db8488d46b32513ab69a974a4334508728b5d14bb9edad',
 })
 for (const [file, digest] of Object.entries(expected)) {
-  const actual = createHash('sha256').update(readFileSync(resolve(root, file))).digest('hex')
+  // Ignore checkout LF/CRLF differences, not source-content changes.
+  const content = readFileSync(resolve(root, file), 'utf8').replace(/\r\n/g, '\n')
+  const actual = createHash('sha256').update(content).digest('hex')
   if (actual !== digest) {
     console.error(`FAIL: UX3F-2 protected source changed: ${file}`)
     process.exit(1)
