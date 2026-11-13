@@ -125,6 +125,10 @@ declare global {
       platform: string
       version: string
 
+      onlineAuthStatus(): Promise<{ enabled: boolean; authenticated: boolean; pending: boolean }>
+      onlineAuthBegin(): Promise<{ started: boolean }>
+      onlineAuthSignOut(): Promise<{ enabled: boolean; authenticated: boolean; pending: boolean }>
+
       hostedMode(): Promise<{mode: 'local' | 'remote' | 'unavailable'}>
       hostedCreate(permissions: {
         watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'

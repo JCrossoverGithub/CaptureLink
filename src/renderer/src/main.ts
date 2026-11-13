@@ -1,5 +1,6 @@
 import { installConnectionRecoveryUx } from './connection-recovery-ux'
 import { installXboxAuthDialog } from './xbox-auth-dialog'
+import { installCaptureLinkOnlineSettings } from './capturelink-online-settings'
 import './capturelink-design.css'
 import { installCaptureLinkAppearance } from './capturelink-appearance'
 import './xbox-auth-dialog.css'
@@ -8237,6 +8238,9 @@ signOutButton.addEventListener('click', () => {
 settingsSignOutButton.addEventListener('click', () => {
   signOutButton.click()
 })
+
+// Separate Auth0 account; never alters Xbox auth, media, pilot or friend P2P.
+installCaptureLinkOnlineSettings()
 
 settingsDiagnosticsButton.addEventListener('click', () => {
   setDiagnosticsVisible(!diagnosticsVisible)

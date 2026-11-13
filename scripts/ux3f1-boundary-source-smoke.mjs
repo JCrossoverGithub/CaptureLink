@@ -1,4 +1,4 @@
-/** Offline source-boundary audit for UX3F-1. Run at accepted a1a83ea baseline. */
+/** Offline source-boundary audit for UX3F-1. Reconciled at UX3F-3B2 for online-only Electron integration. */
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
@@ -15,7 +15,7 @@ const unchanged = Object.freeze({
   'services/signaling/src/pilot-runtime.mjs': '10b24487fe0f631423b6b4612bc4fcd765105e5adff0f0644de692f2a1937ada',
   'services/signaling/src/client.mjs': '951b159e5671a04341e35872326b74e2e3825435e95e03e3038e3ba2b84364f9',
   'services/signaling/src/protocol.mjs': 'fab9db6887b895249d2297ad3b4cea69cbb4fef836ae46c1055f326682d6f085',
-  'src/main/index.ts': 'f4af9d555598237bc1fd86ee70a6b96c270c568b3330edb415732cd408c5cb66',
+  'src/main/index.ts': '5b184a751c5b83c689aedb5d258b992a535377c6234c36921712f953f168faf5',
   'src/main/hosted-signaling-bridge.mjs': '7b1bafb049d69989553bebcc4b6f87b09624fe7ff469bd9fb5a05de4245d9374',
   'src/main/ux3c3d-pilot-enrollment.mjs': '760720d3e5d793c3403d0d1f7a993753b0d3d127697dbce5833d88ba39fbb37f',
   'src/renderer/src/hosted-session-ux.ts': '24a0e4acf5e45c0ce1542ab9b0e69c91ec9076490409ac7ef1dab67fdda298c2',
@@ -30,4 +30,4 @@ const source = readFileSync(resolve(root, 'services/signaling/src/public-authori
 if (/\b(?:fetch\s*\(|https?:\/\/|createServer\s*\(|listen\s*\(|node:(?:http|https|net|tls))/.test(source)) {
   throw new Error('UX3F-1 policy may not own network transport or embed origins')
 }
-console.log('PASS: UX3F-1 offline module; v1 pilot, enrollment, desktop and manual UX2 source unchanged')
+console.log('PASS: UX3F-1 policy and legacy client remain protected; UX3F-3B2 Electron auth reconciliation approved')

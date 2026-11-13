@@ -1,0 +1,11 @@
+/* Keep CaptureLink's existing settings-card styling; no new global layout. */
+.settings-card--online small {
+  display: block;
+  opacity: .7;
+  margin-top: 0.45rem;
+  line-height: 1.5;
+}
+.settings-card--online .settings-card__action:disabled {
+  cursor: wait;
+  opacity: .55;
+}
