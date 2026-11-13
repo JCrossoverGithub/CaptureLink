@@ -141,7 +141,16 @@ test('normal reset calls only owned friend transport teardown', async () => {
 // Tiny controlled DOM adapter tests the *actual* hosted UI module without
 // inventing browser/WebRTC behavior or requiring an Electron instance.
 const hostedSource = readFileSync(new URL('../src/renderer/src/hosted-session-ux.ts', import.meta.url), 'utf8')
-const hostedJs = transformSync(hostedSource, { loader: 'ts', format: 'esm', target: 'es2022' })
+// The runtime imports the new mode gate as a separate ESM file. This test
+// embeds the ORIGINAL checked-in module into its data-URL fixture because
+// data URLs cannot resolve relative imports in Node. No implementation is mocked.
+const gateSource = readFileSync(new URL('../src/renderer/src/renderer-signaling-mode-gate.mjs', import.meta.url), 'utf8')
+const hostedCombined = hostedSource.replace(
+  "import { createRendererSignalingModeGate } from './renderer-signaling-mode-gate.mjs'",
+  gateSource.replace('export function createRendererSignalingModeGate', 'function createRendererSignalingModeGate')
+)
+assert.notEqual(hostedCombined, hostedSource, 'Expected mode-gate import missing')
+const hostedJs = transformSync(hostedCombined, { loader: 'ts', format: 'esm', target: 'es2022' })
 const { installHostedSessionUx } = await import('data:text/javascript;base64,' + Buffer.from(hostedJs.code).toString('base64'))
 
 class FakeElement {
