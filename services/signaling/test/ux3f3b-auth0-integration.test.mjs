@@ -79,8 +79,9 @@ test('rejects unsafe provider config; public client needs no secret', () => {
 
 test('real RS256/JWKS verifies Auth0 API claims and blocks signature, issuer, audience, azp, RBAC, expiry and scope forgery', async () => {
   const { provider } = providerFixture()
-  assert.deepEqual(await provider.verifyHostAccessToken(access()), {
-    iss: BASE, aud: AUDIENCE, sub: 'auth0|test-user', exp: baseClaims(AUDIENCE).exp,
+  const expectedExp = Math.floor(now() / 1000) + 1800
+  assert.deepEqual(await provider.verifyHostAccessToken(access({ exp: expectedExp })), {
+    iss: BASE, aud: AUDIENCE, sub: 'auth0|test-user', exp: expectedExp,
     scope: ['sessions:create'],
   })
   const original = access()
