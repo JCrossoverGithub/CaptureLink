@@ -9,14 +9,14 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const expected = Object.freeze({
-  'src/main/index.ts': ('ce15d9dd48cf5b69cbe165530f1d2a9f' + 'e4917104d1dbb63d49391fd878b7b31b'),
+  'src/main/index.ts': ('770f9cb8bc9cc2417f2489b0c1eee2bc' + 'be54007d5b0d00a3ee8b73adb41a4949'),
   'src/main/hosted-signaling-bridge.mjs': '7b1bafb049d69989553bebcc4b6f87b09624fe7ff469bd9fb5a05de4245d9374',
   'src/main/ux3c3d-pilot-enrollment.mjs': '760720d3e5d793c3403d0d1f7a993753b0d3d127697dbce5833d88ba39fbb37f',
   'src/main/ux3c-signaling-client.mjs': '77ce4f90cfe4c84757326b7f49c9d5ce963aa4f8f389db0e9439dc05c9e7ca5d',
   'src/main/xbox/consoles.ts': 'f80077483a2c580281bea86bf914b73a1fc5db59c402c662303abadb0c0ef1e0',
   'src/main/xbox/xhome.ts': '6a2349a38cb07c464f6b987001ed64e5497203e1d59b543f4991fe1867351692',
-  'src/preload/index.ts': 'e7d731a606d764366fbbd170b75bcc57d96f91bd4b90ef7ee0c73ee1b881eddb',
-  'src/renderer/src/env.d.ts': '34489a45ae2dff268b6bc928cb758893f1841f7ca1172f659c2bda605a01ba01',
+  'src/preload/index.ts': 'c53caff49ec5af81d9e39c2fd7fbe7458dfa8091dd0194681675e92575055246',
+  'src/renderer/src/env.d.ts': 'e1fa364b980db861edc7cd7d125192f78c6500fc1fe5090b0aeb9ec9bcf40179',
   'src/renderer/src/hosted-session-ux.ts': '24a0e4acf5e45c0ce1542ab9b0e69c91ec9076490409ac7ef1dab67fdda298c2',
   'src/renderer/src/unified-session-ux.ts': '129f765c65a7918a79db8488d46b32513ab69a974a4334508728b5d14bb9edad',
   'services/signaling/src/server.mjs': '1c85fdc44c1471d52247ea1f1aacf13da91fd9b2caa9155b4727198ad10b36a5',
@@ -32,4 +32,4 @@ for (const [file, digest] of Object.entries(expected)) {
     process.exit(1)
   }
 }
-console.log('PASS: UX3F-3A Xbox/pilot/v2 preserved; UX3F-3B2 Electron auth reconciliation approved')
+console.log('PASS: UX3F-3A Xbox/pilot/v2 preserved; UX3F-3B2 auth and 3B3C2 offline IPC reconciliation approved')

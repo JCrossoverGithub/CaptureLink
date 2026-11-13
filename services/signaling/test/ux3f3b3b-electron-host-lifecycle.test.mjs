@@ -203,13 +203,13 @@ test('host candidate requires explicitly trusted factory; rejected permissions n
   assert.equal(f.vault.peek(), null)
 })
 
-test('main-process source introduces no new host IPC or preload/renderer paths', async () => {
+test('original Auth0 host-factory contract is reused by the explicit offline online bridge', async () => {
   const root = new URL('../../../', import.meta.url)
   const read = async path => readFile(new URL(path, root), 'utf8')
   const main = await read('src/main/index.ts')
   const preload = await read('src/preload/index.ts')
   const renderer = await read('src/renderer/src/capturelink-online-settings.ts')
-  assert.ok(main.includes('hostFactory: ({ accessToken }) => createCaptureLinkOnlineHttpsHostCandidate({ accessToken })'))
+  assert.ok(main.includes('hostFactory: ({ accessToken }) => onlineSession!.authenticatedHostAdapter(accessToken)'))
   assert.ok(!main.includes('capturelink:online-host-create'))
   assert.ok(!preload.includes('createHostSession'))
   assert.ok(!renderer.includes('createHostSession'))

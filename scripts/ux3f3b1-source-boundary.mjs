@@ -24,8 +24,8 @@ const files = [
   'services/signaling/src/public-authorization-policy.mjs',
 ]
 const expected = Object.freeze({
-  'src/main/index.ts': ('ce15d9dd48cf5b69cbe165530f1d2a9f' + 'e4917104d1dbb63d49391fd878b7b31b'),
-  'src/preload/index.ts': 'e7d731a606d764366fbbd170b75bcc57d96f91bd4b90ef7ee0c73ee1b881eddb',
+  'src/main/index.ts': ('770f9cb8bc9cc2417f2489b0c1eee2bc' + 'be54007d5b0d00a3ee8b73adb41a4949'),
+  'src/preload/index.ts': 'c53caff49ec5af81d9e39c2fd7fbe7458dfa8091dd0194681675e92575055246',
   'src/renderer/src/main.ts': 'd345ce9529fc4050b022d09ec409b29cd09e9de771b5308546a842935e20e3b8',
   'src/main/capturelink-online-vault.mjs': 'f3aad046e9031a3caf787eba6c5b57b8308debd900cba3e7773f8e64a796ce38',
   'src/main/hosted-signaling-bridge.mjs': '7b1bafb049d69989553bebcc4b6f87b09624fe7ff469bd9fb5a05de4245d9374',
@@ -46,4 +46,4 @@ for (const path of files) {
     process.exit(1)
   }
 }
-console.log('PASS: UX3F-3B1 Xbox/v1/v2/vault preserved; UX3F-3B2 Electron auth reconciliation approved')
+console.log('PASS: UX3F-3B1 Xbox/v1/v2/vault preserved; UX3F-3B2 auth and 3B3C2 offline IPC reconciliation approved')
