@@ -47,6 +47,12 @@ jobs:
       - name: UX3F-2 protected v1/desktop source boundary
         run: node scripts/ux3f2-source-boundary.mjs
 
+      - name: UX3F-3A provider-neutral Windows auth and secret vault tests
+        run: node --test services/signaling/test/ux3f3-online-auth.test.mjs
+
+      - name: UX3F-3A protected Xbox and hosted signaling boundary
+        run: node scripts/ux3f3a-source-boundary.mjs
+
       - name: UX3c-2 localhost/pilot boundary smoke
         run: node scripts/ux3c2-broker-source-smoke.mjs
 
@@ -108,3 +114,8 @@ jobs:
         run: |
           node --test services/signaling/test/public-authorization-policy.test.mjs services/signaling/test/public-v2-server.test.mjs
           node scripts/ux3f2-source-boundary.mjs
+
+      - name: UX3F-3A provider-neutral auth and boundary on Linux
+        run: |
+          node --test services/signaling/test/ux3f3-online-auth.test.mjs
+          node scripts/ux3f3a-source-boundary.mjs
