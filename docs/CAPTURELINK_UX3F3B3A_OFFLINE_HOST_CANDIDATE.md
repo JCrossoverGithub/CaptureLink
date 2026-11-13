@@ -1,6 +1,6 @@
 # CaptureLink UX3F-3B3A — Offline HTTPS host-creation candidate
 
-**Status:** first implementation candidate, not merged and not approved for any public use.
+**Status:** Offline acceptance complete; PR #23 awaiting merge. Not approved for production or public use.
 **Accepted parent commit:** `dde32013d32bc4677a4d322d41fc23bea72ad2dc` (PR #22).
 **Target branch:** `feature/ux3f3b3-online-hosting`.
 **No production deployment, no Electron UI activation, no real public v2 endpoint.**
@@ -18,7 +18,7 @@
 
 - Archive SHA-256: `9393eda775ef7169cb219ffca2d52aed5074d27c53575078ddc3f34d7821bb4e`.
 - Node v22.16.0 (local archive sandbox): 49 selected tests passed (43 accepted policy/broker tests + 6 new host candidate tests), 0 failed, 0 skipped.
-- **Not yet verified in the operator's Windows/WSL checkout:** full Linux suite, Windows typecheck/build, legacy source guards, Gitleaks, GitHub CI or real Electron integration. The actual target runtime is Node 24.x.
+- **Operator acceptance:** Linux 170/170; Windows 164 passed with 6 platform skips; five historical source guards passed; Windows Node 24 typecheck and Electron build passed; Gitleaks 8.30.1 found no leaks; PR #23 CI passed 3/3. Real Electron integration remains outside this stage.
 
 ## Explicit outstanding engineering work
 
@@ -31,12 +31,12 @@
 
 ## Local acceptance checklist (WSL, branch root)
 
-- [ ] Verify HEAD is the accepted parent commit and the worktree is initially clean.
-- [ ] Apply the exact four new files from the reviewed bundle; no existing files overwritten.
-- [ ] `node --test services/signaling/test/public-authorization-policy.test.mjs services/signaling/test/public-v2-server.test.mjs services/signaling/test/ux3f3b3a-https-host-candidate.test.mjs` — target **49/49**.
-- [ ] `node --test services/signaling/test/*.test.mjs` — expect **170 cases** on Linux if the accepted suite remains 164 and the 6 new cases run; investigate any mismatch, never assume the count.
-- [ ] All five historical UX3F guards still pass; `git diff --check` and the staged Gitleaks scan pass.
-- [ ] Windows Node 24 test/build and GitHub CI pass before PR merge.
-- [ ] Independent source-diff review confirms no renderer bearer exposure and no production/pilot modifications.
+- [x] Verify HEAD is the accepted parent commit and the worktree is initially clean.
+- [x] Apply the exact four new files from the reviewed bundle; no existing files overwritten.
+- [x] `node --test services/signaling/test/public-authorization-policy.test.mjs services/signaling/test/public-v2-server.test.mjs services/signaling/test/ux3f3b3a-https-host-candidate.test.mjs` — target **49/49**.
+- [x] `node --test services/signaling/test/*.test.mjs` — expect **170 cases** on Linux if the accepted suite remains 164 and the 6 new cases run; investigate any mismatch, never assume the count.
+- [x] All five historical UX3F guards still pass; `git diff --check` and the staged Gitleaks scan pass.
+- [x] Windows Node 24 test/build and GitHub CI pass before PR merge.
+- [x] Independent source-diff review confirms no renderer bearer exposure and no production/pilot modifications.
 
-**Merge approval:** NOT GRANTED by creating this bundle or by passing only the selected tests.
+**Merge gate:** Offline candidate acceptance and CI passed. Final head-commit verification remains required. This does not authorize production deployment.
