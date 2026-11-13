@@ -85,8 +85,10 @@ test('no host auto-approval; rejection prevents all coordinator operations', asy
     timeoutMs: 5000,
   })
   const gp = guestSession(guest, guestImpl, await d.promise, false, { intervalMs: 50, timeoutMs: 5000 })
-  await assert.rejects(hp, err => err.code === 'host_rejected')
-  await assert.rejects(gp, err => ['host_rejected','not_found'].includes(err.code))
+  // Observe both expected rejections before awaiting either one.
+  const hostRejected = assert.rejects(hp, err => err.code === 'host_rejected')
+  const guestRejected = assert.rejects(gp, err => ['host_rejected', 'not_found'].includes(err.code))
+  await Promise.all([hostRejected, guestRejected])
   assert.equal(hostImpl.created, 0)
   assert.equal(guestImpl.joined, 0)
   assert.equal(host.role, null)

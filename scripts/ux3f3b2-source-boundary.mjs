@@ -1,4 +1,6 @@
 /** UX3F-3B2 sealed dev-only main/preload/renderer changes and original broker/Xbox paths.
+ * UX3F-3B3B explicitly updates only Electron main and the main-only auth lifecycle
+ * and declaration for offline HTTPS-host composition; IPC/renderer remain pinned.
  * Reconciles prior source guards without dropping historical hash coverage.
  * LF normalization permits Windows CRLF checkout but no source mutation.
  */
@@ -24,13 +26,13 @@ const expected = Object.freeze({
   'services/signaling/src/public-authorization-policy.mjs': '4d536af5a625f984c59643c81b5e55c6857ce5efa0ce221054114b734791ad44',
   'src/renderer/src/hosted-session-ux.ts': '24a0e4acf5e45c0ce1542ab9b0e69c91ec9076490409ac7ef1dab67fdda298c2',
   'src/renderer/src/unified-session-ux.ts': '129f765c65a7918a79db8488d46b32513ab69a974a4334508728b5d14bb9edad',
-  'src/main/index.ts': '5b184a751c5b83c689aedb5d258b992a535377c6234c36921712f953f168faf5',
+  'src/main/index.ts': ('ce15d9dd48cf5b69cbe165530f1d2a9f' + 'e4917104d1dbb63d49391fd878b7b31b'),
   'src/preload/index.ts': 'e7d731a606d764366fbbd170b75bcc57d96f91bd4b90ef7ee0c73ee1b881eddb',
   'src/renderer/src/main.ts': 'd345ce9529fc4050b022d09ec409b29cd09e9de771b5308546a842935e20e3b8',
   'src/renderer/src/env.d.ts': '34489a45ae2dff268b6bc928cb758893f1841f7ca1172f659c2bda605a01ba01',
   'src/main/capturelink-online-dev-config.mjs': '239b941100adc6289990bf7c6de2b477e49104a36966abf8439ac3cdf37dcfd9',
-  'src/main/capturelink-online-electron.mjs': 'e4769be795d93e90f0ad2b0c0580ba6dd31a3a3aa96f84f5bf7f8e1593c448cd',
-  'src/main/capturelink-online-electron.d.mts': '9f022bed53034906a3c599bf567f0e532b7212dcc9ca4bee4da105f2a94a8527',
+  'src/main/capturelink-online-electron.mjs': ('065b1f70ed2804411e7bfeb55606df63' + 'b9ba5706efbe0a410a29862c45fd05fc'),
+  'src/main/capturelink-online-electron.d.mts': ('fb3d1179c1312893ff132f7a26401316' + '36741c07fd570613aff33a9cd32ac8dc'),
   'src/main/capturelink-auth0-provider.d.mts': ('37095a8c42321ee73e0db4ba81fa0031' + 'b772f1a6605c8c2c2fcf4d4619776306'),
   'src/main/capturelink-online-vault.d.mts': 'd6276d844ef993e063c920a2c9b030a448d0f6abfbd66fadac54f5f1394d3022',
   'src/main/capturelink-online-dev-config.d.mts': '457a390d582ecac54b9d6a2c9d4b3092d4434d06416cf8b4c72302f71b6fdf1d',
@@ -57,4 +59,4 @@ if (!main.includes("!app.isPackaged && !localGuestTest") ||
     /\b(?:accessToken|refreshToken|clientSecret|codeVerifier|jwks)\b/.test(preload + renderer)) {
   throw new Error('UX3F-3B2 privileged boundary weakened')
 }
-console.log('PASS: UX3F-3B2 dev-only Auth0 IPC and source boundary verified')
+console.log('PASS: UX3F-3B2 dev-only Auth0 IPC and UX3F-3B3B main-only host integration boundaries verified')

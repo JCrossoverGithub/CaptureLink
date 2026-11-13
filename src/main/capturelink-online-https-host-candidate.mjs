@@ -1,8 +1,9 @@
 /**
  * UX3F-3B3A: isolated, main-process-only HTTPS /v2 host-creation candidate.
  *
- * This stage intentionally pins a non-routable .test identity and is not
- * imported by Electron, the private pilot, or the production edge. A later
+ * This stage intentionally pins a non-routable .test identity. UX3F-3B3B
+ * imports it through a trusted Electron-main factory, without any call site
+ * or IPC activation. It is not in the private pilot or production edge. A later
  * reviewed stage must explicitly approve a real origin, full session bridge,
  * account deactivation handling, and production deployment.
  *

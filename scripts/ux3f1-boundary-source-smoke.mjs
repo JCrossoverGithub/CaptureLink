@@ -1,4 +1,4 @@
-/** Offline source-boundary audit for UX3F-1. Reconciled at UX3F-3B2 for online-only Electron integration. */
+/** Offline source-boundary audit for UX3F-1. Reconciled at UX3F-3B2/3B3B for main-only development Electron auth/host integration. */
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
@@ -15,7 +15,7 @@ const unchanged = Object.freeze({
   'services/signaling/src/pilot-runtime.mjs': '10b24487fe0f631423b6b4612bc4fcd765105e5adff0f0644de692f2a1937ada',
   'services/signaling/src/client.mjs': '951b159e5671a04341e35872326b74e2e3825435e95e03e3038e3ba2b84364f9',
   'services/signaling/src/protocol.mjs': 'fab9db6887b895249d2297ad3b4cea69cbb4fef836ae46c1055f326682d6f085',
-  'src/main/index.ts': '5b184a751c5b83c689aedb5d258b992a535377c6234c36921712f953f168faf5',
+  'src/main/index.ts': ('ce15d9dd48cf5b69cbe165530f1d2a9f' + 'e4917104d1dbb63d49391fd878b7b31b'),
   'src/main/hosted-signaling-bridge.mjs': '7b1bafb049d69989553bebcc4b6f87b09624fe7ff469bd9fb5a05de4245d9374',
   'src/main/ux3c3d-pilot-enrollment.mjs': '760720d3e5d793c3403d0d1f7a993753b0d3d127697dbce5833d88ba39fbb37f',
   'src/renderer/src/hosted-session-ux.ts': '24a0e4acf5e45c0ce1542ab9b0e69c91ec9076490409ac7ef1dab67fdda298c2',
