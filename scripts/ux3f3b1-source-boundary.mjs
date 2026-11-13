@@ -1,5 +1,7 @@
 /** UX3F-3B1: preserve accepted Xbox, v1 pilot, v2 broker, desktop IPC and vault.
- * Only Auth0 adapter, loopback, main-only v2 client and PKCE audience seam may change.
+ * UX3F-3B2 reconciles the four previously pinned Electron settings/IPC paths
+ * after reviewed, isolated development-only Auth0 wiring. The broker, Xbox,
+ * vault, and pilot identities remain pinned to their original accepted hashes.
  * Git line-ending normalization avoids false positives on Windows checkout.
  */
 import { readFileSync } from 'node:fs'
@@ -22,9 +24,9 @@ const files = [
   'services/signaling/src/public-authorization-policy.mjs',
 ]
 const expected = Object.freeze({
-  'src/main/index.ts': 'f4af9d555598237bc1fd86ee70a6b96c270c568b3330edb415732cd408c5cb66',
-  'src/preload/index.ts': 'a9a0051b835b7834ad619ea7feb0f9e775fbd62c6080a91df2f8ce009ba0d6ed',
-  'src/renderer/src/main.ts': 'cbc97cc6aaff790ee1ebde33ee2428e144fe83821ae514037cb64d870e6b352a',
+  'src/main/index.ts': '5b184a751c5b83c689aedb5d258b992a535377c6234c36921712f953f168faf5',
+  'src/preload/index.ts': 'e7d731a606d764366fbbd170b75bcc57d96f91bd4b90ef7ee0c73ee1b881eddb',
+  'src/renderer/src/main.ts': 'd345ce9529fc4050b022d09ec409b29cd09e9de771b5308546a842935e20e3b8',
   'src/main/capturelink-online-vault.mjs': 'f3aad046e9031a3caf787eba6c5b57b8308debd900cba3e7773f8e64a796ce38',
   'src/main/hosted-signaling-bridge.mjs': '7b1bafb049d69989553bebcc4b6f87b09624fe7ff469bd9fb5a05de4245d9374',
   'src/main/ux3c-signaling-client.mjs': '77ce4f90cfe4c84757326b7f49c9d5ce963aa4f8f389db0e9439dc05c9e7ca5d',
@@ -44,4 +46,4 @@ for (const path of files) {
     process.exit(1)
   }
 }
-console.log('PASS: UX3F-3B1 protected Xbox, v1/v2, main IPC, preload, renderer and vault unchanged')
+console.log('PASS: UX3F-3B1 Xbox/v1/v2/vault preserved; UX3F-3B2 Electron auth reconciliation approved')

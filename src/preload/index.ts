@@ -11,6 +11,11 @@ contextBridge.exposeInMainWorld('captureLink', {
   platform: process.platform,
   version: '0.2.0',
 
+  // UX3F-3B2: only status booleans and commands, never Auth0 credentials.
+  onlineAuthStatus: () => ipcRenderer.invoke('capturelink:online-auth-status'),
+  onlineAuthBegin: () => ipcRenderer.invoke('capturelink:online-auth-begin'),
+  onlineAuthSignOut: () => ipcRenderer.invoke('capturelink:online-auth-sign-out'),
+
   // Only an unprivileged mode status crosses IPC, never admission credentials.
   hostedMode: () => ipcRenderer.invoke('capturelink:hosted-mode'),
   // Main-process-only tokens: only code, sanitized status, and UX2 wire cross IPC.

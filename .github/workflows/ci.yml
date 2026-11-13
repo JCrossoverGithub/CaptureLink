@@ -59,6 +59,12 @@ jobs:
       - name: UX3F-3B1 protected desktop and broker source boundary
         run: node scripts/ux3f3b1-source-boundary.mjs
 
+      - name: UX3F-3B2 development-only Electron browser auth tests
+        run: node --test services/signaling/test/ux3f3b2-electron-auth.test.mjs
+
+      - name: UX3F-3B2 Electron auth boundary
+        run: node scripts/ux3f3b2-source-boundary.mjs
+
       - name: UX3c-2 localhost/pilot boundary smoke
         run: node scripts/ux3c2-broker-source-smoke.mjs
 
@@ -130,3 +136,8 @@ jobs:
         run: |
           node --test services/signaling/test/ux3f3b-auth0-integration.test.mjs
           node scripts/ux3f3b1-source-boundary.mjs
+
+      - name: UX3F-3B2 Electron auth offline lifecycle on Linux
+        run: |
+          node --test services/signaling/test/ux3f3b2-electron-auth.test.mjs
+          node scripts/ux3f3b2-source-boundary.mjs

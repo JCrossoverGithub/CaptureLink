@@ -8,6 +8,10 @@ import { basename, dirname, extname, join, parse } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
 import { HostedSignalingBridge } from './hosted-signaling-bridge.mjs'
+import { createCaptureLinkOnlineElectron } from './capturelink-online-electron.mjs'
+import { createCaptureLinkAuth0Provider } from './capturelink-auth0-provider.mjs'
+import { createWindowsOnlineVault } from './capturelink-online-vault.mjs'
+import { loadCaptureLinkOnlineDevConfig } from './capturelink-online-dev-config.mjs'
 import { createSignalingClientForMain } from './ux3c-signaling-client.mjs'
 import { PILOT_ORIGIN, loadPilotEnrollment, importPilotEnrollment, disablePilotEnrollment, type PilotSelection } from './ux3c3d-pilot-enrollment.mjs'
 import {
@@ -37,6 +41,10 @@ function createTrustedHostedClient() {
   })
 }
 const hostedSignaling = new HostedSignalingBridge({ clientFactory: createTrustedHostedClient })
+// UX3F-3B2: Auth0 is independent of Xbox and private-pilot credentials.
+// It is never enabled in packaged apps or on non-Windows platforms.
+let onlineAuth: ReturnType<typeof createCaptureLinkOnlineElectron> | null = null
+const disabledOnlineStatus = Object.freeze({ enabled: false, authenticated: false, pending: false })
 
 
 // UX3b1 local acceptance only: a second Electron process must not inherit the
@@ -528,6 +536,23 @@ function authorizedHostedFrame(event: IpcMainInvokeEvent): void {
     throw new Error('Unauthorized CaptureLink signaling page.')
   }
 }
+
+// No Auth0 issuer, client ID, audience, verifier, bearer or user input crosses IPC.
+// Reuse the existing top-level trusted CaptureLink frame authorization.
+ipcMain.handle('capturelink:online-auth-status', event => {
+  authorizedHostedFrame(event)
+  return onlineAuth?.status() ?? disabledOnlineStatus
+})
+ipcMain.handle('capturelink:online-auth-begin', event => {
+  authorizedHostedFrame(event)
+  if (!onlineAuth) throw new Error('online_auth_unavailable')
+  return onlineAuth.begin()
+})
+ipcMain.handle('capturelink:online-auth-sign-out', event => {
+  authorizedHostedFrame(event)
+  if (!onlineAuth) throw new Error('online_auth_unavailable')
+  return onlineAuth.signOut()
+})
 
 ipcMain.handle('capturelink:hosted-mode', event => {
   authorizedHostedFrame(event)
@@ -1341,6 +1366,29 @@ app.whenReady().then(async () => {
     app.setAppUserModelId('com.capturelink.desktop')
   }
 
+  // No operator-provisioned domain: fail closed. No env/CLI/IPC overrides.
+  // The development callback must exactly match Auth0's registered URL.
+  if (!app.isPackaged && !localGuestTest && process.platform === 'win32' &&
+      safeStorage.isEncryptionAvailable()) {
+    try {
+      const devConfig = await loadCaptureLinkOnlineDevConfig()
+      if (!devConfig) throw new Error('online_auth_unavailable')
+      const provider = createCaptureLinkAuth0Provider({
+        domain: devConfig.domain,
+        clientId: devConfig.clientId,
+        audience: devConfig.audience
+      })
+      const vault = createWindowsOnlineVault({ userData, safeStorage })
+      onlineAuth = createCaptureLinkOnlineElectron({
+        provider, vault, redirectPort: devConfig.redirectPort,
+        openBrowser: (url: string) => shell.openExternal(url)
+      })
+      await onlineAuth.initialize()
+    } catch {
+      // No fallback to insecure storage, Xbox identity or pilot enrollment.
+      onlineAuth = null
+    }
+  }
   Menu.setApplicationMenu(null)
   createMainWindow()
 
@@ -1352,6 +1400,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  void onlineAuth?.shutdown()
   void hostedSignaling.end()
   void preserveActiveRecording('application shutdown')
   void xboxHome.stop()
