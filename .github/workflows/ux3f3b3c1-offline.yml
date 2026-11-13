@@ -1,0 +1,44 @@
+name: CaptureLink UX3F-3B3C1 offline guest signaling
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ux3f3b3c1-offline.yml'
+      - 'src/main/capturelink-online-https-session-candidate.mjs'
+      - 'src/main/capturelink-online-https-session-candidate.d.mts'
+      - 'services/signaling/test/ux3f3b3c1-https-guest.test.mjs'
+      - 'scripts/ux3f3b3c1-source-boundary.mjs'
+      - 'docs/CAPTURELINK_UX3F3B3C1_GUEST_HTTPS_AND_AUTH0_RELEASE_GATES.md'
+      - 'services/signaling/src/public-v2-server.mjs'
+      - 'src/main/capturelink-online-https-host-candidate.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-guest-signaling:
+    name: offline-guest-signaling
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Full Linux signaling regression
+        run: node --test services/signaling/test/*.test.mjs
+      - name: Historical and new source guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/ux3f1-boundary-source-smoke.mjs
+          node scripts/ux3f2-source-boundary.mjs
+          node scripts/ux3f3a-source-boundary.mjs
+          node scripts/ux3f3b1-source-boundary.mjs
+          node scripts/ux3f3b2-source-boundary.mjs
+          node scripts/ux3f3b3c1-source-boundary.mjs
+      - name: Verify commit whitespace
+        run: git diff --check HEAD~1 HEAD
