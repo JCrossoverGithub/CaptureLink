@@ -41,6 +41,12 @@ jobs:
       - name: UX3c-2 pilot broker admission and abuse tests
         run: node --test services/signaling/test/pilot-server.test.mjs
 
+      - name: UX3F-2 offline public authorization and v2 broker tests
+        run: node --test services/signaling/test/public-authorization-policy.test.mjs services/signaling/test/public-v2-server.test.mjs
+
+      - name: UX3F-2 protected v1/desktop source boundary
+        run: node scripts/ux3f2-source-boundary.mjs
+
       - name: UX3c-2 localhost/pilot boundary smoke
         run: node scripts/ux3c2-broker-source-smoke.mjs
 
@@ -97,3 +103,8 @@ jobs:
         run: node --test services/signaling/test/ux3c3c-https-edge.test.mjs
       - name: UX3c-3c no-public-exposure source boundary
         run: node scripts/ux3c3c-edge-source-smoke.mjs
+
+      - name: UX3F-2 Linux offline v2 broker and source boundary
+        run: |
+          node --test services/signaling/test/public-authorization-policy.test.mjs services/signaling/test/public-v2-server.test.mjs
+          node scripts/ux3f2-source-boundary.mjs
