@@ -53,6 +53,12 @@ jobs:
       - name: UX3F-3A protected Xbox and hosted signaling boundary
         run: node scripts/ux3f3a-source-boundary.mjs
 
+      - name: UX3F-3B1 offline Auth0 PKCE, JWKS and v2 client integration
+        run: node --test services/signaling/test/ux3f3b-auth0-integration.test.mjs
+
+      - name: UX3F-3B1 protected desktop and broker source boundary
+        run: node scripts/ux3f3b1-source-boundary.mjs
+
       - name: UX3c-2 localhost/pilot boundary smoke
         run: node scripts/ux3c2-broker-source-smoke.mjs
 
@@ -119,3 +125,8 @@ jobs:
         run: |
           node --test services/signaling/test/ux3f3-online-auth.test.mjs
           node scripts/ux3f3a-source-boundary.mjs
+
+      - name: UX3F-3B1 Auth0 offline adapter and protected source on Linux
+        run: |
+          node --test services/signaling/test/ux3f3b-auth0-integration.test.mjs
+          node scripts/ux3f3b1-source-boundary.mjs

@@ -115,6 +115,7 @@ export function createCaptureLinkOnlineAuth(config) {
       url.searchParams.set('client_id', config.clientId)
       url.searchParams.set('redirect_uri', redirect.href)
       url.searchParams.set('scope', config.scope)
+      url.searchParams.set('audience', config.audience)
       url.searchParams.set('state', state)
       url.searchParams.set('nonce', nonce)
       url.searchParams.set('code_challenge_method', 'S256')
@@ -144,7 +145,7 @@ export function createCaptureLinkOnlineAuth(config) {
             ![...url.searchParams.keys()].every(k => ['code', 'state', 'iss'].includes(k)) ||
             url.searchParams.getAll('code').length !== 1 ||
             url.searchParams.getAll('iss').length > 1 ||
-            (url.searchParams.has('iss') && url.searchParams.get('iss') !== issuer) ||
+            (url.searchParams.has('iss') && !([issuer, issuer + '/'].includes(url.searchParams.get('iss')))) ||
             url.searchParams.getAll('state').length !== 1 ||
             !same(url.searchParams.get('state'), pending.state) ||
             !CODE.test(url.searchParams.get('code'))) throw error()
