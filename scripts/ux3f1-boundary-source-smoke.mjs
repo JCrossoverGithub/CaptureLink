@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sha256 = text => createHash('sha256').update(text).digest('hex')
 
-// From verified UX3F-0 SOURCE_MANIFEST.json. Source must be byte-for-byte
-// identical to accepted pilot; this is deliberately stricter than a normal test.
+// From verified UX3F-0 SOURCE_MANIFEST.json. Sources must match the accepted pilot
+// after CRLF-to-LF checkout normalization; content changes remain prohibited.
 const unchanged = Object.freeze({
   'services/signaling/src/server.mjs': '1c85fdc44c1471d52247ea1f1aacf13da91fd9b2caa9155b4727198ad10b36a5',
   'services/signaling/src/pilot-admission.mjs': 'ceae7e86d90536802bbb698c8fc936f88e576a1df16577aea0d7fd685ff17b14',
@@ -18,12 +18,12 @@ const unchanged = Object.freeze({
   'src/main/index.ts': ('770f9cb8bc9cc2417f2489b0c1eee2bc' + 'be54007d5b0d00a3ee8b73adb41a4949'),
   'src/main/hosted-signaling-bridge.mjs': '7b1bafb049d69989553bebcc4b6f87b09624fe7ff469bd9fb5a05de4245d9374',
   'src/main/ux3c3d-pilot-enrollment.mjs': '760720d3e5d793c3403d0d1f7a993753b0d3d127697dbce5833d88ba39fbb37f',
-  'src/renderer/src/hosted-session-ux.ts': '24a0e4acf5e45c0ce1542ab9b0e69c91ec9076490409ac7ef1dab67fdda298c2',
+  'src/renderer/src/hosted-session-ux.ts': 'd7fe1af1215921a938418999cf8994af583783e39031e4f8b5d0abfa59a609d1',
   'src/renderer/src/unified-session-ux.ts': '129f765c65a7918a79db8488d46b32513ab69a974a4334508728b5d14bb9edad',
 })
 
 for (const [path, expected] of Object.entries(unchanged)) {
-  const got = sha256(readFileSync(resolve(root, path)))
+  const got = sha256(readFileSync(resolve(root, path), 'utf8').replace(/\r\n/g, '\n'))
   if (got !== expected) throw new Error(`v1/manual boundary modified: ${path}`)
 }
 const source = readFileSync(resolve(root, 'services/signaling/src/public-authorization-policy.mjs'), 'utf8')

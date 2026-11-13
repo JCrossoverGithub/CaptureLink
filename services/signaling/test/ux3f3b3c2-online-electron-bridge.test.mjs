@@ -196,7 +196,7 @@ test('ending while guest join is pending invalidates local authority before resp
   assert.equal(observed.filter(x => x.path === '/v2/sessions').length, 1)
 })
 
-test('IPC source has exact-frame verification, independent one-session owner, and no online renderer activation', async () => {
+test('IPC source has exact-frame verification, independent one-session owner, and dev-gated renderer selection', async () => {
   const root = new URL('../../../', import.meta.url)
   const get = p => readFile(new URL(p, root), 'utf8')
   const [main, preload, types, renderer, auth, client] = await Promise.all([
@@ -217,8 +217,12 @@ test('IPC source has exact-frame verification, independent one-session owner, an
     'onlineSessionApprove', 'onlineSessionSend', 'onlineSessionMessages', 'onlineSessionEnd']) {
     assert.ok(preload.includes(method))
     assert.ok(types.includes(method))
-    assert.ok(!renderer.includes(method))
+    assert.ok(renderer.includes(method))
   }
+  assert.ok(renderer.includes('const gate = createRendererSignalingModeGate(legacyBackend, onlineBackend)'))
+  assert.ok(renderer.includes('modeArea.hidden = !status.enabled'))
+  assert.ok(renderer.includes('const closingBackend = gate.release()'))
+  assert.ok(!renderer.includes('https://signal.capturelink.io/'))
   assert.ok(!/\b(?:accessToken|refreshToken|clientSecret|codeVerifier|jwks)\b/.test(preload))
   assert.ok(auth.includes('const ended = stopHost()'))
 })

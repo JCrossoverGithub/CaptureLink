@@ -1,0 +1,67 @@
+name: CaptureLink UX3F-3B3C3 offline renderer lifecycle
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ux3f3b3c3-renderer.yml'
+      - 'src/renderer/src/hosted-session-ux.ts'
+      - 'src/renderer/src/renderer-signaling-mode-gate.*'
+      - 'services/signaling/test/ux3f3b3c2-online-electron-bridge.test.mjs'
+      - 'services/signaling/test/ux3f3b3c3-*.test.mjs'
+      - 'scripts/ux3f3b3c3-source-boundary.mjs'
+      - 'scripts/ux3b1-*-smoke.mjs'
+      - 'scripts/ux3c3b-session-*.mjs'
+      - 'scripts/ux3f*-source-*.mjs'
+      - 'scripts/ux3f1-boundary-source-smoke.mjs'
+      - 'docs/CAPTURELINK_UX3F3B3C3_RENDERER_LIFECYCLE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-renderer-lifecycle:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Electron build
+        run: npm run build
+      - name: Full Windows signaling regression
+        run: node --test services/signaling/test/*.test.mjs
+      - name: Actual hosted cancellation tests
+        run: node --test scripts/ux3c3b-session-cancellation.test.mjs
+      - name: Protected renderer and legacy smoke tests
+        shell: pwsh
+        run: |
+          $checks = @(
+            'ux3b1-electron-source-smoke.mjs',
+            'ux3b1-end-session-smoke.mjs',
+            'ux3b1-recovery-smoke.mjs',
+            'ux3b1-guest-name-smoke.mjs',
+            'ux3c3b-session-lifecycle-source-smoke.mjs',
+            'ux3f1-boundary-source-smoke.mjs',
+            'ux3f2-source-boundary.mjs',
+            'ux3f3a-source-boundary.mjs',
+            'ux3f3b1-source-boundary.mjs',
+            'ux3f3b2-source-boundary.mjs',
+            'ux3f3b3c1-source-boundary.mjs',
+            'ux3f3b3c2-source-boundary.mjs',
+            'ux3f3b3c3-source-boundary.mjs'
+          )
+          foreach ($check in $checks) {
+            node "scripts/$check"
+            if ($LASTEXITCODE -ne 0) { throw "STOP: $check failed" }
+          }
+      - name: Exact diff whitespace
+        run: git diff --check HEAD~1 HEAD

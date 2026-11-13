@@ -4,6 +4,7 @@
  * No broker bearer credentials, raw SDP/ICE, or user identity are displayed.
  */
 import type { SessionCapabilities, UnifiedSessionCoordinator } from './unified-session-core'
+import { createRendererSignalingModeGate } from './renderer-signaling-mode-gate.mjs'
 
 type HostedRole = 'host' | 'guest'
 
@@ -37,6 +38,15 @@ export function installHostedSessionUx(
   hosted.setAttribute('aria-label', 'Hosted invitation')
   hosted.innerHTML = `
     <p class="clux3-note" id="clux3-mode-note">Local invitation: both clients must use the signaling service on the same computer.</p>
+    <div id="clux3-dev-mode" class="clux2-advanced" hidden>
+      <label for="clux3-dev-mode-choice">Signaling path (unpackaged development only)</label>
+      <select id="clux3-dev-mode-choice">
+        <option value="legacy">Local / private pilot (existing)</option>
+        <option value="online">Offline HTTPS prototype (.test only)</option>
+      </select>
+      <p class="clux3-note">The online option is a test-only integration path. It cannot reach an internet guest; host requires a signed-in CaptureLink Online account. No mode is switched automatically.</p>
+      <button id="clux3-dev-stale-end" class="clux2-subtle" type="button" hidden>End orphaned development session</button>
+    </div>
     <div id="clux3-host" hidden>
       <button id="clux3-create" class="clux2-primary" type="button">Create invitation</button>
       <div id="clux3-code-group" hidden>
@@ -82,6 +92,75 @@ export function installHostedSessionUx(
   const guestArea = el<HTMLElement>('clux3-guest')
   const status = el<HTMLElement>('clux3-status')
   const modeNote = el<HTMLElement>('clux3-mode-note')
+  // Adapt method names ONLY in renderer. Main still owns each trust domain and
+  // rejects cross-mode operations. Neither backend exposes a bearer token.
+  const legacyBackend = {
+    create: (permissions: SessionCapabilities) => window.captureLink.hostedCreate(permissions),
+    join: (code: string, name: string) => window.captureLink.hostedJoin(code, name),
+    snapshot: () => window.captureLink.hostedSnapshot(),
+    approve: (allowed: boolean) => window.captureLink.hostedApprove(allowed),
+    send: (kind: 'invite' | 'response', wire: string) => window.captureLink.hostedSend(kind, wire),
+    messages: () => window.captureLink.hostedMessages(),
+    end: () => window.captureLink.hostedEnd()
+  }
+  const onlineBackend = {
+    create: (permissions: SessionCapabilities) => window.captureLink.onlineSessionCreate(permissions),
+    join: (code: string, name: string) => window.captureLink.onlineSessionJoin(code, name),
+    snapshot: () => window.captureLink.onlineSessionSnapshot(),
+    approve: (allowed: boolean) => window.captureLink.onlineSessionApprove(allowed),
+    send: (kind: 'invite' | 'response', wire: string) => window.captureLink.onlineSessionSend(kind, wire),
+    messages: () => window.captureLink.onlineSessionMessages(),
+    end: () => window.captureLink.onlineSessionEnd()
+  }
+  const gate = createRendererSignalingModeGate(legacyBackend, onlineBackend)
+  const modeArea = el<HTMLElement>('clux3-dev-mode')
+  const modeChoice = el<HTMLSelectElement>('clux3-dev-mode-choice')
+  const staleButton = el<HTMLButtonElement>('clux3-dev-stale-end')
+  const updateMode = (): void => { modeChoice.disabled = gate.active() }
+  modeChoice.addEventListener('change', () => {
+    try {
+      if (modeChoice.value !== 'legacy' && modeChoice.value !== 'online') throw new Error('invalid_mode')
+      gate.select(modeChoice.value)
+    } catch { modeChoice.value = gate.mode() }
+    updateMode()
+  })
+  // The main status is a DEV CODE-PATH capability, not proof of connectivity.
+  // A production/packaged app never reveals the selector.
+  if (typeof window.captureLink.onlineSessionStatus === 'function') {
+    void window.captureLink.onlineSessionStatus().then(status => {
+      gate.allowOnline(status.enabled === true)
+      modeArea.hidden = !status.enabled
+      // A renderer reload can leave a main-owned online session without local
+      // WebRTC ownership. Never silently reclaim it or assume it is connected.
+      staleButton.hidden = !status.active
+      modeChoice.value = gate.mode()
+      updateMode()
+    }).catch(() => { gate.allowOnline(false); modeArea.hidden = true })
+  }
+  const backend = () => {
+    const selected = gate.current()
+    if (!selected) throw new Error('hosted_signaling_unavailable')
+    return selected
+  }
+  staleButton.addEventListener('click', () => {
+    if (active || closing || gate.active() || staleButton.disabled) return
+    staleButton.disabled = true
+    void (async () => {
+      // An orphan is a main-owned session with NO renderer-owned authority.
+      // Always attempt both local media teardown and a main IPC close.
+      let locallyStopped = true
+      try { coordinator.reset() } catch { locallyStopped = false }
+      let requested = false
+      try { await window.captureLink.onlineSessionEnd(); requested = true } catch { /* best effort */ }
+      staleButton.hidden = requested
+      modeNote.textContent = !locallyStopped
+        ? 'WARNING: friend transport shutdown is unconfirmed. Close CaptureLink to disconnect.'
+        : requested
+          ? 'Development session close requested. Remote revocation is not independently confirmed.'
+          : 'Broker closure could not be requested. Close CaptureLink if media remains active.'
+      staleButton.disabled = false
+    })()
+  })
   // Read-only main status. Neither renderer nor preload can supply the origin
   // or admission token; an unavailable enrollment must never appear local.
   if (typeof window.captureLink.hostedMode === 'function') {
@@ -134,7 +213,8 @@ export function installHostedSessionUx(
     const code = match?.[1]
     const descriptions: Record<string, string> = {
       network_unavailable: 'Signaling connection lost. Friend sharing stopped locally; broker revocation is unconfirmed.',
-      hosted_signaling_unavailable: 'Local signaling is unavailable. Try the manual invitation.',
+      hosted_signaling_unavailable: 'Signaling is unavailable. Use the manual invitation or verify the selected development mode.',
+      online_signaling_unavailable: 'Offline HTTPS mode is unavailable. This .test prototype is not an internet service.',
       not_found: 'Session ended or expired. Request a new code.',
       invitation_unavailable: 'Invitation expired or was already used.',
       invitation_expired: 'Invitation expired. Start a new session.',
@@ -173,13 +253,15 @@ export function installHostedSessionUx(
     // This must precede any network await. Even an unreachable or revoked
     // broker cannot be allowed to keep controller/voice/media running locally.
     const stoppedLocally = resetTransports()
+    const closingBackend = gate.release() // synchronous: old requests cannot capture a new mode
+    updateMode()
     onActiveChange(false)
     say(stoppedLocally
       ? 'Friend sharing stopped locally. Closing broker session…'
       : 'WARNING: friend transport shutdown could not be confirmed. Close CaptureLink to disconnect.')
     closing = (async () => {
       let brokerRequestCompleted = true
-      try { await window.captureLink.hostedEnd() } catch { brokerRequestCompleted = false }
+      try { await closingBackend?.end() } catch { brokerRequestCompleted = false }
       // The main-process bridge currently swallows failed remote revocation;
       // a successful IPC response is NOT proof the remote peer lost access.
       say(!stoppedLocally
@@ -204,7 +286,7 @@ export function installHostedSessionUx(
       if (!hostCapabilities) throw new Error('invalid_permissions')
       const wire = await coordinator.createInvitation(hostCapabilities)
       if (!current(generation)) return
-      await window.captureLink.hostedSend('invite', wire)
+      await backend().send('invite', wire)
       if (!current(generation)) return
       hostOfferSent = true
       say('Invitation delivered. Waiting for the guest response…')
@@ -216,7 +298,7 @@ export function installHostedSessionUx(
       say('Host approved. Negotiating the permitted connections…')
       const response = await coordinator.joinInvitation(wire, guestMicConsent)
       if (!current(generation)) return
-      await window.captureLink.hostedSend('response', response)
+      await backend().send('response', response)
       if (!current(generation)) return
       say('Response delivered. Verify controller, gameplay video, and Xbox chat separately.')
       onNegotiated()
@@ -228,7 +310,7 @@ export function installHostedSessionUx(
     polling = true
     const generation = epoch
     try {
-      const snap = await window.captureLink.hostedSnapshot()
+      const snap = await backend().snapshot()
       if (!current(generation)) return
       if (snap.status === 'rejected') throw new Error('host_rejected')
       if (role === 'host') {
@@ -241,7 +323,7 @@ export function installHostedSessionUx(
           void beginHostOffer(generation)
         }
         if (hostOfferSent && !hostAnswerAccepted) {
-          const messages = await window.captureLink.hostedMessages()
+          const messages = await backend().messages()
           if (!current(generation)) return
           const answer = messages.find(x => x.kind === 'response')
           if (answer) {
@@ -255,7 +337,7 @@ export function installHostedSessionUx(
           }
         }
       } else if (snap.status === 'approved' && !guestReplyStarted) {
-        const messages = await window.captureLink.hostedMessages()
+        const messages = await backend().messages()
         if (!current(generation)) return
         const invite = messages.find(x => x.kind === 'invite')
         if (invite) void beginGuestReply(invite.payload, generation)
@@ -279,7 +361,9 @@ export function installHostedSessionUx(
     hostArea.hidden = role !== 'host'
     guestArea.hidden = role !== 'guest'
     manual.open = false
-    say(active ? 'Local session in progress.' : 'Ready to use the local signaling prototype.')
+    say(active ? 'Session in progress.' : gate.mode() === 'online'
+      ? 'Offline HTTPS development mode selected. No public endpoint is available.'
+      : 'Ready to use the local signaling prototype.')
     // Never silently revoke a session just because the Friend drawer was closed.
   }
   createButton.addEventListener('click', () => {
@@ -287,6 +371,9 @@ export function installHostedSessionUx(
     if (coordinator.snapshot().phase !== 'idle' && coordinator.snapshot().phase !== 'failed') {
       say('End the existing manual session before creating a hosted invitation.'); return
     }
+    let selectedBackend: ReturnType<typeof gate.begin>
+    try { selectedBackend = gate.begin() } catch { say('Signaling mode is unavailable.'); return }
+    updateMode()
     hostCapabilities = getCapabilities()
     manual.open = false
     const generation = ++epoch
@@ -294,8 +381,10 @@ export function installHostedSessionUx(
     createButton.disabled = true; onActiveChange(true)
     void (async () => {
       try {
-        say('Creating a local invitation…')
-        const result = await window.captureLink.hostedCreate(hostCapabilities!)
+        say(gate.mode() === 'online'
+          ? 'Attempting offline HTTPS development invitation…'
+          : 'Creating a local invitation…')
+        const result = await selectedBackend.create(hostCapabilities!)
         if (!current(generation)) return
         codeField.value = result.inviteCode
         el<HTMLElement>('clux3-code-group').hidden = false
@@ -337,6 +426,9 @@ export function installHostedSessionUx(
       return
     }
     const code = el<HTMLTextAreaElement>('clux3-join-code').value.trim()
+    let selectedBackend: ReturnType<typeof gate.begin>
+    try { selectedBackend = gate.begin() } catch { say('Signaling mode is unavailable.'); return }
+    updateMode()
     guestMicConsent = el<HTMLInputElement>('clux3-mic-consent').checked
     const generation = ++epoch
     role = 'guest'; active = true; guestJoinPending = true
@@ -348,7 +440,7 @@ export function installHostedSessionUx(
     void (async () => {
       try {
         say('Requesting host approval…')
-        await window.captureLink.hostedJoin(code, name)
+        await selectedBackend.join(code, name)
         if (!current(generation)) return
         // Only dismiss the guest name prompt after the broker accepted the join.
         nameDialog.close()
@@ -361,7 +453,9 @@ export function installHostedSessionUx(
           // An invalid/expired code should not erase the guest's name or dismiss
           // the prompt. Keep both inputs available for correction and retry.
           const message = displayError(error)
-          try { await window.captureLink.hostedEnd() } catch { /* best-effort local cleanup */ }
+          const failedBackend = gate.release()
+          updateMode()
+          try { await failedBackend?.end() } catch { /* best-effort local cleanup */ }
           if (current(generation)) {
             active = false
             ++epoch
@@ -392,7 +486,7 @@ export function installHostedSessionUx(
     const generation = epoch
     void (async () => {
       try {
-        await window.captureLink.hostedApprove(true)
+        await backend().approve(true)
         if (!current(generation)) return
         hostApproved = true
         approval.hidden = true
@@ -405,7 +499,7 @@ export function installHostedSessionUx(
     if (!active || role !== 'host') return
     const generation = epoch
     void (async () => {
-      try { await window.captureLink.hostedApprove(false) } catch { /* local cleanup still required */ }
+      try { await backend().approve(false) } catch { /* local cleanup still required */ }
       if (!current(generation)) return
       await end()
       say('Join request rejected. No controller, voice, or video was shared.')

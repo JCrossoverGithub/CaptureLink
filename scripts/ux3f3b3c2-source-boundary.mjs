@@ -1,4 +1,4 @@
-/** UX3F-3B3C2: only approved dev Electron main, preload and declaration surfaces changed. */
+/** UX3F-3B3C2: reconciled 3B3C3 renderer entry while retaining trusted main and preload boundary. */
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +12,7 @@ const pinned = Object.freeze({
   'src/main/capturelink-online-session-bridge.d.mts': '23e4169f25f3575fc03026d0d69e24c0f9d20ae61f7d1566f1722acd63f7ae8d',
   'src/main/capturelink-signaling-mode-arbiter.mjs': '26d8876087635e5e3ae8c979d9f1087594def04af2110d60fc9eb75600e520e5',
   'src/main/capturelink-signaling-mode-arbiter.d.mts': '3fefc3b1457cd08673b17045f3160138304843eeba597d75cf5a0354deac2660',
-  'src/renderer/src/hosted-session-ux.ts': '24a0e4acf5e45c0ce1542ab9b0e69c91ec9076490409ac7ef1dab67fdda298c2',
+  'src/renderer/src/hosted-session-ux.ts': 'd7fe1af1215921a938418999cf8994af583783e39031e4f8b5d0abfa59a609d1',
   'src/renderer/src/main.ts': 'd345ce9529fc4050b022d09ec409b29cd09e9de771b5308546a842935e20e3b8',
   'src/main/capturelink-online-electron.mjs': '065b1f70ed2804411e7bfeb55606df63b9ba5706efbe0a410a29862c45fd05fc',
   'src/main/capturelink-online-https-session-candidate.mjs': '2b219f7764613f002adc745ec5823b93c2ac3c9b35a6555e84d4addd9c4678df',
@@ -44,12 +44,14 @@ for (const required of [
 ]) if (!main.includes(required)) throw new Error(`UX3F-3B3C2 main boundary weakened: ${required}`)
 for (const required of ['onlineSessionCreate','onlineSessionJoin','onlineSessionApprove',
   'onlineSessionEnd','onlineSessionSend','onlineSessionMessages']) {
-  if (!preload.includes(required) || renderer.includes(required))
-    throw new Error(`UX3F-3B3C2 preload/renderer boundary weakened: ${required}`)
+  if (!preload.includes(required))
+    throw new Error(`UX3F-3B3C2 preload boundary weakened: ${required}`)
 }
-if (!candidate.includes('UX3F3B3A_TEST_ORIGIN') ||
+if (!renderer.includes('createRendererSignalingModeGate') ||
+    !renderer.includes('modeArea.hidden = !status.enabled') ||
+    !candidate.includes('UX3F3B3A_TEST_ORIGIN') ||
     /\b(?:accessToken|refreshToken|clientSecret|codeVerifier|jwks)\b/.test(preload) ||
     main.includes('https://signal.capturelink.io/')) {
   throw new Error('UX3F-3B3C2 secrets, origin, or dev-only boundary weakened')
 }
-console.log('PASS: UX3F-3B3C2 dev-only exact-frame IPC, exclusive modes, frozen pilot/renderer/broker and .test origin')
+console.log('PASS: UX3F-3B3C2 dev-only exact-frame IPC, exclusive modes, frozen pilot/broker and .test origin')
