@@ -26,10 +26,10 @@ const expected = Object.freeze({
   'services/signaling/src/public-authorization-policy.mjs': '4d536af5a625f984c59643c81b5e55c6857ce5efa0ce221054114b734791ad44',
   'src/renderer/src/hosted-session-ux.ts': '24a0e4acf5e45c0ce1542ab9b0e69c91ec9076490409ac7ef1dab67fdda298c2',
   'src/renderer/src/unified-session-ux.ts': '129f765c65a7918a79db8488d46b32513ab69a974a4334508728b5d14bb9edad',
-  'src/main/index.ts': ('ce15d9dd48cf5b69cbe165530f1d2a9f' + 'e4917104d1dbb63d49391fd878b7b31b'),
-  'src/preload/index.ts': 'e7d731a606d764366fbbd170b75bcc57d96f91bd4b90ef7ee0c73ee1b881eddb',
+  'src/main/index.ts': ('770f9cb8bc9cc2417f2489b0c1eee2bc' + 'be54007d5b0d00a3ee8b73adb41a4949'),
+  'src/preload/index.ts': 'c53caff49ec5af81d9e39c2fd7fbe7458dfa8091dd0194681675e92575055246',
   'src/renderer/src/main.ts': 'd345ce9529fc4050b022d09ec409b29cd09e9de771b5308546a842935e20e3b8',
-  'src/renderer/src/env.d.ts': '34489a45ae2dff268b6bc928cb758893f1841f7ca1172f659c2bda605a01ba01',
+  'src/renderer/src/env.d.ts': 'e1fa364b980db861edc7cd7d125192f78c6500fc1fe5090b0aeb9ec9bcf40179',
   'src/main/capturelink-online-dev-config.mjs': '239b941100adc6289990bf7c6de2b477e49104a36966abf8439ac3cdf37dcfd9',
   'src/main/capturelink-online-electron.mjs': ('065b1f70ed2804411e7bfeb55606df63' + 'b9ba5706efbe0a410a29862c45fd05fc'),
   'src/main/capturelink-online-electron.d.mts': ('fb3d1179c1312893ff132f7a26401316' + '36741c07fd570613aff33a9cd32ac8dc'),
@@ -59,4 +59,4 @@ if (!main.includes("!app.isPackaged && !localGuestTest") ||
     /\b(?:accessToken|refreshToken|clientSecret|codeVerifier|jwks)\b/.test(preload + renderer)) {
   throw new Error('UX3F-3B2 privileged boundary weakened')
 }
-console.log('PASS: UX3F-3B2 dev-only Auth0 IPC and UX3F-3B3B main-only host integration boundaries verified')
+console.log('PASS: UX3F-3B2 dev-only Auth0 and UX3F-3B3C2 offline online-session IPC boundaries verified')

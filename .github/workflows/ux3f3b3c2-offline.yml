@@ -1,0 +1,48 @@
+name: CaptureLink UX3F-3B3C2 offline Electron guest bridge
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ux3f3b3c2-offline.yml'
+      - 'src/main/index.ts'
+      - 'src/main/capturelink-online-session-bridge.*'
+      - 'src/main/capturelink-signaling-mode-arbiter.*'
+      - 'src/preload/index.ts'
+      - 'src/renderer/src/env.d.ts'
+      - 'services/signaling/test/ux3f3b3c2-*.test.mjs'
+      - 'services/signaling/test/ux3f3b3b-electron-host-lifecycle.test.mjs'
+      - 'scripts/ux3f*-source-*.mjs'
+      - 'scripts/ux3f1-boundary-source-smoke.mjs'
+      - 'docs/CAPTURELINK_UX3F3B3C2_OFFLINE_ELECTRON_GUEST_BRIDGE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-electron-online-guest:
+    name: offline-electron-online-guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Full Linux signaling and Electron-main offline regression
+        run: node --test services/signaling/test/*.test.mjs
+      - name: Source boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/ux3f1-boundary-source-smoke.mjs
+          node scripts/ux3f2-source-boundary.mjs
+          node scripts/ux3f3a-source-boundary.mjs
+          node scripts/ux3f3b1-source-boundary.mjs
+          node scripts/ux3f3b2-source-boundary.mjs
+          node scripts/ux3f3b3c1-source-boundary.mjs
+          node scripts/ux3f3b3c2-source-boundary.mjs
+      - name: Verify commit whitespace
+        run: git diff --check HEAD~1 HEAD

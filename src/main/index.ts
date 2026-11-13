@@ -9,7 +9,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getXboxConsoles } from './xbox/consoles'
 import { HostedSignalingBridge } from './hosted-signaling-bridge.mjs'
 import { createCaptureLinkOnlineElectron } from './capturelink-online-electron.mjs'
-import { createCaptureLinkOnlineHttpsHostCandidate } from './capturelink-online-https-host-candidate.mjs'
+import { CaptureLinkOnlineSessionBridge } from './capturelink-online-session-bridge.mjs'
+import { createCaptureLinkSignalingModeArbiter } from './capturelink-signaling-mode-arbiter.mjs'
 import { createCaptureLinkAuth0Provider } from './capturelink-auth0-provider.mjs'
 import { createWindowsOnlineVault } from './capturelink-online-vault.mjs'
 import { loadCaptureLinkOnlineDevConfig } from './capturelink-online-dev-config.mjs'
@@ -42,6 +43,11 @@ function createTrustedHostedClient() {
   })
 }
 const hostedSignaling = new HostedSignalingBridge({ clientFactory: createTrustedHostedClient })
+// UX3F-3B3C2: a separate, development-only online client. No production origin,
+// new renderer actions, or live online service activation exists at this stage.
+let onlineSession: CaptureLinkOnlineSessionBridge | null = null
+// Exclusive mode ticket covers in-flight creation, not just established roles.
+const signalingMode = createCaptureLinkSignalingModeArbiter()
 // UX3F-3B2: Auth0 is independent of Xbox and private-pilot credentials.
 // It is never enabled in packaged apps or on non-Windows platforms.
 let onlineAuth: ReturnType<typeof createCaptureLinkOnlineElectron> | null = null
@@ -514,7 +520,10 @@ function createMainWindow(): void {
 
   window.on('closed', () => {
     if (mainWindow === window) {
+      signalingMode.release('legacy')
+      signalingMode.release('online')
       void hostedSignaling.end()
+      void onlineSession?.end()
       mainWindow = null
     }
   })
@@ -552,7 +561,9 @@ ipcMain.handle('capturelink:online-auth-begin', event => {
 ipcMain.handle('capturelink:online-auth-sign-out', event => {
   authorizedHostedFrame(event)
   if (!onlineAuth) throw new Error('online_auth_unavailable')
-  return onlineAuth.signOut()
+  const result = onlineAuth.signOut()
+  signalingMode.release('online')
+  return result
 })
 
 ipcMain.handle('capturelink:hosted-mode', event => {
@@ -562,25 +573,74 @@ ipcMain.handle('capturelink:hosted-mode', event => {
 
 ipcMain.handle('capturelink:hosted-create', (event, permissions: {
   watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
-}) => { authorizedHostedFrame(event); return hostedSignaling.create(permissions) })
+}) => { authorizedHostedFrame(event); return signalingMode.claim('legacy', () => hostedSignaling.create(permissions)) })
 ipcMain.handle('capturelink:hosted-join', (event, code: string, displayName: string) => {
-  authorizedHostedFrame(event); return hostedSignaling.join(code, displayName)
+  authorizedHostedFrame(event); return signalingMode.claim('legacy', () => hostedSignaling.join(code, displayName))
 })
 ipcMain.handle('capturelink:hosted-snapshot', event => {
-  authorizedHostedFrame(event); return hostedSignaling.snapshot()
+  authorizedHostedFrame(event); signalingMode.active('legacy'); return hostedSignaling.snapshot()
 })
 ipcMain.handle('capturelink:hosted-approve', (event, allow: boolean) => {
-  authorizedHostedFrame(event); return hostedSignaling.approve(allow)
+  authorizedHostedFrame(event); signalingMode.active('legacy'); return hostedSignaling.approve(allow)
 })
 ipcMain.handle('capturelink:hosted-send', (event, kind: 'invite' | 'response', wire: string) => {
-  authorizedHostedFrame(event); return hostedSignaling.send(kind, wire)
+  authorizedHostedFrame(event); signalingMode.active('legacy'); return hostedSignaling.send(kind, wire)
 })
 ipcMain.handle('capturelink:hosted-messages', event => {
-  authorizedHostedFrame(event); return hostedSignaling.messages()
+  authorizedHostedFrame(event); signalingMode.active('legacy'); return hostedSignaling.messages()
 })
 ipcMain.handle('capturelink:hosted-end', event => {
-  authorizedHostedFrame(event); return hostedSignaling.end()
+  authorizedHostedFrame(event); signalingMode.release('legacy'); return hostedSignaling.end()
 })
+
+// UX3F-3B3C2: explicit online IPC boundary. No renderer calls it yet; the
+// candidate's HTTPS origin is still permanently pinned to signal.capturelink.test.
+// The host must possess a current Auth0 session. Guest join needs no login.
+// Only permissions, unverified names, invitation codes and validated UX2 wire
+// may cross; Auth0 JWTs and v2 role-capability tokens stay inside Electron main.
+ipcMain.handle('capturelink:online-session-status', event => {
+  authorizedHostedFrame(event)
+  return Object.freeze({ enabled: onlineSession !== null,
+    ...(onlineSession?.status() ?? { role: null, active: false }) })
+})
+ipcMain.handle('capturelink:online-session-create', (event, permissions: {
+  watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
+}) => {
+  authorizedHostedFrame(event)
+  if (!onlineSession || !onlineAuth) throw new Error('online_signaling_unavailable')
+  return signalingMode.claim('online', () => onlineAuth!.createHostSession(permissions))
+})
+ipcMain.handle('capturelink:online-session-join', (event, code: string, displayName: string) => {
+  authorizedHostedFrame(event)
+  if (!onlineSession) throw new Error('online_signaling_unavailable')
+  return signalingMode.claim('online', () => onlineSession!.join(code, displayName))
+})
+ipcMain.handle('capturelink:online-session-snapshot', event => {
+  authorizedHostedFrame(event); signalingMode.active('online')
+  if (!onlineSession) throw new Error('online_signaling_unavailable')
+  return onlineSession.snapshot()
+})
+ipcMain.handle('capturelink:online-session-approve', (event, allow: boolean) => {
+  authorizedHostedFrame(event); signalingMode.active('online')
+  if (!onlineSession) throw new Error('online_signaling_unavailable')
+  return onlineSession.approve(allow)
+})
+ipcMain.handle('capturelink:online-session-send', (event, kind: 'invite' | 'response', wire: string) => {
+  authorizedHostedFrame(event); signalingMode.active('online')
+  if (!onlineSession) throw new Error('online_signaling_unavailable')
+  return onlineSession.send(kind, wire)
+})
+ipcMain.handle('capturelink:online-session-messages', event => {
+  authorizedHostedFrame(event); signalingMode.active('online')
+  if (!onlineSession) throw new Error('online_signaling_unavailable')
+  return onlineSession.messages()
+})
+ipcMain.handle('capturelink:online-session-end', event => {
+  authorizedHostedFrame(event)
+  signalingMode.release('online')
+  return onlineSession?.end() ?? { ended: true }
+})
+
 
 ipcMain.handle(
   'capturelink:window-set-fullscreen',
@@ -1367,6 +1427,13 @@ app.whenReady().then(async () => {
     app.setAppUserModelId('com.capturelink.desktop')
   }
 
+  // Unpackaged Windows only; the online candidate is permanently pinned to
+  // a non-routable .test HTTPS identity. Isolated guest profiles can join
+  // without Auth0; no real/public signaling connection is configured.
+  if (!app.isPackaged && process.platform === 'win32') {
+    onlineSession = new CaptureLinkOnlineSessionBridge()
+  }
+
   // No operator-provisioned domain: fail closed. No env/CLI/IPC overrides.
   // The development callback must exactly match Auth0's registered URL.
   if (!app.isPackaged && !localGuestTest && process.platform === 'win32' &&
@@ -1383,9 +1450,9 @@ app.whenReady().then(async () => {
       onlineAuth = createCaptureLinkOnlineElectron({
         provider, vault, redirectPort: devConfig.redirectPort,
         openBrowser: (url: string) => shell.openExternal(url),
-        // UX3F-3B3B: trusted main-only, offline .test candidate. There are no
-        // online-hosting IPC handlers or active online create call sites.
-        hostFactory: ({ accessToken }) => createCaptureLinkOnlineHttpsHostCandidate({ accessToken })
+        // Single role-scoped online authority shared with the explicit IPC
+        // bridge. Auth0 sign-out and shutdown end this SAME online session.
+        hostFactory: ({ accessToken }) => onlineSession!.authenticatedHostAdapter(accessToken)
       })
       await onlineAuth.initialize()
     } catch {
@@ -1404,7 +1471,10 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  signalingMode.release('online')
+  signalingMode.release('legacy')
   void onlineAuth?.shutdown()
+  void onlineSession?.end()
   void hostedSignaling.end()
   void preserveActiveRecording('application shutdown')
   void xboxHome.stop()

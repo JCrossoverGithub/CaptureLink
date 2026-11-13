@@ -16,6 +16,20 @@ contextBridge.exposeInMainWorld('captureLink', {
   onlineAuthBegin: () => ipcRenderer.invoke('capturelink:online-auth-begin'),
   onlineAuthSignOut: () => ipcRenderer.invoke('capturelink:online-auth-sign-out'),
 
+  // UX3F-3B3C2: explicit dev-only online path; no browser/renderer credentials.
+  // The candidate origin remains non-routable; UX3F-3B3C3 will add the UI.
+  onlineSessionStatus: () => ipcRenderer.invoke('capturelink:online-session-status'),
+  onlineSessionCreate: (permissions: { watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2' }) =>
+    ipcRenderer.invoke('capturelink:online-session-create', permissions),
+  onlineSessionJoin: (code: string, displayName: string) =>
+    ipcRenderer.invoke('capturelink:online-session-join', code, displayName),
+  onlineSessionSnapshot: () => ipcRenderer.invoke('capturelink:online-session-snapshot'),
+  onlineSessionApprove: (allow: boolean) => ipcRenderer.invoke('capturelink:online-session-approve', allow),
+  onlineSessionSend: (kind: 'invite' | 'response', wire: string) =>
+    ipcRenderer.invoke('capturelink:online-session-send', kind, wire),
+  onlineSessionMessages: () => ipcRenderer.invoke('capturelink:online-session-messages'),
+  onlineSessionEnd: () => ipcRenderer.invoke('capturelink:online-session-end'),
+
   // Only an unprivileged mode status crosses IPC, never admission credentials.
   hostedMode: () => ipcRenderer.invoke('capturelink:hosted-mode'),
   // Main-process-only tokens: only code, sanitized status, and UX2 wire cross IPC.

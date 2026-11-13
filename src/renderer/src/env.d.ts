@@ -129,6 +129,20 @@ declare global {
       onlineAuthBegin(): Promise<{ started: boolean }>
       onlineAuthSignOut(): Promise<{ enabled: boolean; authenticated: boolean; pending: boolean }>
 
+      // Dormant until UX3F-3B3C3: development-only, .test HTTPS online session.
+      onlineSessionStatus(): Promise<{ enabled: boolean; role: 'host' | 'guest' | null; active: boolean }>
+      onlineSessionCreate(permissions: {
+        watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
+      }): Promise<{ inviteCode: string; inviteExpiresAt: number }>
+      onlineSessionJoin(code: string, displayName: string): Promise<{ status: 'pending' }>
+      onlineSessionSnapshot(): Promise<{ role: 'host' | 'guest'; status: 'open' | 'pending' | 'approved' | 'rejected';
+        hasPendingGuest: boolean; guestDisplayName: string | null;
+        permissions: { watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2' } }>
+      onlineSessionApprove(allow: boolean): Promise<{ status: 'approved' | 'rejected' }>
+      onlineSessionSend(kind: 'invite' | 'response', wire: string): Promise<{ sent: true }>
+      onlineSessionMessages(): Promise<Array<{ kind: 'invite' | 'response'; payload: string }>>
+      onlineSessionEnd(): Promise<{ ended: true }>
+
       hostedMode(): Promise<{mode: 'local' | 'remote' | 'unavailable'}>
       hostedCreate(permissions: {
         watch: boolean; voice: boolean; controller: boolean; controllerMode: 'shared' | 'player2'
