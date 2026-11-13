@@ -73,7 +73,7 @@
 - [x] Windows Node 24 complete signaling suite: **176 passed, 0 failed, 6 expected platform skips**, with temporary Git for Windows OpenSSL PATH; TypeScript check and Electron build passed.
 - [x] All five historical UX3F source-boundary guards and the new UX3F-3B3C1 guard passed.
 - [x] Exact six-file staged inventory, protected-source hashes, whitespace check, staged Gitleaks 8.30.1 (**no leaks**) and independent diff review passed.
-- [ ] New UX3F-3B3C1 GitHub workflow and existing CaptureLink CI pass against the **exact draft PR head**; verify no new routes, IPC or production deployment before merge.
+- [x] PR #25 initial head `359d77c2a9311550ff2b1658d2f782390b6e13cd` passed all four GitHub jobs: `validate`, `private-pilot-linux`, `offline-electron-host`, and `offline-guest-signaling` (runs `43478881288`, `43478881245`, `43478881599`). Source guards confirmed no new renderer IPC or production activation. **Any subsequent PR head requires fresh CI verification before merge.**
 
 **Review provenance:** the independently reconstructed six-file staged diff matches the operator's reported SHA-256 `8def9452ff77d3dbee7d5f01f5722591af9d54d12068e8fdd0f8556edda593e6` before this documentation-only reconciliation. Earlier off-machine Node 22.16.0 preliminary tests passed 182/182 but do not substitute for the completed Node 24 operator gates. Auth0 production dashboard configuration was not inspected or changed; all production identity, revocation and deployment gates above remain open.
 
